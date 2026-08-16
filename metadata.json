@@ -1,0 +1,6 @@
+{
+  "name": "Trainingsplan Full Body",
+  "description": "Ein klarer, zweisprachiger Full-Body-Trainingsplan (Deutsch & Arabisch) für Einsteiger mit Geräten und Alternativen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
