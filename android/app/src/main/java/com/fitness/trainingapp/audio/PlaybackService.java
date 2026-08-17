@@ -208,158 +208,195 @@ public class PlaybackService extends MediaSessionService {
         return MimeTypes.AUDIO_MPEG; // Default fallback for workout music
     }
 
-    public void setPlaylistAndPlay(List<MediaTrackData> tracks, int startIndex, long startPositionMs) {
-        Log.i(TAG, "[DEBUG_PLAYBACK] setPlaylistAndPlay called. Tracks count: " + tracks.size() + ", startIndex: " + startIndex + ", startPosMs: " + startPositionMs);
-        playlist.clear();
-        playlist.addAll(tracks);
+    private void runOnMainThread(String operationName, Runnable action) {
+        Log.d(TAG, "[DEBUG_NATIVE_AUDIO] Current thread before player operation (" + operationName + "): " + Thread.currentThread().getName());
+        new Handler(Looper.getMainLooper()).post(() -> {
+            Log.d(TAG, "[DEBUG_PLAYBACK] Player operation (" + operationName + ") executing on thread: " + Thread.currentThread().getName());
+            try {
+                action.run();
+                Log.d(TAG, "[DEBUG_PLAYBACK] Player operation (" + operationName + ") completed successfully on thread: " + Thread.currentThread().getName());
+            } catch (Exception e) {
+                Log.e(TAG, "[DEBUG_PLAYBACK] Player operation (" + operationName + ") failed: " + e.getMessage(), e);
+            }
+        });
+    }
 
-        List<MediaItem> mediaItems = new ArrayList<>();
-        for (MediaTrackData track : tracks) {
-            File trackFile = getTrackFile(track.id);
-            boolean exists = trackFile.exists();
-            long length = exists ? trackFile.length() : 0;
-            Log.d(TAG, "[DEBUG_PLAYBACK] Track ID: " + track.id + ", Name: " + track.name + ", File path: " + trackFile.getAbsolutePath() + " exists: " + exists + " length: " + length);
-            if (!exists) {
-                Log.w(TAG, "[DEBUG_PLAYBACK] Audio track file NOT found for ID: " + track.id);
+    public void setPlaylistAndPlay(List<MediaTrackData> tracks, int startIndex, long startPositionMs) {
+        runOnMainThread("setPlaylistAndPlay", () -> {
+            Log.i(TAG, "[DEBUG_PLAYBACK] setPlaylistAndPlay called. Tracks count: " + tracks.size() + ", startIndex: " + startIndex + ", startPosMs: " + startPositionMs);
+            playlist.clear();
+            playlist.addAll(tracks);
+
+            List<MediaItem> mediaItems = new ArrayList<>();
+            for (MediaTrackData track : tracks) {
+                File trackFile = getTrackFile(track.id);
+                boolean exists = trackFile.exists();
+                long length = exists ? trackFile.length() : 0;
+                Log.d(TAG, "[DEBUG_PLAYBACK] Track ID: " + track.id + ", Name: " + track.name + ", File path: " + trackFile.getAbsolutePath() + " exists: " + exists + " length: " + length);
+                if (!exists) {
+                    Log.w(TAG, "[DEBUG_PLAYBACK] Audio track file NOT found for ID: " + track.id);
+                }
+
+                String determinedMimeType = normalizeMimeType(track.mimeType, track.name);
+                Log.d(TAG, "[DEBUG_PLAYBACK] Determined mime type: " + determinedMimeType);
+
+                MediaMetadata mediaMetadata = new MediaMetadata.Builder()
+                    .setTitle(track.name)
+                    .setArtist(track.artist)
+                    .setAlbumTitle(track.album)
+                    .build();
+
+                MediaItem item = new MediaItem.Builder()
+                    .setMediaId(track.id)
+                    .setUri(Uri.fromFile(trackFile))
+                    .setMimeType(determinedMimeType)
+                    .setMediaMetadata(mediaMetadata)
+                    .build();
+
+                mediaItems.add(item);
             }
 
-            String determinedMimeType = normalizeMimeType(track.mimeType, track.name);
-            Log.d(TAG, "[DEBUG_PLAYBACK] Determined mime type: " + determinedMimeType);
+            if (!mediaItems.isEmpty()) {
+                Log.i(TAG, "[DEBUG_PLAYBACK] Setting media items in ExoPlayer. Math.max(0, startIndex)=" + Math.max(0, startIndex));
+                player.setMediaItems(mediaItems, Math.max(0, startIndex), Math.max(0, startPositionMs));
+                Log.i(TAG, "[DEBUG_PLAYBACK] Calling player.prepare()");
+                player.prepare();
+                Log.i(TAG, "[DEBUG_PLAYBACK] Calling player.play()");
+                player.play();
+                currentTrackIndex = Math.max(0, startIndex);
+                Log.i(TAG, "[DEBUG_PLAYBACK] ExoPlayer state after play() - isPlaying: " + player.isPlaying() + ", PlaybackState: " + player.getPlaybackState());
+            } else {
+                Log.e(TAG, "[DEBUG_PLAYBACK] Cannot start playback because mediaItems list is empty!");
+            }
+        });
+    }
+
+    public void playTrack(String trackId, String name, String artist, String album, long startPositionMs, String mimeType) {
+        runOnMainThread("playTrack", () -> {
+            File trackFile = getTrackFile(trackId);
+            String determinedMimeType = normalizeMimeType(mimeType, name);
 
             MediaMetadata mediaMetadata = new MediaMetadata.Builder()
-                .setTitle(track.name)
-                .setArtist(track.artist)
-                .setAlbumTitle(track.album)
+                .setTitle(name)
+                .setArtist(artist)
+                .setAlbumTitle(album)
                 .build();
 
-            MediaItem item = new MediaItem.Builder()
-                .setMediaId(track.id)
+            MediaItem mediaItem = new MediaItem.Builder()
+                .setMediaId(trackId)
                 .setUri(Uri.fromFile(trackFile))
                 .setMimeType(determinedMimeType)
                 .setMediaMetadata(mediaMetadata)
                 .build();
 
-            mediaItems.add(item);
-        }
-
-        if (!mediaItems.isEmpty()) {
-            Log.i(TAG, "[DEBUG_PLAYBACK] Setting media items in ExoPlayer. Math.max(0, startIndex)=" + Math.max(0, startIndex));
-            player.setMediaItems(mediaItems, Math.max(0, startIndex), Math.max(0, startPositionMs));
-            Log.i(TAG, "[DEBUG_PLAYBACK] Calling player.prepare()");
+            player.setMediaItem(mediaItem, Math.max(0, startPositionMs));
             player.prepare();
-            Log.i(TAG, "[DEBUG_PLAYBACK] Calling player.play()");
             player.play();
-            currentTrackIndex = Math.max(0, startIndex);
-            Log.i(TAG, "[DEBUG_PLAYBACK] ExoPlayer state after play() - isPlaying: " + player.isPlaying() + ", PlaybackState: " + player.getPlaybackState());
-        } else {
-            Log.e(TAG, "[DEBUG_PLAYBACK] Cannot start playback because mediaItems list is empty!");
-        }
-    }
-
-    public void playTrack(String trackId, String name, String artist, String album, long startPositionMs, String mimeType) {
-        File trackFile = getTrackFile(trackId);
-        String determinedMimeType = normalizeMimeType(mimeType, name);
-
-        MediaMetadata mediaMetadata = new MediaMetadata.Builder()
-            .setTitle(name)
-            .setArtist(artist)
-            .setAlbumTitle(album)
-            .build();
-
-        MediaItem mediaItem = new MediaItem.Builder()
-            .setMediaId(trackId)
-            .setUri(Uri.fromFile(trackFile))
-            .setMimeType(determinedMimeType)
-            .setMediaMetadata(mediaMetadata)
-            .build();
-
-        player.setMediaItem(mediaItem, Math.max(0, startPositionMs));
-        player.prepare();
-        player.play();
-        currentTrackIndex = 0;
+            currentTrackIndex = 0;
+        });
     }
 
     public void pause() {
-        if (player != null) {
-            player.pause();
-        }
+        runOnMainThread("pause", () -> {
+            if (player != null) {
+                player.pause();
+            }
+        });
     }
 
     public void resume() {
-        if (player != null) {
-            if (player.getPlaybackState() == Player.STATE_IDLE) {
-                player.prepare();
+        runOnMainThread("resume", () -> {
+            if (player != null) {
+                if (player.getPlaybackState() == Player.STATE_IDLE) {
+                    player.prepare();
+                }
+                player.play();
             }
-            player.play();
-        }
+        });
     }
 
     public void stop() {
-        if (player != null) {
-            player.stop();
-            stopProgressTracker();
-        }
+        runOnMainThread("stop", () -> {
+            if (player != null) {
+                player.stop();
+                stopProgressTracker();
+            }
+        });
     }
 
     public void seekTo(long positionMs) {
-        if (player != null) {
-            player.seekTo(Math.max(0, positionMs));
-        }
+        runOnMainThread("seekTo", () -> {
+            if (player != null) {
+                player.seekTo(Math.max(0, positionMs));
+            }
+        });
     }
 
     public void skip(long deltaMs) {
-        if (player != null) {
-            long newPos = Math.max(0, player.getCurrentPosition() + deltaMs);
-            if (player.getDuration() > 0) {
-                newPos = Math.min(newPos, player.getDuration());
+        runOnMainThread("skip", () -> {
+            if (player != null) {
+                long newPos = Math.max(0, player.getCurrentPosition() + deltaMs);
+                if (player.getDuration() > 0) {
+                    newPos = Math.min(newPos, player.getDuration());
+                }
+                player.seekTo(newPos);
             }
-            player.seekTo(newPos);
-        }
+        });
     }
 
     public void next() {
-        if (player != null && player.hasNextMediaItem()) {
-            player.seekToNextMediaItem();
-        }
+        runOnMainThread("next", () -> {
+            if (player != null && player.hasNextMediaItem()) {
+                player.seekToNextMediaItem();
+            }
+        });
     }
 
     public void previous() {
-        if (player != null) {
-            if (player.getCurrentPosition() > 3000 || !player.hasPreviousMediaItem()) {
-                player.seekTo(0);
-            } else {
-                player.seekToPreviousMediaItem();
+        runOnMainThread("previous", () -> {
+            if (player != null) {
+                if (player.getCurrentPosition() > 3000 || !player.hasPreviousMediaItem()) {
+                    player.seekTo(0);
+                } else {
+                    player.seekToPreviousMediaItem();
+                }
             }
-        }
+        });
     }
 
     public void setPlaybackSpeed(float speed) {
-        if (player != null) {
-            player.setPlaybackParameters(new PlaybackParameters(speed));
-        }
+        runOnMainThread("setPlaybackSpeed", () -> {
+            if (player != null) {
+                player.setPlaybackParameters(new PlaybackParameters(speed));
+            }
+        });
     }
 
     public void setRepeatMode(String mode) {
-        if (player != null) {
-            switch (mode) {
-                case "one":
-                    player.setRepeatMode(Player.REPEAT_MODE_ONE);
-                    break;
-                case "all":
-                    player.setRepeatMode(Player.REPEAT_MODE_ALL);
-                    break;
-                case "off":
-                default:
-                    player.setRepeatMode(Player.REPEAT_MODE_OFF);
-                    break;
+        runOnMainThread("setRepeatMode", () -> {
+            if (player != null) {
+                switch (mode) {
+                    case "one":
+                        player.setRepeatMode(Player.REPEAT_MODE_ONE);
+                        break;
+                    case "all":
+                        player.setRepeatMode(Player.REPEAT_MODE_ALL);
+                        break;
+                    case "off":
+                    default:
+                        player.setRepeatMode(Player.REPEAT_MODE_OFF);
+                        break;
+                }
             }
-        }
+        });
     }
 
     public void setVolume(float volume) {
-        if (player != null) {
-            player.setVolume(Math.max(0.0f, Math.min(1.0f, volume)));
-        }
+        runOnMainThread("setVolume", () -> {
+            if (player != null) {
+                player.setVolume(Math.max(0.0f, Math.min(1.0f, volume)));
+            }
+        });
     }
 
     public ExoPlayer getPlayer() {

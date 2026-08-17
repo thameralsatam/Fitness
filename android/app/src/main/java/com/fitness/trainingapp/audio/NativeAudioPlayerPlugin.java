@@ -377,22 +377,36 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
 
     @PluginMethod
     public void getPlaybackState(PluginCall call) {
-        PlaybackService service = PlaybackService.getInstance();
-        JSObject ret = new JSObject();
-        if (service != null && service.getPlayer() != null) {
-            ret.put("isPlaying", service.getPlayer().isPlaying());
-            ret.put("currentPosition", service.getPlayer().getCurrentPosition() / 1000.0);
-            ret.put("duration", service.getPlayer().getDuration() / 1000.0);
-            ret.put("currentIndex", service.getPlayer().getCurrentMediaItemIndex());
-            ret.put("playbackSpeed", service.getPlayer().getPlaybackParameters().speed);
-        } else {
-            ret.put("isPlaying", false);
-            ret.put("currentPosition", 0);
-            ret.put("duration", 0);
-            ret.put("currentIndex", -1);
-            ret.put("playbackSpeed", 1.0);
-        }
-        call.resolve(ret);
+        Log.d(TAG, "[DEBUG_NATIVE_AUDIO] Current thread before player operation (getPlaybackState): " + Thread.currentThread().getName());
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            Log.d(TAG, "[DEBUG_PLAYBACK] Player operation (getPlaybackState) executing on thread: " + Thread.currentThread().getName());
+            PlaybackService service = PlaybackService.getInstance();
+            JSObject ret = new JSObject();
+            if (service != null && service.getPlayer() != null) {
+                try {
+                    ret.put("isPlaying", service.getPlayer().isPlaying());
+                    ret.put("currentPosition", service.getPlayer().getCurrentPosition() / 1000.0);
+                    ret.put("duration", service.getPlayer().getDuration() / 1000.0);
+                    ret.put("currentIndex", service.getPlayer().getCurrentMediaItemIndex());
+                    ret.put("playbackSpeed", service.getPlayer().getPlaybackParameters().speed);
+                    Log.d(TAG, "[DEBUG_PLAYBACK] Player operation (getPlaybackState) completed successfully on thread: " + Thread.currentThread().getName());
+                } catch (Exception e) {
+                    Log.e(TAG, "[DEBUG_PLAYBACK] Player operation (getPlaybackState) failed: " + e.getMessage(), e);
+                    ret.put("isPlaying", false);
+                    ret.put("currentPosition", 0);
+                    ret.put("duration", 0);
+                    ret.put("currentIndex", -1);
+                    ret.put("playbackSpeed", 1.0);
+                }
+            } else {
+                ret.put("isPlaying", false);
+                ret.put("currentPosition", 0);
+                ret.put("duration", 0);
+                ret.put("currentIndex", -1);
+                ret.put("playbackSpeed", 1.0);
+            }
+            call.resolve(ret);
+        });
     }
 
     @Override
