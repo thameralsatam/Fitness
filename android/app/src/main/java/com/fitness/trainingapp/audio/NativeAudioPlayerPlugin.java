@@ -16,6 +16,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "NativeAudioPlayer")
 public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.PlaybackEventListener {
@@ -28,6 +30,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
 
     private static final List<ServiceTask> pendingTasks = new ArrayList<>();
     private static NativeAudioPlayerPlugin activeInstance;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     @Override
     public void load() {
@@ -177,7 +180,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
         }
 
         final String finalChunk = chunk;
-        getBridge().executeOnAnExecutor(() -> {
+        executorService.execute(() -> {
             try {
                 byte[] decodedBytes = Base64.decode(finalChunk, Base64.DEFAULT);
                 File file = getAudioTrackFile(id);
