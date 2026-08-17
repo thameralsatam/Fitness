@@ -67,6 +67,7 @@ public class PlaybackService extends MediaSessionService {
         instance = this;
         createNotificationChannel();
         initializePlayerAndSession();
+        NativeAudioPlayerPlugin.onServiceReady(this);
     }
 
     private void createNotificationChannel() {

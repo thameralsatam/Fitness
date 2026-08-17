@@ -60,6 +60,7 @@ import { Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { NativeFilePickerModal } from './NativeFilePickerModal';
 import { notifyModalChange } from '../utils/modalManager';
+import { useAudio } from '../context/AudioContext';
 
 interface AudioPlayerSectionProps {
   currentLang: Language;
@@ -88,21 +89,39 @@ interface EditTrackModalData {
 }
 
 export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentLang }) => {
-  const [tracks, setTracks] = useState<AudioTrack[]>([]);
-  const [folders, setFolders] = useState<AudioFolder[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
-  const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(-1);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [playbackRate, setPlaybackRate] = useState<number>(1);
-  const [playbackMode, setPlaybackMode] = useState<'all' | 'shuffle' | 'one' | 'off'>('all');
+  const {
+    tracks,
+    folders,
+    selectedFolderId,
+    setSelectedFolderId,
+    currentTrackIndex,
+    currentTrack,
+    displayedTracks,
+    isPlaying,
+    currentTime,
+    duration,
+    isMuted,
+    playbackRate,
+    playbackMode,
+    playTrackAtIndex,
+    playTrackById,
+    togglePlay,
+    handleNext,
+    handlePrev,
+    handleSkip,
+    handleSeek: seekToTime,
+    cycleSpeed,
+    cyclePlaybackMode,
+    toggleMute,
+    stopAudio,
+    setTracks,
+    setFolders,
+    refreshTracksAndFolders,
+  } = useAudio();
+
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
-  const [, setIsLoading] = useState<boolean>(true);
   const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
-  const [, setCurrentAudioUrl] = useState<string | null>(null);
 
   // Active 3-dots dropdown track ID and folder ID
   const [activeMenuTrackId, setActiveMenuTrackId] = useState<string | null>(null);
@@ -126,20 +145,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   const [deletingFolder, setDeletingFolder] = useState<AudioFolder | null>(null);
   const [deleteFolderMode, setDeleteFolderMode] = useState<'keep_tracks' | 'delete_all'>('keep_tracks');
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Synchronized refs to avoid stale closures in audio event handlers
-  const tracksRef = useRef<AudioTrack[]>(tracks);
-  tracksRef.current = tracks;
-  const currentTrackIndexRef = useRef<number>(currentTrackIndex);
-  currentTrackIndexRef.current = currentTrackIndex;
-  const playbackModeRef = useRef<'all' | 'shuffle' | 'one' | 'off'>(playbackMode);
-  playbackModeRef.current = playbackMode;
-  const playbackRateRef = useRef<number>(playbackRate);
-  playbackRateRef.current = playbackRate;
-  const isMutedRef = useRef<boolean>(isMuted);
-  isMutedRef.current = isMuted;
 
   // Close 3-dot dropdown menus on outside click
   useEffect(() => {
@@ -175,270 +181,10 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
     };
   }, [isAnyAudioModalOpen]);
 
-  // Load tracks and folders on mount
-  useEffect(() => {
-    let isMounted = true;
-    const loadedFolders = getAudioFolders();
-    setFolders(loadedFolders);
-
-    getAllTracks()
-      .then((loaded) => {
-        if (isMounted) {
-          setTracks(loaded);
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load audio tracks:', err);
-        if (isMounted) setIsLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Filtered tracks based on selected folder
-  const displayedTracks =
-    selectedFolderId === 'all'
-      ? tracks
-      : tracks.filter((t) => (t.folderId || '') === selectedFolderId);
-
-  // Set up audio source when track changes
-  useEffect(() => {
-    if (currentTrackIndex >= 0 && currentTrackIndex < tracks.length) {
-      const track = tracks[currentTrackIndex];
-      const url = URL.createObjectURL(track.blob);
-      setCurrentAudioUrl(url);
-
-      if (audioRef.current) {
-        audioRef.current.src = url;
-        audioRef.current.playbackRate = playbackRate;
-        audioRef.current.muted = isMuted;
-        audioRef.current.loop = playbackMode === 'one';
-        audioRef.current
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
-      }
-
-      return () => {
-        URL.revokeObjectURL(url);
-      };
-    } else {
-      setCurrentAudioUrl(null);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
-      setIsPlaying(false);
-      setCurrentTime(0);
-      setDuration(0);
-    }
-  }, [currentTrackIndex, tracks]);
-
-  // Robust play track at specific index
-  const playTrackAtIndex = (index: number) => {
-    const list = tracksRef.current;
-    if (index < 0 || index >= list.length) return;
-
-    if (index === currentTrackIndexRef.current) {
-      // Replay current track from start
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
-      }
-    } else {
-      setCurrentTrackIndex(index);
-    }
-  };
-
-  const playTrackById = (id: string) => {
-    const targetIdx = tracks.findIndex((t) => t.id === id);
-    if (targetIdx !== -1) {
-      playTrackAtIndex(targetIdx);
-    }
-  };
-
-  // Handle Play/Pause
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (currentTrackIndex === -1 && tracks.length > 0) {
-      if (displayedTracks.length > 0) {
-        playTrackById(displayedTracks[0].id);
-      } else {
-        playTrackAtIndex(0);
-      }
-      return;
-    }
-
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false));
-    }
-  };
-
-  // Next Track handler (Forward)
-  const handleNext = () => {
-    const list = displayedTracks.length > 0 ? displayedTracks : tracksRef.current;
-    if (list.length === 0) return;
-
-    const currentTrackId = tracksRef.current[currentTrackIndexRef.current]?.id;
-    const currentInFilteredIdx = list.findIndex((t) => t.id === currentTrackId);
-    const mode = playbackModeRef.current;
-
-    if (mode === 'shuffle' && list.length > 1) {
-      let nextRandom = Math.floor(Math.random() * list.length);
-      while (nextRandom === currentInFilteredIdx && list.length > 1) {
-        nextRandom = Math.floor(Math.random() * list.length);
-      }
-      playTrackById(list[nextRandom].id);
-      return;
-    }
-
-    if (currentInFilteredIdx >= 0 && currentInFilteredIdx < list.length - 1) {
-      playTrackById(list[currentInFilteredIdx + 1].id);
-    } else {
-      // Loop back to start
-      playTrackById(list[0].id);
-    }
-  };
-
-  // Prev Track handler (Rewind/Back)
-  const handlePrev = () => {
-    const list = displayedTracks.length > 0 ? displayedTracks : tracksRef.current;
-    if (list.length === 0) return;
-
-    if (audioRef.current && audioRef.current.currentTime > 3) {
-      audioRef.current.currentTime = 0;
-      setCurrentTime(0);
-      return;
-    }
-
-    const currentTrackId = tracksRef.current[currentTrackIndexRef.current]?.id;
-    const currentInFilteredIdx = list.findIndex((t) => t.id === currentTrackId);
-
-    if (currentInFilteredIdx > 0) {
-      playTrackById(list[currentInFilteredIdx - 1].id);
-    } else {
-      playTrackById(list[list.length - 1].id);
-    }
-  };
-
-  // Skip seconds (+10s / -10s)
-  const handleSkip = (seconds: number) => {
-    if (!audioRef.current) return;
-    const newTime = Math.min(Math.max(0, audioRef.current.currentTime + seconds), duration || 0);
-    audioRef.current.currentTime = newTime;
-    setCurrentTime(newTime);
-  };
-
   // Seek bar scrub
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
-  };
-
-  // Cycle Speed option
-  const SPEED_OPTIONS = [1, 1.25, 1.5, 2, 0.75];
-  const cycleSpeed = () => {
-    const currentIdx = SPEED_OPTIONS.indexOf(playbackRate);
-    const nextIdx = (currentIdx + 1) % SPEED_OPTIONS.length;
-    const nextRate = SPEED_OPTIONS[nextIdx];
-    setPlaybackRate(nextRate);
-    if (audioRef.current) {
-      audioRef.current.playbackRate = nextRate;
-    }
-  };
-
-  // Cycle Playback Mode (all -> shuffle -> one -> off -> all)
-  const cyclePlaybackMode = () => {
-    setPlaybackMode((prev) => {
-      const next =
-        prev === 'all'
-          ? 'shuffle'
-          : prev === 'shuffle'
-          ? 'one'
-          : prev === 'one'
-          ? 'off'
-          : 'all';
-      if (audioRef.current) {
-        audioRef.current.loop = next === 'one';
-      }
-      return next;
-    });
-  };
-
-  // Toggle Mute
-  const toggleMute = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    if (audioRef.current) {
-      audioRef.current.muted = nextMuted;
-    }
-  };
-
-  // Audio events
-  const onTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
-
-  const onLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration || 0);
-    }
-  };
-
-  const onEnded = () => {
-    const mode = playbackModeRef.current;
-    const list = displayedTracks.length > 0 ? displayedTracks : tracksRef.current;
-
-    if (list.length === 0) return;
-
-    if (mode === 'one') {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-      }
-      return;
-    }
-
-    const currentTrackId = tracksRef.current[currentTrackIndexRef.current]?.id;
-    const currentInFilteredIdx = list.findIndex((t) => t.id === currentTrackId);
-
-    if (mode === 'shuffle' && list.length > 1) {
-      let nextRandom = Math.floor(Math.random() * list.length);
-      while (nextRandom === currentInFilteredIdx && list.length > 1) {
-        nextRandom = Math.floor(Math.random() * list.length);
-      }
-      playTrackById(list[nextRandom].id);
-      return;
-    }
-
-    if (currentInFilteredIdx >= 0 && currentInFilteredIdx < list.length - 1) {
-      playTrackById(list[currentInFilteredIdx + 1].id);
-    } else if (mode === 'all') {
-      playTrackById(list[0].id);
-    } else {
-      // mode === 'off': stop at end of playlist
-      setIsPlaying(false);
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-      }
-    }
+    seekToTime(time);
   };
 
   // When files are selected from input or drag-and-drop
@@ -520,10 +266,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
         addedTracks.push(newTrack);
       }
 
-      setTracks((prev) => [...prev, ...addedTracks]);
-      if (currentTrackIndex === -1 && addedTracks.length > 0) {
-        setCurrentTrackIndex(0);
-      }
+      await refreshTracksAndFolders();
     } catch (err) {
       console.error('Error saving audio/video files:', err);
     } finally {
@@ -666,17 +409,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
 
     try {
       await deleteTrack(id);
-      setTracks((prev) => prev.filter((t) => t.id !== id));
-
-      if (trackIndex === currentTrackIndex) {
-        if (tracks.length > 1) {
-          setCurrentTrackIndex((prev) => (prev >= tracks.length - 1 ? 0 : prev));
-        } else {
-          setCurrentTrackIndex(-1);
-        }
-      } else if (trackIndex < currentTrackIndex) {
-        setCurrentTrackIndex((prev) => prev - 1);
-      }
+      await refreshTracksAndFolders();
     } catch (err) {
       console.error('Failed to delete track:', err);
     } finally {
@@ -722,12 +455,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   const handleConfirmClearAll = async () => {
     try {
       await clearAllTracks();
-      setTracks([]);
-      setCurrentTrackIndex(-1);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
+      await refreshTracksAndFolders();
     } catch (err) {
       console.error('Failed to clear all tracks:', err);
     } finally {
@@ -742,22 +470,10 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const currentTrack = currentTrackIndex >= 0 ? tracks[currentTrackIndex] : null;
   const activeFolder = folders.find((f) => f.id === selectedFolderId);
 
   return (
     <div className="space-y-4">
-      {/* Hidden Native Audio Element */}
-      <audio
-        ref={audioRef}
-        onTimeUpdate={onTimeUpdate}
-        onLoadedMetadata={onLoadedMetadata}
-        onEnded={onEnded}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onError={() => setIsPlaying(false)}
-      />
-
       {/* Main Player Display Card */}
       <div className="bg-[#15221b] text-white rounded-3xl p-4 sm:p-5 shadow-md border border-[#23382c] space-y-3.5 relative overflow-hidden">
         {/* Background Subtle Wave Accents */}
