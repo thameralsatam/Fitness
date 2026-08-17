@@ -30,16 +30,16 @@
 
         </activity>
 
-        <receiver
-            android:name=".widget.FitnessWidgetReceiver"
+        <!-- AndroidX Media3 MediaSessionService for Background Audio & Media Notification -->
+        <service
+            android:name=".audio.PlaybackService"
+            android:foregroundServiceType="mediaPlayback"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="androidx.media3.session.MediaSessionService"/>
+                <action android:name="android.media.browse.MediaBrowserService"/>
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/fitness_widget_info" />
-        </receiver>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

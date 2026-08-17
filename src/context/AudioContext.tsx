@@ -5,6 +5,12 @@ import {
   getAllTracks,
   getAudioFolders,
 } from '../utils/audioDb';
+import {
+  NativeAudioPlayer,
+  isNativeAudioAvailable,
+  blobToBase64,
+  NativeAudioTrackItem,
+} from '../utils/nativeAudioBridge';
 
 interface AudioContextType {
   tracks: AudioTrack[];
@@ -38,6 +44,7 @@ interface AudioContextType {
   refreshTracksAndFolders: () => Promise<void>;
   currentLang: 'ar' | 'de';
   setCurrentLang: (lang: 'ar' | 'de') => void;
+  isNative: boolean;
 }
 
 const AudioContext = createContext<AudioContextType | null>(null);
@@ -46,6 +53,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   children,
   lang,
 }) => {
+  const isNative = isNativeAudioAvailable();
   const [currentLang, setCurrentLang] = useState<'ar' | 'de'>(lang);
   useEffect(() => {
     setCurrentLang(lang);
@@ -107,10 +115,78 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   const currentTrackRef = useRef<AudioTrack | null>(currentTrack);
   currentTrackRef.current = currentTrack;
 
-  // Track URL management
+  // Native Android Media3 Listeners
+  useEffect(() => {
+    if (!isNative) return;
+
+    let removeListeners: Array<() => void> = [];
+
+    const setupListeners = async () => {
+      try {
+        const sub1 = await NativeAudioPlayer.addListener('onPlaybackStateChange', (data) => {
+          setIsPlaying(data.isPlaying);
+        });
+        removeListeners.push(sub1.remove);
+
+        const sub2 = await NativeAudioPlayer.addListener('onProgress', (data) => {
+          setCurrentTime(data.currentTime);
+          if (data.duration > 0) {
+            setDuration(data.duration);
+          }
+        });
+        removeListeners.push(sub2.remove);
+
+        const sub3 = await NativeAudioPlayer.addListener('onTrackChanged', (data) => {
+          if (data.currentTrackId) {
+            const idx = tracksRef.current.findIndex((t) => t.id === data.currentTrackId);
+            if (idx !== -1) {
+              setCurrentTrackIndex(idx);
+            }
+          }
+        });
+        removeListeners.push(sub3.remove);
+
+        const sub4 = await NativeAudioPlayer.addListener('onTrackEnded', (data) => {
+          // Native player handles playlist loop / next item
+          if (playbackModeRef.current === 'off' && tracksRef.current.length > 0) {
+            const lastTrack = tracksRef.current[tracksRef.current.length - 1];
+            if (lastTrack && lastTrack.id === data.currentTrackId) {
+              setIsPlaying(false);
+            }
+          }
+        });
+        removeListeners.push(sub4.remove);
+
+        const sub5 = await NativeAudioPlayer.addListener('onError', (data) => {
+          console.error('Native Audio Player error:', data.message);
+          setIsPlaying(false);
+        });
+        removeListeners.push(sub5.remove);
+      } catch (e) {
+        console.warn('Could not register native audio listeners:', e);
+      }
+    };
+
+    setupListeners();
+
+    return () => {
+      removeListeners.forEach((remove) => {
+        try {
+          remove();
+        } catch {
+          // ignore
+        }
+      });
+    };
+  }, [isNative]);
+
+  // Track URL management for Web Fallback
   const [activeAudioUrl, setActiveAudioUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    // If native, Web HTMLAudioElement is not used
+    if (isNative) return;
+
     if (currentTrack) {
       const url = URL.createObjectURL(currentTrack.blob);
       setActiveAudioUrl(url);
@@ -139,10 +215,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
       setCurrentTime(0);
       setDuration(0);
     }
-  }, [currentTrackIndex, tracks]);
+  }, [currentTrackIndex, tracks, isNative]);
 
-  // Configure Media Session API for mobile & browser background playback and lock-screen
+  // Configure Media Session API for Web browser fallback
   useEffect(() => {
+    if (isNative) return;
+
     if (typeof window !== 'undefined' && 'mediaSession' in navigator && currentTrack) {
       const trackName = currentTrack.name;
       const albumName =
@@ -215,7 +293,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         handleSkip(10);
       });
 
-      // Crucial: Stop handler handles notification close / stop button
       setHandler('stop', () => {
         stopAudio();
       });
@@ -227,10 +304,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         }
       });
     }
-  }, [currentTrack, currentLang]);
+  }, [currentTrack, currentLang, isNative]);
 
-  // Sync MediaSession playback state & position state for lockscreen scrubber
+  // Sync MediaSession playback state & position state for Web lockscreen scrubber
   useEffect(() => {
+    if (isNative) return;
+
     if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
       
@@ -241,27 +320,94 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
             playbackRate: playbackRate || 1,
             position: Math.min(Math.max(0, currentTime), duration),
           });
-        } catch (e) {
+        } catch {
           // Ignore unsupported position state bounds
         }
       }
     }
-  }, [isPlaying, currentTime, duration, playbackRate]);
+  }, [isPlaying, currentTime, duration, playbackRate, isNative]);
 
-  const playTrackAtIndex = (index: number) => {
+  // Helper to ensure track is cached into native storage
+  const ensureNativeTrackCached = async (track: AudioTrack) => {
+    try {
+      const { cached } = await NativeAudioPlayer.hasCachedTrack({ id: track.id });
+      if (!cached) {
+        const base64Data = await blobToBase64(track.blob);
+        await NativeAudioPlayer.cacheTrack({
+          id: track.id,
+          data: base64Data,
+          mimeType: track.type || 'audio/mpeg',
+        });
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to cache track natively:', track.id, e);
+      return false;
+    }
+  };
+
+  const playTrackAtIndex = async (index: number) => {
     const list = tracksRef.current;
     if (index < 0 || index >= list.length) return;
 
-    if (index === currentTrackIndexRef.current) {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
+    const track = list[index];
+    if (!track) return;
+
+    if (isNative) {
+      try {
+        await ensureNativeTrackCached(track);
+
+        const currentActiveList =
+          displayedTracksRef.current.length > 0
+            ? displayedTracksRef.current
+            : tracksRef.current;
+
+        const playlistData: NativeAudioTrackItem[] = currentActiveList.map((t) => ({
+          id: t.id,
+          name: t.name,
+          artist: currentLang === 'ar' ? 'تمارين اليوم' : 'Full Body Workout',
+          album: currentLang === 'ar' ? 'المحفزات الصوتية للتمارين' : 'Trainingsplan Motivation Audio',
+          duration: t.duration || 0,
+          order: t.order || 0,
+        }));
+
+        const startIndexInPlaylist = currentActiveList.findIndex((t) => t.id === track.id);
+
+        await NativeAudioPlayer.setPlaylist({
+          tracks: playlistData,
+          startIndex: Math.max(0, startIndexInPlaylist),
+          startPosition: 0,
+        });
+
+        await NativeAudioPlayer.setPlaybackSpeed({ speed: playbackRate });
+        await NativeAudioPlayer.setRepeatMode({ mode: playbackMode });
+        await NativeAudioPlayer.setVolume({ volume: isMuted ? 0 : 1 });
+
+        setCurrentTrackIndex(index);
+        setIsPlaying(true);
+
+        // Pre-cache other tracks in playlist in background
+        currentActiveList.forEach((t) => {
+          if (t.id !== track.id) {
+            ensureNativeTrackCached(t);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to play native track:', err);
+        setIsPlaying(false);
       }
     } else {
-      setCurrentTrackIndex(index);
+      if (index === currentTrackIndexRef.current) {
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current
+            .play()
+            .then(() => setIsPlaying(true))
+            .catch(() => setIsPlaying(false));
+        }
+      } else {
+        setCurrentTrackIndex(index);
+      }
     }
   };
 
@@ -273,7 +419,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   };
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
     if (currentTrackIndex === -1 && tracks.length > 0) {
       if (displayedTracks.length > 0) {
         playTrackById(displayedTracks[0].id);
@@ -282,6 +427,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
       }
       return;
     }
+
+    if (isNative) {
+      if (isPlaying) {
+        NativeAudioPlayer.pause().catch(() => {});
+        setIsPlaying(false);
+      } else {
+        NativeAudioPlayer.resume().catch(() => {});
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    if (!audioRef.current) return;
 
     if (isPlaying) {
       audioRef.current.pause();
@@ -295,6 +453,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   };
 
   const handleNext = () => {
+    if (isNative) {
+      NativeAudioPlayer.next().catch(() => {});
+      return;
+    }
+
     const list =
       displayedTracksRef.current.length > 0
         ? displayedTracksRef.current
@@ -322,6 +485,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   };
 
   const handlePrev = () => {
+    if (isNative) {
+      NativeAudioPlayer.previous().catch(() => {});
+      return;
+    }
+
     const list =
       displayedTracksRef.current.length > 0
         ? displayedTracksRef.current
@@ -345,6 +513,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   };
 
   const handleSkip = (seconds: number) => {
+    if (isNative) {
+      NativeAudioPlayer.skip({ seconds }).catch(() => {});
+      return;
+    }
+
     if (!audioRef.current) return;
     const newTime = Math.min(
       Math.max(0, audioRef.current.currentTime + seconds),
@@ -355,6 +528,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   };
 
   const handleSeek = (time: number) => {
+    if (isNative) {
+      NativeAudioPlayer.seekTo({ time }).catch(() => {});
+      setCurrentTime(time);
+      return;
+    }
+
     if (audioRef.current) {
       audioRef.current.currentTime = time;
       setCurrentTime(time);
@@ -367,7 +546,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     const nextIdx = (currentIdx + 1) % SPEED_OPTIONS.length;
     const nextRate = SPEED_OPTIONS[nextIdx];
     setPlaybackRate(nextRate);
-    if (audioRef.current) {
+
+    if (isNative) {
+      NativeAudioPlayer.setPlaybackSpeed({ speed: nextRate }).catch(() => {});
+    } else if (audioRef.current) {
       audioRef.current.playbackRate = nextRate;
     }
   };
@@ -382,7 +564,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
           : prev === 'one'
           ? 'off'
           : 'all';
-      if (audioRef.current) {
+
+      if (isNative) {
+        NativeAudioPlayer.setRepeatMode({ mode: next }).catch(() => {});
+      } else if (audioRef.current) {
         audioRef.current.loop = next === 'one';
       }
       return next;
@@ -392,13 +577,18 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   const toggleMute = () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
-    if (audioRef.current) {
+
+    if (isNative) {
+      NativeAudioPlayer.setVolume({ volume: nextMuted ? 0 : 1 }).catch(() => {});
+    } else if (audioRef.current) {
       audioRef.current.muted = nextMuted;
     }
   };
 
   const stopAudio = () => {
-    if (audioRef.current) {
+    if (isNative) {
+      NativeAudioPlayer.stop().catch(() => {});
+    } else if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
@@ -407,18 +597,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   };
 
   const onTimeUpdate = () => {
-    if (audioRef.current) {
+    if (!isNative && audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
     }
   };
 
   const onLoadedMetadata = () => {
-    if (audioRef.current) {
+    if (!isNative && audioRef.current) {
       setDuration(audioRef.current.duration || 0);
     }
   };
 
   const onEnded = () => {
+    if (isNative) return;
+
     const mode = playbackModeRef.current;
     const list =
       displayedTracksRef.current.length > 0
@@ -496,18 +688,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         refreshTracksAndFolders,
         currentLang,
         setCurrentLang,
+        isNative,
       }}
     >
-      {/* Root Persistent HTML Audio Element */}
-      <audio
-        ref={audioRef}
-        onTimeUpdate={onTimeUpdate}
-        onLoadedMetadata={onLoadedMetadata}
-        onEnded={onEnded}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onError={() => setIsPlaying(false)}
-      />
+      {/* Root Persistent HTML Audio Element - active only for Web fallback */}
+      {!isNative && (
+        <audio
+          ref={audioRef}
+          onTimeUpdate={onTimeUpdate}
+          onLoadedMetadata={onLoadedMetadata}
+          onEnded={onEnded}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onError={() => setIsPlaying(false)}
+        />
+      )}
       {children}
     </AudioContext.Provider>
   );

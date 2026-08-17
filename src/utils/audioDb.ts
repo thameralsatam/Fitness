@@ -4,6 +4,8 @@ export interface AudioFolder {
   createdAt: number;
 }
 
+import { NativeAudioPlayer, isNativeAudioAvailable } from './nativeAudioBridge';
+
 export interface AudioTrack {
   id: string;
   name: string;
@@ -176,6 +178,9 @@ export async function addMultipleTracks(files: File[], startingOrder: number): P
 }
 
 export async function deleteTrack(id: string): Promise<void> {
+  if (isNativeAudioAvailable()) {
+    NativeAudioPlayer.deleteCachedTrack({ id }).catch(() => {});
+  }
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -249,6 +254,9 @@ export async function deleteTracksInFolder(folderId: string): Promise<void> {
       const all = (req.result as AudioTrack[]) || [];
       all.forEach((t) => {
         if (t.folderId === folderId) {
+          if (isNativeAudioAvailable()) {
+            NativeAudioPlayer.deleteCachedTrack({ id: t.id }).catch(() => {});
+          }
           store.delete(t.id);
         }
       });
@@ -260,6 +268,9 @@ export async function deleteTracksInFolder(folderId: string): Promise<void> {
 }
 
 export async function clearAllTracks(): Promise<void> {
+  if (isNativeAudioAvailable()) {
+    NativeAudioPlayer.clearCache().catch(() => {});
+  }
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');

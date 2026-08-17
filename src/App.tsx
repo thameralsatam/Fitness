@@ -113,7 +113,7 @@ export default function App() {
     initializeCustomFonts();
   }, []);
 
-  // Sync language attribute to html document & native widget
+  // Sync language attribute to html document
   useEffect(() => {
     document.documentElement.lang = currentLang;
     document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
@@ -121,16 +121,6 @@ export default function App() {
       localStorage.setItem('gym_lang', currentLang);
     } catch {
       // fallback
-    }
-
-    // Sync with Android Glance Widget if running on Android
-    try {
-      const bridge = (window as unknown as { AndroidWidgetBridge?: { syncWidgetLanguage?: (l: string) => void } }).AndroidWidgetBridge;
-      if (bridge && typeof bridge.syncWidgetLanguage === 'function') {
-        bridge.syncWidgetLanguage(currentLang);
-      }
-    } catch (err) {
-      console.warn('Widget bridge sync:', err);
     }
   }, [currentLang]);
 
@@ -162,26 +152,6 @@ export default function App() {
       // fallback
     }
   }, [completedExercises]);
-
-  // Handle Home Screen Widget Deep-Link Navigation
-  useEffect(() => {
-    const handleWidgetNavigate = (e: Event) => {
-      const customEvent = e as CustomEvent<{ tab?: ViewTab }>;
-      if (customEvent.detail) {
-        const { tab } = customEvent.detail;
-        if (tab && ['plan', 'timer', 'audio', 'stats', 'tools'].includes(tab)) {
-          setCurrentTab(tab);
-          triggerHaptic('selection');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }
-    };
-
-    window.addEventListener('widget-navigate', handleWidgetNavigate);
-    return () => {
-      window.removeEventListener('widget-navigate', handleWidgetNavigate);
-    };
-  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
