@@ -13,6 +13,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { SplashScreen } from './components/SplashScreen';
 import { AudioProvider } from './context/AudioContext';
 import { FloatingMiniPlayer } from './components/FloatingMiniPlayer';
+import { FontSettingsModal } from './components/FontSettingsModal';
 import { triggerHaptic } from './utils/haptics';
 
 interface ConfirmModalState {
@@ -42,17 +43,30 @@ export default function App() {
     } catch {
       // fallback
     }
-    return 'de';
+    return 'ar';
   });
 
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+  const [titleFont, setTitleFont] = useState<string>(() => {
     try {
-      const saved = localStorage.getItem('gym_dark_mode');
-      return saved === 'true';
+      const saved = localStorage.getItem('gym_font_display');
+      if (saved) return saved;
     } catch {
-      return false;
+      // fallback
     }
+    return "'Kufam', sans-serif";
   });
+
+  const [bodyFont, setBodyFont] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('gym_font_body');
+      if (saved) return saved;
+    } catch {
+      // fallback
+    }
+    return "'IBM Plex Sans Arabic', sans-serif";
+  });
+
+  const [isFontModalOpen, setIsFontModalOpen] = useState<boolean>(false);
 
   const [currentTab, setCurrentTab] = useState<ViewTab>('plan');
 
@@ -93,7 +107,7 @@ export default function App() {
 
   const t = I18N[currentLang];
 
-  // Sync language attribute to html document
+  // Sync language attribute to html document & native widget
   useEffect(() => {
     document.documentElement.lang = currentLang;
     document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
@@ -102,21 +116,37 @@ export default function App() {
     } catch {
       // fallback
     }
+
+    // Sync with Android Glance Widget if running on Android
+    try {
+      const bridge = (window as unknown as { AndroidWidgetBridge?: { syncWidgetLanguage?: (l: string) => void } }).AndroidWidgetBridge;
+      if (bridge && typeof bridge.syncWidgetLanguage === 'function') {
+        bridge.syncWidgetLanguage(currentLang);
+      }
+    } catch (err) {
+      console.warn('Widget bridge sync:', err);
+    }
   }, [currentLang]);
 
-  // Persist dark mode preference
+  // Apply selected fonts to CSS Custom Properties in real time
   useEffect(() => {
     try {
-      localStorage.setItem('gym_dark_mode', String(isDarkMode));
-      if (isDarkMode) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      document.documentElement.style.setProperty('--font-display', titleFont);
+      localStorage.setItem('gym_font_display', titleFont);
     } catch {
       // fallback
     }
-  }, [isDarkMode]);
+  }, [titleFont]);
+
+  useEffect(() => {
+    try {
+      document.documentElement.style.setProperty('--font-body', bodyFont);
+      document.body.style.fontFamily = bodyFont;
+      localStorage.setItem('gym_font_body', bodyFont);
+    } catch {
+      // fallback
+    }
+  }, [bodyFont]);
 
   // Persist completed exercises
   useEffect(() => {
@@ -159,11 +189,6 @@ export default function App() {
     const newLang = currentLang === 'de' ? 'ar' : 'de';
     setCurrentLang(newLang);
     showToast(newLang === 'ar' ? 'تم تغيير اللغة إلى العربية' : 'Sprache auf Deutsch geändert');
-  };
-
-  const handleToggleDarkMode = () => {
-    triggerHaptic('medium');
-    setIsDarkMode((prev) => !prev);
   };
 
   const handleToggleExercise = (id: number) => {
@@ -266,11 +291,7 @@ export default function App() {
 
   return (
     <AudioProvider lang={currentLang}>
-      <div className={`w-full min-h-screen max-w-[100vw] overflow-x-hidden flex flex-col transition-colors duration-300 ${
-        isDarkMode 
-          ? 'bg-[#0b1410] text-slate-100 selection:bg-emerald-500/30 selection:text-white' 
-          : 'bg-[#f6f8f6] text-[#15221b] selection:bg-[#215641]/15 selection:text-[#15221b]'
-      }`}>
+      <div className="w-full min-h-screen max-w-[100vw] overflow-x-hidden flex flex-col bg-[#f6f8f6] text-[#15221b] selection:bg-[#215641]/15 selection:text-[#15221b] transition-colors duration-300">
         {/* Animated Native Splash Screen */}
         <AnimatePresence>
           {showSplash && (
@@ -278,138 +299,149 @@ export default function App() {
           )}
         </AnimatePresence>
 
-      {/* Top Header */}
-      <Header
-        currentLang={currentLang}
-        onToggleLang={handleToggleLang}
-        onCopyPlan={handleCopyPlan}
-        onToggleAllAlts={handleToggleAllAlts}
-        onResetProgress={handleRequestResetProgress}
-        isDarkMode={isDarkMode}
-        onToggleDarkMode={handleToggleDarkMode}
-      />
+        {/* Top Header */}
+        <Header
+          currentLang={currentLang}
+          onToggleLang={handleToggleLang}
+          onCopyPlan={handleCopyPlan}
+          onToggleAllAlts={handleToggleAllAlts}
+          onResetProgress={handleRequestResetProgress}
+          onOpenFontSettings={() => setIsFontModalOpen(true)}
+        />
 
-      {/* Main View Container */}
-      <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-4 py-4 sm:py-6 overflow-x-hidden min-w-0 pb-28">
-        <AnimatePresence mode="wait">
-          {currentTab === 'plan' && (
-            <motion.div
-              key="view-plan"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <PlanView
-                exercises={EXERCISES_DATA}
-                completedExercises={completedExercises}
-                openPanels={openPanels}
-                currentLang={currentLang}
-                onToggleExercise={handleToggleExercise}
-                onTogglePanel={handleTogglePanel}
-                onResetToday={handleRequestResetProgress}
-                onNavigateTab={handleTabChange}
-                totalSessions={totalSessions}
-              />
-            </motion.div>
-          )}
+        {/* Main View Container */}
+        <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-4 py-4 sm:py-6 overflow-x-hidden min-w-0 pb-28">
+          <AnimatePresence mode="wait">
+            {currentTab === 'plan' && (
+              <motion.div
+                key="view-plan"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <PlanView
+                  exercises={EXERCISES_DATA}
+                  completedExercises={completedExercises}
+                  openPanels={openPanels}
+                  currentLang={currentLang}
+                  onToggleExercise={handleToggleExercise}
+                  onTogglePanel={handleTogglePanel}
+                  onResetToday={handleRequestResetProgress}
+                  onNavigateTab={handleTabChange}
+                  totalSessions={totalSessions}
+                />
+              </motion.div>
+            )}
 
-          {currentTab === 'timer' && (
-            <motion.div
-              key="view-timer"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <TimerView currentLang={currentLang} />
-            </motion.div>
-          )}
+            {currentTab === 'timer' && (
+              <motion.div
+                key="view-timer"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <TimerView currentLang={currentLang} />
+              </motion.div>
+            )}
 
-          {currentTab === 'audio' && (
-            <motion.div
-              key="view-audio"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <AudioView currentLang={currentLang} />
-            </motion.div>
-          )}
+            {currentTab === 'audio' && (
+              <motion.div
+                key="view-audio"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <AudioView currentLang={currentLang} />
+              </motion.div>
+            )}
 
-          {currentTab === 'tools' && (
-            <motion.div
-              key="view-tools"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ToolsView currentLang={currentLang} />
-            </motion.div>
-          )}
+            {currentTab === 'tools' && (
+              <motion.div
+                key="view-tools"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ToolsView currentLang={currentLang} />
+              </motion.div>
+            )}
 
-          {currentTab === 'stats' && (
+            {currentTab === 'stats' && (
+              <motion.div
+                key="view-stats"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <StatsView
+                  currentLang={currentLang}
+                  completedExercises={completedExercises}
+                  totalSessions={totalSessions}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+
+        {/* Persistent Floating Mini Audio Player when browsing other tabs */}
+        <FloatingMiniPlayer
+          currentTab={currentTab}
+          onNavigateTab={handleTabChange}
+          lang={currentLang}
+        />
+
+        {/* Liquid Glass Bottom Navigation Dock */}
+        <MobileBottomNav
+          currentTab={currentTab}
+          onTabChange={handleTabChange}
+          currentLang={currentLang}
+        />
+
+        {/* Font Settings Modal */}
+        <FontSettingsModal
+          isOpen={isFontModalOpen}
+          onClose={() => setIsFontModalOpen(false)}
+          lang={currentLang}
+          currentTitleFont={titleFont}
+          currentBodyFont={bodyFont}
+          onSelectTitleFont={setTitleFont}
+          onSelectBodyFont={setBodyFont}
+        />
+
+        {/* Confirmation Modal */}
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          title={confirmModal.title}
+          description={confirmModal.description}
+          confirmText={confirmModal.confirmText}
+          cancelText={confirmModal.cancelText}
+          type={confirmModal.type}
+          currentLang={currentLang}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        />
+
+        {/* Floating Toast Notification */}
+        <AnimatePresence>
+          {toastMessage && (
             <motion.div
-              key="view-stats"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: -16, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -16, scale: 0.95 }}
+              transition={{ duration: 0.18 }}
+              className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#15221b] text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg border border-white/10"
             >
-              <StatsView
-                currentLang={currentLang}
-                completedExercises={completedExercises}
-                totalSessions={totalSessions}
-              />
+              {toastMessage}
             </motion.div>
           )}
         </AnimatePresence>
-      </main>
-
-      {/* Persistent Floating Mini Audio Player when browsing other tabs */}
-      <FloatingMiniPlayer
-        currentTab={currentTab}
-        onNavigateTab={handleTabChange}
-        lang={currentLang}
-      />
-
-      {/* Liquid Glass Bottom Navigation Dock */}
-      <MobileBottomNav
-        currentTab={currentTab}
-        onTabChange={handleTabChange}
-        currentLang={currentLang}
-      />
-
-      {/* Confirmation Modal */}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        title={confirmModal.title}
-        description={confirmModal.description}
-        confirmText={confirmModal.confirmText}
-        cancelText={confirmModal.cancelText}
-        type={confirmModal.type}
-        currentLang={currentLang}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-      />
-
-      {/* Floating Toast Notification */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -16, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -16, scale: 0.95 }}
-            transition={{ duration: 0.18 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#15221b] text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg border border-white/10"
-          >
-            {toastMessage}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      </div>
     </AudioProvider>
   );
 }
+

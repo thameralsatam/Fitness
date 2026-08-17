@@ -31,6 +31,7 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.text.FontFamily
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -38,6 +39,22 @@ import androidx.glance.text.TextAlign
 import androidx.glance.unit.ColorProvider
 import com.fitness.trainingapp.MainActivity
 import com.fitness.trainingapp.R
+
+fun getWidgetLanguage(context: Context): String {
+    return try {
+        val sp = context.getSharedPreferences("gym_widget_prefs", Context.MODE_PRIVATE)
+        val lang = sp.getString("gym_lang", null)
+        if (!lang.isNullOrBlank()) return lang
+
+        val capSp = context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE)
+        val capLang = capSp.getString("gym_lang", null)
+        if (!capLang.isNullOrBlank()) return capLang
+
+        if (java.util.Locale.getDefault().language == "ar") "ar" else "de"
+    } catch (e: Exception) {
+        if (java.util.Locale.getDefault().language == "ar") "ar" else "de"
+    }
+}
 
 @Composable
 fun FitnessWidgetContent() {
@@ -47,7 +64,7 @@ fun FitnessWidgetContent() {
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(ColorProvider(Color(0xFF1B3D2F)))
+            .background(ColorProvider(Color(0xFF13271E)))
             .padding(12.dp)
             .cornerRadius(16.dp),
         contentAlignment = Alignment.Center
@@ -71,26 +88,43 @@ private fun createIntent(context: Context, tab: String): Intent {
 @Composable
 fun SmallFitnessWidget() {
     val context = LocalContext.current
+    val lang = getWidgetLanguage(context)
+    val isAr = lang == "ar"
+
+    val titleText = if (isAr) "خطة التدريب" else "Trainingsplan"
+    val startBtnText = if (isAr) "ابدأ الآن" else "Starten"
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
         modifier = GlanceModifier.fillMaxSize()
     ) {
+        Image(
+            provider = ImageProvider(R.drawable.ic_widget_logo),
+            contentDescription = "App Icon",
+            modifier = GlanceModifier.size(28.dp)
+        )
+        Spacer(modifier = GlanceModifier.height(6.dp))
         Text(
-            text = "Fitness Plan", 
+            text = titleText, 
             style = TextStyle(
                 color = ColorProvider(Color.White), 
                 fontWeight = FontWeight.Bold, 
-                fontSize = 14.sp
+                fontSize = 13.sp,
+                fontFamily = FontFamily.SansSerif
             )
         )
-        Spacer(modifier = GlanceModifier.height(12.dp))
+        Spacer(modifier = GlanceModifier.height(8.dp))
         Button(
-            text = "Start",
+            text = startBtnText,
             onClick = actionStartActivity(createIntent(context, "plan")),
             colors = ButtonDefaults.buttonColors(
                 backgroundColor = ColorProvider(Color(0xFF34D399)),
-                contentColor = ColorProvider(Color.Black)
+                contentColor = ColorProvider(Color(0xFF0F241C))
+            ),
+            style = TextStyle(
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.SansSerif
             )
         )
     }
@@ -99,6 +133,14 @@ fun SmallFitnessWidget() {
 @Composable
 fun MediumFitnessWidget() {
     val context = LocalContext.current
+    val lang = getWidgetLanguage(context)
+    val isAr = lang == "ar"
+
+    val titleText = if (isAr) "خطة التدريب الكاملة" else "Trainingsplan · Full Body"
+    val planBtnText = if (isAr) "الخطة" else "Plan"
+    val timerBtnText = if (isAr) "المؤقت" else "Timer"
+    val audioBtnText = if (isAr) "الصوتيات" else "Audio"
+
     Column(
         modifier = GlanceModifier.fillMaxSize(),
         verticalAlignment = Alignment.CenterVertically
@@ -108,14 +150,19 @@ fun MediumFitnessWidget() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
-                provider = ImageProvider(R.mipmap.ic_launcher),
-                contentDescription = "Icon",
+                provider = ImageProvider(R.drawable.ic_widget_logo),
+                contentDescription = "App Icon",
                 modifier = GlanceModifier.size(24.dp)
             )
             Spacer(modifier = GlanceModifier.width(8.dp))
             Text(
-                text = "Training Plan", 
-                style = TextStyle(color = ColorProvider(Color.White), fontWeight = FontWeight.Bold, fontSize = 16.sp),
+                text = titleText, 
+                style = TextStyle(
+                    color = ColorProvider(Color.White), 
+                    fontWeight = FontWeight.Bold, 
+                    fontSize = 15.sp,
+                    fontFamily = FontFamily.SansSerif
+                ),
                 modifier = GlanceModifier.defaultWeight()
             )
         }
@@ -127,21 +174,24 @@ fun MediumFitnessWidget() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Button(
-                text = "Plan",
+                text = planBtnText,
                 onClick = actionStartActivity(createIntent(context, "plan")),
-                colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White))
+                colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White)),
+                style = TextStyle(fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
             )
-            Spacer(modifier = GlanceModifier.width(4.dp))
+            Spacer(modifier = GlanceModifier.width(6.dp))
             Button(
-                text = "Timer",
+                text = timerBtnText,
                 onClick = actionStartActivity(createIntent(context, "timer")),
-                colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White))
+                colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White)),
+                style = TextStyle(fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
             )
-            Spacer(modifier = GlanceModifier.width(4.dp))
+            Spacer(modifier = GlanceModifier.width(6.dp))
             Button(
-                text = "Audio",
+                text = audioBtnText,
                 onClick = actionStartActivity(createIntent(context, "audio")),
-                colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White))
+                colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White)),
+                style = TextStyle(fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
             )
         }
     }
