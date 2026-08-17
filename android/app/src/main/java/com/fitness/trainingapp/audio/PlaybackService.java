@@ -164,8 +164,9 @@ public class PlaybackService extends MediaSessionService {
             public void onPlayerError(@NonNull PlaybackException error) {
                 Log.e(TAG, "ExoPlayer error occurred: " + error.getMessage(), error);
                 String errorMessage = error.getMessage() != null ? error.getMessage() : "Unknown playback error";
-                if (error.errorCodeName != null) {
-                    errorMessage += " (" + error.errorCodeName + ")";
+                String errorCodeName = PlaybackException.getErrorCodeName(error.errorCode);
+                if (errorCodeName != null) {
+                    errorMessage += " (" + errorCodeName + ")";
                 }
                 if (eventListener != null) {
                     eventListener.onError(errorMessage);
