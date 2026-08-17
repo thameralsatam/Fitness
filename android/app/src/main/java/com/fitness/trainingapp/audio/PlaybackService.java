@@ -376,6 +376,7 @@ public class PlaybackService extends MediaSessionService {
     public void onDestroy() {
         stopProgressTracker();
         instance = null;
+        NativeAudioPlayerPlugin.onServiceDestroyed();
         if (player != null) {
             player.release();
             player = null;

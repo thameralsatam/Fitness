@@ -19,11 +19,36 @@ import java.util.List;
 @CapacitorPlugin(name = "NativeAudioPlayer")
 public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.PlaybackEventListener {
 
+    public interface ServiceTask {
+        void run(PlaybackService service) throws Exception;
+    }
+
+    private static final List<ServiceTask> pendingTasks = new ArrayList<>();
+    private static NativeAudioPlayerPlugin activeInstance;
+
     @Override
     public void load() {
         super.load();
+        activeInstance = this;
         PlaybackService.setEventListener(this);
         ensureServiceStarted();
+    }
+
+    public static synchronized void onServiceReady(PlaybackService service) {
+        PlaybackService.setEventListener(activeInstance);
+        List<ServiceTask> tasksToRun = new ArrayList<>(pendingTasks);
+        pendingTasks.clear();
+        for (ServiceTask task : tasksToRun) {
+            try {
+                task.run(service);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static synchronized void onServiceDestroyed() {
+        pendingTasks.clear();
     }
 
     private void ensureServiceStarted() {
@@ -32,6 +57,43 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             getContext().startService(intent);
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void runWithService(PluginCall call, ServiceTask task) {
+        ensureServiceStarted();
+        PlaybackService service = PlaybackService.getInstance();
+        if (service != null) {
+            try {
+                task.run(service);
+            } catch (Exception e) {
+                if (call != null) {
+                    call.reject("Playback error: " + e.getMessage(), e);
+                }
+            }
+        } else {
+            synchronized (NativeAudioPlayerPlugin.class) {
+                PlaybackService s = PlaybackService.getInstance();
+                if (s != null) {
+                    try {
+                        task.run(s);
+                    } catch (Exception e) {
+                        if (call != null) {
+                            call.reject("Playback error: " + e.getMessage(), e);
+                        }
+                    }
+                } else {
+                    pendingTasks.add(svc -> {
+                        try {
+                            task.run(svc);
+                        } catch (Exception e) {
+                            if (call != null) {
+                                call.reject("Playback error: " + e.getMessage(), e);
+                            }
+                        }
+                    });
+                }
+            }
         }
     }
 
@@ -130,7 +192,6 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
 
     @PluginMethod
     public void setPlaylist(PluginCall call) {
-        ensureServiceStarted();
         JSArray tracksArray = call.getArray("tracks");
         int startIndex = call.getInt("startIndex", 0);
         double startPosSec = call.getDouble("startPosition", 0.0);
@@ -158,20 +219,16 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             }
         }
 
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.setPlaylistAndPlay(list, startIndex, startPosMs);
             JSObject ret = new JSObject();
             ret.put("success", true);
             call.resolve(ret);
-        } else {
-            call.reject("PlaybackService is not yet available.");
-        }
+        });
     }
 
     @PluginMethod
     public void playTrack(PluginCall call) {
-        ensureServiceStarted();
         String id = call.getString("id");
         String name = call.getString("name", "Audio Track");
         String artist = call.getString("artist", "Full Body Workout");
@@ -184,133 +241,120 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             return;
         }
 
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.playTrack(id, name, artist, album, startPosMs);
             JSObject ret = new JSObject();
             ret.put("success", true);
             ret.put("id", id);
             call.resolve(ret);
-        } else {
-            call.reject("PlaybackService is not yet available.");
-        }
+        });
     }
 
     @PluginMethod
     public void pause(PluginCall call) {
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.pause();
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void resume(PluginCall call) {
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.resume();
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void stop(PluginCall call) {
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.stop();
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void seekTo(PluginCall call) {
         double timeSec = call.getDouble("time", 0.0);
         long timeMs = (long) (timeSec * 1000);
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.seekTo(timeMs);
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void skip(PluginCall call) {
         double deltaSec = call.getDouble("seconds", 10.0);
         long deltaMs = (long) (deltaSec * 1000);
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.skip(deltaMs);
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void next(PluginCall call) {
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.next();
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void previous(PluginCall call) {
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.previous();
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void setPlaybackSpeed(PluginCall call) {
         double speed = call.getDouble("speed", 1.0);
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.setPlaybackSpeed((float) speed);
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void setRepeatMode(PluginCall call) {
         String mode = call.getString("mode", "all");
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.setRepeatMode(mode);
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
     public void setVolume(PluginCall call) {
         double volume = call.getDouble("volume", 1.0);
-        PlaybackService service = PlaybackService.getInstance();
-        if (service != null) {
+        runWithService(call, service -> {
             service.setVolume((float) volume);
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        call.resolve(ret);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        });
     }
 
     @PluginMethod
