@@ -2,6 +2,7 @@ package com.fitness.trainingapp.audio;
 
 import android.content.Intent;
 import android.util.Base64;
+import android.util.Log;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -18,6 +19,8 @@ import java.util.List;
 
 @CapacitorPlugin(name = "NativeAudioPlayer")
 public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.PlaybackEventListener {
+
+    private static final String TAG = "NativeAudioPlayerPlugin";
 
     public interface ServiceTask {
         void run(PlaybackService service) throws Exception;
@@ -42,7 +45,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             try {
                 task.run(service);
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e(TAG, "Error executing pending service task: " + e.getMessage(), e);
             }
         }
     }
@@ -56,7 +59,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             Intent intent = new Intent(getContext(), PlaybackService.class);
             getContext().startService(intent);
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Failed to start PlaybackService: " + e.getMessage(), e);
         }
     }
 
@@ -67,6 +70,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             try {
                 task.run(service);
             } catch (Exception e) {
+                Log.e(TAG, "Task execution error on PlaybackService: " + e.getMessage(), e);
                 if (call != null) {
                     call.reject("Playback error: " + e.getMessage(), e);
                 }
@@ -78,6 +82,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
                     try {
                         task.run(s);
                     } catch (Exception e) {
+                        Log.e(TAG, "Task execution error: " + e.getMessage(), e);
                         if (call != null) {
                             call.reject("Playback error: " + e.getMessage(), e);
                         }
@@ -87,6 +92,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
                         try {
                             task.run(svc);
                         } catch (Exception e) {
+                            Log.e(TAG, "Pending task execution error: " + e.getMessage(), e);
                             if (call != null) {
                                 call.reject("Playback error: " + e.getMessage(), e);
                             }
@@ -122,7 +128,6 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             return;
         }
 
-        // Clean any data URL prefix if present (e.g. data:audio/mpeg;base64,...)
         if (base64Data.contains(",")) {
             base64Data = base64Data.substring(base64Data.indexOf(",") + 1);
         }
@@ -141,6 +146,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             ret.put("size", decodedBytes.length);
             call.resolve(ret);
         } catch (Exception e) {
+            Log.e(TAG, "Failed to cache audio track: " + e.getMessage(), e);
             call.reject("Failed to cache audio track: " + e.getMessage(), e);
         }
     }
@@ -212,10 +218,11 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
                 String album = obj.optString("album", "Trainingsplan Motivation");
                 long durationMs = (long) (obj.optDouble("duration", 0.0) * 1000);
                 int order = obj.optInt("order", i);
+                String mimeType = obj.optString("mimeType", "audio/mpeg");
 
-                list.add(new PlaybackService.MediaTrackData(id, name, artist, album, durationMs, order));
+                list.add(new PlaybackService.MediaTrackData(id, name, artist, album, durationMs, order, mimeType));
             } catch (JSONException e) {
-                e.printStackTrace();
+                Log.e(TAG, "Error parsing track at index " + i, e);
             }
         }
 
@@ -235,6 +242,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
         String album = call.getString("album", "Trainingsplan Motivation");
         double startPosSec = call.getDouble("startPosition", 0.0);
         long startPosMs = (long) (startPosSec * 1000);
+        String mimeType = call.getString("mimeType", "audio/mpeg");
 
         if (id == null || id.isEmpty()) {
             call.reject("Track ID is required.");
@@ -242,7 +250,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
         }
 
         runWithService(call, service -> {
-            service.playTrack(id, name, artist, album, startPosMs);
+            service.playTrack(id, name, artist, album, startPosMs, mimeType);
             JSObject ret = new JSObject();
             ret.put("success", true);
             ret.put("id", id);
@@ -377,7 +385,6 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
         call.resolve(ret);
     }
 
-    // PlaybackService.PlaybackEventListener callbacks -> send to React via notifyListeners
     @Override
     public void onPlaybackStateChanged(boolean isPlaying, int playbackState, String currentTrackId, int currentTrackIndex) {
         JSObject data = new JSObject();
@@ -416,6 +423,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
 
     @Override
     public void onError(String errorMessage) {
+        Log.e(TAG, "Notifying JS listener with error: " + errorMessage);
         JSObject data = new JSObject();
         data.put("message", errorMessage);
         notifyListeners("onError", data);

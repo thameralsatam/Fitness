@@ -7,6 +7,7 @@ export interface NativeAudioTrackItem {
   album?: string;
   duration?: number;
   order?: number;
+  mimeType?: string;
 }
 
 export interface NativeAudioPlayerInterface {
@@ -16,7 +17,7 @@ export interface NativeAudioPlayerInterface {
   deleteCachedTrack(options: { id: string }): Promise<{ success: boolean; id: string }>;
   clearCache(): Promise<{ success: boolean }>;
   setPlaylist(options: { tracks: NativeAudioTrackItem[]; startIndex?: number; startPosition?: number }): Promise<{ success: boolean }>;
-  playTrack(options: { id: string; name: string; artist?: string; album?: string; startPosition?: number }): Promise<{ success: boolean; id: string }>;
+  playTrack(options: { id: string; name: string; artist?: string; album?: string; startPosition?: number; mimeType?: string }): Promise<{ success: boolean; id: string }>;
   pause(): Promise<{ success: boolean }>;
   resume(): Promise<{ success: boolean }>;
   stop(): Promise<{ success: boolean }>;

@@ -1,5 +1,6 @@
 package com.fitness.trainingapp.audio;
 
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -7,9 +8,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
 import androidx.core.app.NotificationCompat;
@@ -17,6 +19,7 @@ import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
@@ -24,6 +27,7 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
+import androidx.media3.session.MediaStyleNotificationHelper;
 import com.fitness.trainingapp.MainActivity;
 import com.fitness.trainingapp.R;
 
@@ -33,15 +37,21 @@ import java.util.List;
 
 public class PlaybackService extends MediaSessionService {
 
-    public static final String NOTIFICATION_CHANNEL_ID = "workout_audio_playback_channel";
+    private static final String TAG = "PlaybackService";
+    private static final String CHANNEL_ID = "fitness_audio_playback_channel";
     private static final int NOTIFICATION_ID = 1001;
 
     private static PlaybackService instance;
+    private static PlaybackEventListener eventListener;
+
     private ExoPlayer player;
     private MediaSession mediaSession;
+
     private final Handler progressHandler = new Handler(Looper.getMainLooper());
     private Runnable progressRunnable;
-    private boolean isUpdatingProgress = false;
+
+    private final List<MediaTrackData> playlist = new ArrayList<>();
+    private int currentTrackIndex = -1;
 
     public interface PlaybackEventListener {
         void onPlaybackStateChanged(boolean isPlaying, int playbackState, String currentTrackId, int currentTrackIndex);
@@ -51,14 +61,12 @@ public class PlaybackService extends MediaSessionService {
         void onError(String errorMessage);
     }
 
-    private static PlaybackEventListener eventListener;
+    public static PlaybackService getInstance() {
+        return instance;
+    }
 
     public static void setEventListener(PlaybackEventListener listener) {
         eventListener = listener;
-    }
-
-    public static PlaybackService getInstance() {
-        return instance;
     }
 
     @Override
@@ -66,20 +74,20 @@ public class PlaybackService extends MediaSessionService {
         super.onCreate();
         instance = this;
         createNotificationChannel();
-        initializePlayerAndSession();
+        initializePlayer();
         NativeAudioPlayerPlugin.onServiceReady(this);
     }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                    NOTIFICATION_CHANNEL_ID,
-                    "Workout Music Playback",
-                    NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID,
+                "Fitness Audio Player",
+                NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Background audio playback controls for workout sessions");
+            channel.setDescription("Background audio playback for workout motivation");
             channel.setShowBadge(false);
-            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 manager.createNotificationChannel(channel);
             }
@@ -87,36 +95,40 @@ public class PlaybackService extends MediaSessionService {
     }
 
     @OptIn(markerClass = UnstableApi.class)
-    private void initializePlayerAndSession() {
+    private void initializePlayer() {
         AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                .setUsage(C.USAGE_MEDIA)
-                .build();
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build();
 
         player = new ExoPlayer.Builder(this)
-                .setAudioAttributes(audioAttributes, true)
-                .setHandleAudioBecomingNoisy(true)
-                .setWakeMode(C.WAKE_MODE_LOCAL)
-                .build();
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .build();
 
-        Intent openAppIntent = new Intent(this, MainActivity.class);
-        openAppIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-                this,
-                0,
-                openAppIntent,
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        player.setRepeatMode(Player.REPEAT_MODE_OFF);
+
+        Intent sessionActivityIntent = new Intent(this, MainActivity.class);
+        PendingIntent sessionPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            sessionActivityIntent,
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
         mediaSession = new MediaSession.Builder(this, player)
-                .setSessionActivity(pendingIntent)
-                .setCallback(new MediaSessionCallback())
-                .build();
+            .setSessionActivity(sessionPendingIntent)
+            .build();
 
         player.addListener(new Player.Listener() {
             @Override
             public void onIsPlayingChanged(boolean isPlaying) {
-                notifyStateChanged();
+                updateNotification();
+                String trackId = getCurrentTrackId();
+                if (eventListener != null) {
+                    eventListener.onPlaybackStateChanged(isPlaying, player.getPlaybackState(), trackId, currentTrackIndex);
+                }
                 if (isPlaying) {
                     startProgressTracker();
                 } else {
@@ -126,163 +138,131 @@ public class PlaybackService extends MediaSessionService {
 
             @Override
             public void onPlaybackStateChanged(int playbackState) {
-                notifyStateChanged();
+                String trackId = getCurrentTrackId();
+                if (eventListener != null) {
+                    eventListener.onPlaybackStateChanged(player.isPlaying(), playbackState, trackId, currentTrackIndex);
+                }
                 if (playbackState == Player.STATE_ENDED) {
-                    stopProgressTracker();
-                    MediaItem currentItem = player.getCurrentMediaItem();
-                    String trackId = currentItem != null ? currentItem.mediaId : "";
                     if (eventListener != null) {
-                        eventListener.onTrackEnded(trackId, player.getCurrentMediaItemIndex());
+                        eventListener.onTrackEnded(trackId, currentTrackIndex);
                     }
                 }
+                updateNotification();
             }
 
             @Override
             public void onMediaItemTransition(@Nullable MediaItem mediaItem, int reason) {
-                notifyStateChanged();
-                String trackId = mediaItem != null ? mediaItem.mediaId : "";
+                currentTrackIndex = player.getCurrentMediaItemIndex();
+                String trackId = getCurrentTrackId();
                 if (eventListener != null) {
-                    eventListener.onTrackChanged(trackId, player.getCurrentMediaItemIndex());
+                    eventListener.onTrackChanged(trackId, currentTrackIndex);
                 }
+                updateNotification();
             }
 
             @Override
-            public void onPlayerError(PlaybackException error) {
+            public void onPlayerError(@NonNull PlaybackException error) {
+                Log.e(TAG, "ExoPlayer error occurred: " + error.getMessage(), error);
+                String errorMessage = error.getMessage() != null ? error.getMessage() : "Unknown playback error";
+                if (error.errorCodeName != null) {
+                    errorMessage += " (" + error.errorCodeName + ")";
+                }
                 if (eventListener != null) {
-                    eventListener.onError("Playback error: " + (error != null ? error.getMessage() : "Unknown error"));
+                    eventListener.onError(errorMessage);
                 }
             }
         });
     }
 
-    private void startProgressTracker() {
-        if (isUpdatingProgress) return;
-        isUpdatingProgress = true;
-        progressRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (player != null && player.isPlaying()) {
-                    long currentPos = Math.max(0, player.getCurrentPosition());
-                    long duration = Math.max(0, player.getDuration());
-                    MediaItem currentItem = player.getCurrentMediaItem();
-                    String trackId = currentItem != null ? currentItem.mediaId : "";
-                    int index = player.getCurrentMediaItemIndex();
-
-                    if (eventListener != null) {
-                        eventListener.onPositionUpdated(currentPos, duration, trackId, index);
-                    }
-                    progressHandler.postDelayed(this, 500);
-                } else {
-                    isUpdatingProgress = false;
-                }
-            }
-        };
-        progressHandler.post(progressRunnable);
-    }
-
-    private void stopProgressTracker() {
-        isUpdatingProgress = false;
-        if (progressRunnable != null) {
-            progressHandler.removeCallbacks(progressRunnable);
-        }
-    }
-
-    private void notifyStateChanged() {
-        if (player == null) return;
-        boolean isPlaying = player.isPlaying();
-        int state = player.getPlaybackState();
-        MediaItem currentItem = player.getCurrentMediaItem();
-        String trackId = currentItem != null ? currentItem.mediaId : "";
-        int index = player.getCurrentMediaItemIndex();
-
-        if (eventListener != null) {
-            eventListener.onPlaybackStateChanged(isPlaying, state, trackId, index);
-        }
-    }
-
     @Nullable
     @Override
-    public MediaSession onGetSession(MediaSession.ControllerInfo controllerInfo) {
+    public MediaSession onGetSession(@NonNull MediaSession.ControllerInfo controllerInfo) {
         return mediaSession;
     }
 
-    public ExoPlayer getPlayer() {
-        return player;
+    private String normalizeMimeType(String rawMime, String fileName) {
+        if (rawMime != null && !rawMime.trim().isEmpty() && !rawMime.equalsIgnoreCase("application/octet-stream")) {
+            String mime = rawMime.trim().toLowerCase();
+            if (mime.contains("audio/mpeg") || mime.contains("audio/mp3")) return MimeTypes.AUDIO_MPEG;
+            if (mime.contains("audio/aac")) return MimeTypes.AUDIO_AAC;
+            if (mime.contains("audio/wav") || mime.contains("audio/x-wav") || mime.contains("audio/wave")) return MimeTypes.AUDIO_WAV;
+            if (mime.contains("audio/flac") || mime.contains("audio/x-flac")) return MimeTypes.AUDIO_FLAC;
+            if (mime.contains("audio/ogg") || mime.contains("application/ogg")) return MimeTypes.AUDIO_OGG;
+            if (mime.contains("audio/mp4") || mime.contains("audio/m4a") || mime.contains("audio/x-m4a")) return MimeTypes.AUDIO_MP4;
+            return mime;
+        }
+
+        if (fileName != null) {
+            String lower = fileName.toLowerCase();
+            if (lower.endsWith(".mp3")) return MimeTypes.AUDIO_MPEG;
+            if (lower.endsWith(".aac")) return MimeTypes.AUDIO_AAC;
+            if (lower.endsWith(".wav")) return MimeTypes.AUDIO_WAV;
+            if (lower.endsWith(".flac")) return MimeTypes.AUDIO_FLAC;
+            if (lower.endsWith(".ogg") || lower.endsWith(".oga")) return MimeTypes.AUDIO_OGG;
+            if (lower.endsWith(".m4a") || lower.endsWith(".mp4")) return MimeTypes.AUDIO_MP4;
+        }
+
+        return MimeTypes.AUDIO_MPEG; // Default fallback for workout music
     }
 
-    public MediaSession getMediaSession() {
-        return mediaSession;
-    }
-
-    // Playback control API methods called from Plugin
     public void setPlaylistAndPlay(List<MediaTrackData> tracks, int startIndex, long startPositionMs) {
-        if (player == null) return;
+        playlist.clear();
+        playlist.addAll(tracks);
+
         List<MediaItem> mediaItems = new ArrayList<>();
         for (MediaTrackData track : tracks) {
-            File localFile = new File(getFilesDir(), "audio_tracks/" + track.id + ".dat");
-            Uri fileUri = Uri.fromFile(localFile);
+            File trackFile = getTrackFile(track.id);
+            if (!trackFile.exists()) {
+                Log.w(TAG, "Audio track file not found for id: " + track.id);
+            }
 
-            MediaMetadata metadata = new MediaMetadata.Builder()
-                    .setTitle(track.name)
-                    .setArtist(track.artist != null && !track.artist.isEmpty() ? track.artist : "Full Body Workout")
-                    .setAlbumTitle(track.album != null && !track.album.isEmpty() ? track.album : "Trainingsplan Motivation")
-                    .build();
+            String determinedMimeType = normalizeMimeType(track.mimeType, track.name);
+
+            MediaMetadata mediaMetadata = new MediaMetadata.Builder()
+                .setTitle(track.name)
+                .setArtist(track.artist)
+                .setAlbumTitle(track.album)
+                .build();
 
             MediaItem item = new MediaItem.Builder()
-                    .setMediaId(track.id)
-                    .setUri(fileUri)
-                    .setMediaMetadata(metadata)
-                    .build();
+                .setMediaId(track.id)
+                .setUri(Uri.fromFile(trackFile))
+                .setMimeType(determinedMimeType)
+                .setMediaMetadata(mediaMetadata)
+                .build();
 
             mediaItems.add(item);
         }
 
-        player.setMediaItems(mediaItems, startIndex, startPositionMs);
-        player.prepare();
-        player.play();
-    }
-
-    public void playTrack(String trackId, String name, String artist, String album, long startPositionMs) {
-        if (player == null) return;
-        
-        // Check if track is already in current playlist
-        int existingIndex = -1;
-        for (int i = 0; i < player.getMediaItemCount(); i++) {
-            MediaItem item = player.getMediaItemAt(i);
-            if (item != null && trackId.equals(item.mediaId)) {
-                existingIndex = i;
-                break;
-            }
-        }
-
-        if (existingIndex >= 0) {
-            player.seekTo(existingIndex, startPositionMs);
-            player.play();
-        } else {
-            File localFile = new File(getFilesDir(), "audio_tracks/" + trackId + ".dat");
-            if (!localFile.exists()) {
-                if (eventListener != null) {
-                    eventListener.onError("Local audio file not found for track: " + trackId);
-                }
-                return;
-            }
-
-            MediaMetadata metadata = new MediaMetadata.Builder()
-                    .setTitle(name)
-                    .setArtist(artist != null && !artist.isEmpty() ? artist : "Full Body Workout")
-                    .setAlbumTitle(album != null && !album.isEmpty() ? album : "Trainingsplan Motivation")
-                    .build();
-
-            MediaItem item = new MediaItem.Builder()
-                    .setMediaId(trackId)
-                    .setUri(Uri.fromFile(localFile))
-                    .setMediaMetadata(metadata)
-                    .build();
-
-            player.setMediaItem(item, startPositionMs);
+        if (!mediaItems.isEmpty()) {
+            player.setMediaItems(mediaItems, Math.max(0, startIndex), Math.max(0, startPositionMs));
             player.prepare();
             player.play();
+            currentTrackIndex = Math.max(0, startIndex);
         }
+    }
+
+    public void playTrack(String trackId, String name, String artist, String album, long startPositionMs, String mimeType) {
+        File trackFile = getTrackFile(trackId);
+        String determinedMimeType = normalizeMimeType(mimeType, name);
+
+        MediaMetadata mediaMetadata = new MediaMetadata.Builder()
+            .setTitle(name)
+            .setArtist(artist)
+            .setAlbumTitle(album)
+            .build();
+
+        MediaItem mediaItem = new MediaItem.Builder()
+            .setMediaId(trackId)
+            .setUri(Uri.fromFile(trackFile))
+            .setMimeType(determinedMimeType)
+            .setMediaMetadata(mediaMetadata)
+            .build();
+
+        player.setMediaItem(mediaItem, Math.max(0, startPositionMs));
+        player.prepare();
+        player.play();
+        currentTrackIndex = 0;
     }
 
     public void pause() {
@@ -293,6 +273,9 @@ public class PlaybackService extends MediaSessionService {
 
     public void resume() {
         if (player != null) {
+            if (player.getPlaybackState() == Player.STATE_IDLE) {
+                player.prepare();
+            }
             player.play();
         }
     }
@@ -300,7 +283,6 @@ public class PlaybackService extends MediaSessionService {
     public void stop() {
         if (player != null) {
             player.stop();
-            player.clearMediaItems();
             stopProgressTracker();
         }
     }
@@ -313,7 +295,10 @@ public class PlaybackService extends MediaSessionService {
 
     public void skip(long deltaMs) {
         if (player != null) {
-            long newPos = Math.max(0, Math.min(player.getCurrentPosition() + deltaMs, player.getDuration()));
+            long newPos = Math.max(0, player.getCurrentPosition() + deltaMs);
+            if (player.getDuration() > 0) {
+                newPos = Math.min(newPos, player.getDuration());
+            }
             player.seekTo(newPos);
         }
     }
@@ -321,7 +306,6 @@ public class PlaybackService extends MediaSessionService {
     public void next() {
         if (player != null && player.hasNextMediaItem()) {
             player.seekToNextMediaItem();
-            player.play();
         }
     }
 
@@ -331,44 +315,113 @@ public class PlaybackService extends MediaSessionService {
                 player.seekTo(0);
             } else {
                 player.seekToPreviousMediaItem();
-                player.play();
             }
         }
     }
 
     public void setPlaybackSpeed(float speed) {
         if (player != null) {
-            PlaybackParameters params = new PlaybackParameters(speed);
-            player.setPlaybackParameters(params);
+            player.setPlaybackParameters(new PlaybackParameters(speed));
         }
     }
 
     public void setRepeatMode(String mode) {
-        if (player == null) return;
-        switch (mode) {
-            case "one":
-                player.setRepeatMode(Player.REPEAT_MODE_ONE);
-                player.setShuffleModeEnabled(false);
-                break;
-            case "all":
-                player.setRepeatMode(Player.REPEAT_MODE_ALL);
-                player.setShuffleModeEnabled(false);
-                break;
-            case "shuffle":
-                player.setRepeatMode(Player.REPEAT_MODE_ALL);
-                player.setShuffleModeEnabled(true);
-                break;
-            case "off":
-            default:
-                player.setRepeatMode(Player.REPEAT_MODE_OFF);
-                player.setShuffleModeEnabled(false);
-                break;
+        if (player != null) {
+            switch (mode) {
+                case "one":
+                    player.setRepeatMode(Player.REPEAT_MODE_ONE);
+                    break;
+                case "all":
+                    player.setRepeatMode(Player.REPEAT_MODE_ALL);
+                    break;
+                case "off":
+                default:
+                    player.setRepeatMode(Player.REPEAT_MODE_OFF);
+                    break;
+            }
         }
     }
 
     public void setVolume(float volume) {
         if (player != null) {
-            player.setVolume(Math.max(0f, Math.min(1f, volume)));
+            player.setVolume(Math.max(0.0f, Math.min(1.0f, volume)));
+        }
+    }
+
+    public ExoPlayer getPlayer() {
+        return player;
+    }
+
+    private String getCurrentTrackId() {
+        if (player != null && player.getCurrentMediaItem() != null) {
+            return player.getCurrentMediaItem().mediaId;
+        }
+        return null;
+    }
+
+    private void startProgressTracker() {
+        stopProgressTracker();
+        progressRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (player != null && player.isPlaying()) {
+                    long currentPos = player.getCurrentPosition();
+                    long duration = player.getDuration();
+                    String trackId = getCurrentTrackId();
+                    if (eventListener != null) {
+                        eventListener.onPositionUpdated(currentPos, duration, trackId, currentTrackIndex);
+                    }
+                    progressHandler.postDelayed(this, 500);
+                }
+            }
+        };
+        progressHandler.post(progressRunnable);
+    }
+
+    private void stopProgressTracker() {
+        if (progressRunnable != null) {
+            progressHandler.removeCallbacks(progressRunnable);
+            progressRunnable = null;
+        }
+    }
+
+    @OptIn(markerClass = UnstableApi.class)
+    private void updateNotification() {
+        if (player == null) return;
+
+        MediaItem currentItem = player.getCurrentMediaItem();
+        String title = "Fitness Audio Player";
+        String artist = "Workout Motivation";
+
+        if (currentItem != null && currentItem.mediaMetadata.title != null) {
+            title = currentItem.mediaMetadata.title.toString();
+        }
+        if (currentItem != null && currentItem.mediaMetadata.artist != null) {
+            artist = currentItem.mediaMetadata.artist.toString();
+        }
+
+        Intent openAppIntent = new Intent(this, MainActivity.class);
+        PendingIntent pendingOpenApp = PendingIntent.getActivity(
+            this,
+            0,
+            openAppIntent,
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(artist)
+            .setContentIntent(pendingOpenApp)
+            .setOngoing(player.isPlaying())
+            .setSilent(true)
+            .setStyle(new MediaStyleNotificationHelper.MediaStyle(mediaSession)
+                .setShowActionsInCompactView(0, 1, 2));
+
+        Notification notification = builder.build();
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) {
+            manager.notify(NOTIFICATION_ID, notification);
         }
     }
 
@@ -388,8 +441,9 @@ public class PlaybackService extends MediaSessionService {
         super.onDestroy();
     }
 
-    private class MediaSessionCallback implements MediaSession.Callback {
-        // Handle media session commands if needed
+    private File getTrackFile(String trackId) {
+        File dir = new File(getFilesDir(), "audio_tracks");
+        return new File(dir, trackId + ".dat");
     }
 
     public static class MediaTrackData {
@@ -399,14 +453,16 @@ public class PlaybackService extends MediaSessionService {
         public String album;
         public long durationMs;
         public int order;
+        public String mimeType;
 
-        public MediaTrackData(String id, String name, String artist, String album, long durationMs, int order) {
+        public MediaTrackData(String id, String name, String artist, String album, long durationMs, int order, String mimeType) {
             this.id = id;
             this.name = name;
             this.artist = artist;
             this.album = album;
             this.durationMs = durationMs;
             this.order = order;
+            this.mimeType = mimeType;
         }
     }
 }

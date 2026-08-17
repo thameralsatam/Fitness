@@ -336,7 +336,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         await NativeAudioPlayer.cacheTrack({
           id: track.id,
           data: base64Data,
-          mimeType: track.type || 'audio/mpeg',
+          mimeType: track.type || track.blob?.type || 'audio/mpeg',
         });
       }
       return true;
@@ -369,6 +369,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
           album: currentLang === 'ar' ? 'المحفزات الصوتية للتمارين' : 'Trainingsplan Motivation Audio',
           duration: t.duration || 0,
           order: t.order || 0,
+          mimeType: t.type || t.blob?.type || 'audio/mpeg',
         }));
 
         const startIndexInPlaylist = currentActiveList.findIndex((t) => t.id === track.id);
@@ -418,7 +419,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     }
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (currentTrackIndex === -1 && tracks.length > 0) {
       if (displayedTracks.length > 0) {
         playTrackById(displayedTracks[0].id);
@@ -430,11 +431,26 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
 
     if (isNative) {
       if (isPlaying) {
-        NativeAudioPlayer.pause().catch(() => {});
-        setIsPlaying(false);
+        try {
+          await NativeAudioPlayer.pause();
+          setIsPlaying(false);
+        } catch (e) {
+          console.error('Error pausing native player:', e);
+        }
       } else {
-        NativeAudioPlayer.resume().catch(() => {});
-        setIsPlaying(true);
+        try {
+          const state = await NativeAudioPlayer.getPlaybackState();
+          if (state.currentIndex >= 0 && state.duration > 0) {
+            await NativeAudioPlayer.resume();
+            setIsPlaying(true);
+          } else {
+            const targetIdx = currentTrackIndexRef.current >= 0 ? currentTrackIndexRef.current : 0;
+            await playTrackAtIndex(targetIdx);
+          }
+        } catch {
+          const targetIdx = currentTrackIndexRef.current >= 0 ? currentTrackIndexRef.current : 0;
+          await playTrackAtIndex(targetIdx);
+        }
       }
       return;
     }
