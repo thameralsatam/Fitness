@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Check, ChevronDown, Info, RotateCcw } from 'lucide-react';
 import { ExerciseItem, Language } from '../types';
 import { I18N } from '../data/workoutData';
+import { WorkoutWidgets } from './WorkoutWidgets';
+import { triggerHaptic } from '../utils/haptics';
 
 interface PlanViewProps {
   exercises: ExerciseItem[];
@@ -11,6 +13,8 @@ interface PlanViewProps {
   onToggleExercise: (id: number) => void;
   onTogglePanel: (id: number) => void;
   onResetToday: () => void;
+  onNavigateTab?: (tab: 'plan' | 'timer' | 'audio' | 'stats' | 'tools') => void;
+  totalSessions?: number;
 }
 
 export const PlanView: React.FC<PlanViewProps> = ({
@@ -21,6 +25,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
   onToggleExercise,
   onTogglePanel,
   onResetToday,
+  onNavigateTab,
+  totalSessions = 1,
 }) => {
   const t = I18N[currentLang];
   const [notesOpen, setNotesOpen] = useState(false);
@@ -30,6 +36,18 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
   return (
     <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-5 animate-in fade-in duration-200">
+      {/* Interactive Companion Widgets */}
+      {onNavigateTab && (
+        <WorkoutWidgets
+          currentLang={currentLang}
+          completedCount={completedCount}
+          totalExercises={exercises.length}
+          currentStreak={Math.max(1, completedCount > 0 ? 3 : 1)}
+          totalSessions={totalSessions}
+          onNavigateTab={onNavigateTab}
+        />
+      )}
+
       {/* Schedule Hero Card */}
       <section className="bg-white rounded-2xl border border-[#dbe4dc] p-4 sm:p-5 shadow-xs min-w-0">
         <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#e2ebe3] min-w-0">

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trash2, RotateCcw, X } from 'lucide-react';
 import { Language } from '../types';
+import { notifyModalChange } from '../utils/modalManager';
 
 export interface ConfirmModalProps {
   isOpen: boolean;
@@ -33,10 +34,14 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
       }
     };
     if (isOpen) {
+      notifyModalChange(true);
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
+      if (isOpen) {
+        notifyModalChange(false);
+      }
       document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleKeyDown);
     };
@@ -54,7 +59,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={onCancel}
         >
           <motion.div

@@ -43,8 +43,10 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
         {/* Brand */}
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[#215641] flex items-center justify-center text-white shadow-sm flex-shrink-0">
-            <Dumbbell className="w-5 h-5 stroke-[2.2]" />
+          <div className="relative w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#1b3d2f] to-[#255c45] border border-emerald-500/30 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+            <div className="w-full h-full rounded-[14px] bg-gradient-to-b from-[#18392c] to-[#0f241c] flex items-center justify-center">
+              <Dumbbell className="w-5 h-5 text-emerald-400 stroke-[2.4] drop-shadow-[0_0_8px_rgba(52,211,153,0.5)] transform -rotate-12" />
+            </div>
           </div>
           <div className="flex flex-col">
             <h1 className="font-display font-extrabold text-[15px] sm:text-[16px] text-[#15221b] tracking-tight leading-tight">

@@ -22,7 +22,38 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="fitnessapp" />
+            </intent-filter>
+
         </activity>
+
+        <!-- Workout Progress & Quick Actions App Widget -->
+        <receiver
+            android:name=".WorkoutProgressWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/workout_progress_widget_info" />
+        </receiver>
+
+        <!-- Quick Rest Timer App Widget -->
+        <receiver
+            android:name=".QuickTimerWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_timer_widget_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

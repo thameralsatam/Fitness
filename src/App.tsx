@@ -10,6 +10,8 @@ import { AudioView } from './components/AudioView';
 import { StatsView } from './components/StatsView';
 import { ToolsView } from './components/ToolsView';
 import { ConfirmModal } from './components/ConfirmModal';
+import { SplashScreen } from './components/SplashScreen';
+import { triggerHaptic } from './utils/haptics';
 
 interface ConfirmModalState {
   isOpen: boolean;
@@ -22,6 +24,16 @@ interface ConfirmModalState {
 }
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState<boolean>(() => {
+    // Show splash once per launch session
+    try {
+      const hasShown = sessionStorage.getItem('gym_splash_shown');
+      return !hasShown;
+    } catch {
+      return true;
+    }
+  });
+
   const [currentLang, setCurrentLang] = useState<Language>(() => {
     try {
       const saved = localStorage.getItem('gym_lang');
@@ -91,6 +103,26 @@ export default function App() {
     }
   }, [completedExercises]);
 
+  // Handle Home Screen Widget Deep-Link Navigation
+  useEffect(() => {
+    const handleWidgetNavigate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tab?: ViewTab; seconds?: number }>;
+      if (customEvent.detail) {
+        const { tab } = customEvent.detail;
+        if (tab && ['plan', 'timer', 'audio', 'stats', 'tools'].includes(tab)) {
+          setCurrentTab(tab);
+          triggerHaptic('selection');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+    };
+
+    window.addEventListener('widget-navigate', handleWidgetNavigate);
+    return () => {
+      window.removeEventListener('widget-navigate', handleWidgetNavigate);
+    };
+  }, []);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -103,18 +135,21 @@ export default function App() {
   };
 
   const handleToggleExercise = (id: number) => {
+    triggerHaptic('medium');
     setCompletedExercises((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
+        triggerHaptic('success');
       }
       return next;
     });
   };
 
   const handleTogglePanel = (id: number) => {
+    triggerHaptic('light');
     setOpenPanels((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -127,6 +162,7 @@ export default function App() {
   };
 
   const handleToggleAllAlts = () => {
+    triggerHaptic('medium');
     if (openPanels.size === EXERCISES_DATA.length) {
       setOpenPanels(new Set());
     } else {
@@ -136,6 +172,7 @@ export default function App() {
 
   // Reset progress with confirmation
   const handleRequestResetProgress = () => {
+    triggerHaptic('warning');
     setConfirmModal({
       isOpen: true,
       title: t.confirmResetTitle,
@@ -184,12 +221,29 @@ export default function App() {
   };
 
   const handleTabChange = (tab: ViewTab) => {
+    triggerHaptic('selection');
     setCurrentTab(tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSplashFinish = () => {
+    try {
+      sessionStorage.setItem('gym_splash_shown', 'true');
+    } catch {
+      // fallback
+    }
+    setShowSplash(false);
+  };
+
   return (
     <div className="w-full min-h-screen max-w-[100vw] overflow-x-hidden bg-[#f6f8f6] text-[#15221b] flex flex-col selection:bg-[#215641]/15 selection:text-[#15221b]">
+      {/* Animated Native Splash Screen */}
+      <AnimatePresence>
+        {showSplash && (
+          <SplashScreen onFinish={handleSplashFinish} lang={currentLang} />
+        )}
+      </AnimatePresence>
+
       {/* Top Header */}
       <Header
         currentLang={currentLang}
@@ -219,6 +273,8 @@ export default function App() {
                 onToggleExercise={handleToggleExercise}
                 onTogglePanel={handleTogglePanel}
                 onResetToday={handleRequestResetProgress}
+                onNavigateTab={handleTabChange}
+                totalSessions={totalSessions}
               />
             </motion.div>
           )}

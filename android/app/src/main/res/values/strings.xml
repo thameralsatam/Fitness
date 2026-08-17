@@ -4,4 +4,6 @@
     <string name="title_activity_main">Trainingsplan Full Body</string>
     <string name="package_name">com.fitness.trainingapp</string>
     <string name="custom_url_scheme">com.fitness.trainingapp</string>
+    <string name="widget_workout_description">ويدجت التمارين والوصول السريع لخطة التدريب والمؤقت</string>
+    <string name="widget_timer_description">ويدجت مؤقت الراحة السريع بين الجولات</string>
 </resources>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ViewTab, Language } from '../types';
 import { I18N } from '../data/workoutData';
+import { useIsModalOpen } from '../utils/modalManager';
 
 const ACTIVE_COLOR = "#15221b";
 const INACTIVE_COLOR = "#3c4e44";
@@ -9,14 +10,18 @@ interface MobileBottomNavProps {
   currentTab: ViewTab;
   onTabChange: (tab: ViewTab) => void;
   currentLang: Language;
+  isHidden?: boolean;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   currentTab,
   onTabChange,
   currentLang,
+  isHidden = false,
 }) => {
   const t = I18N[currentLang];
+  const isAnyModalOpen = useIsModalOpen();
+  const shouldHide = isHidden || isAnyModalOpen;
 
   const navItems: {
     id: ViewTab;
@@ -129,7 +134,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       aria-label="Hauptnavigation"
-      className="fixed z-50 left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[390px] transition-all duration-300 outline-none"
+      className={`fixed z-40 left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[390px] transition-all duration-300 ease-out outline-none ${
+        shouldHide
+          ? 'translate-y-36 opacity-0 pointer-events-none scale-95'
+          : 'translate-y-0 opacity-100 pointer-events-auto scale-100'
+      }`}
       style={{
         bottom: "max(12px, env(safe-area-inset-bottom, 12px))"
       }}

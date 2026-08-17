@@ -57,6 +57,9 @@ import {
   isVideoFile,
 } from '../utils/audioExtractor';
 import { Language } from '../types';
+import { triggerHaptic } from '../utils/haptics';
+import { NativeFilePickerModal } from './NativeFilePickerModal';
+import { notifyModalChange } from '../utils/modalManager';
 
 interface AudioPlayerSectionProps {
   currentLang: Language;
@@ -108,6 +111,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   // Modals state
   const [detailsModalTrack, setDetailsModalTrack] = useState<AudioTrack | null>(null);
   const [pendingUploads, setPendingUploads] = useState<PendingUploadItem[] | null>(null);
+  const [isNativePickerOpen, setIsNativePickerOpen] = useState<boolean>(false);
   const [editingTrack, setEditingTrack] = useState<EditTrackModalData | null>(null);
   const [deletingTrack, setDeletingTrack] = useState<{ id: string; name: string } | null>(null);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState<boolean>(false);
@@ -146,6 +150,30 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
     window.addEventListener('click', handleWindowClick);
     return () => window.removeEventListener('click', handleWindowClick);
   }, []);
+
+  // Sync active modals state to notify bottom nav hiding
+  const isAnyAudioModalOpen = Boolean(
+    detailsModalTrack ||
+      pendingUploads ||
+      editingTrack ||
+      deletingTrack ||
+      isClearAllModalOpen ||
+      isAddExistingToFolderModalOpen ||
+      isNewFolderModalOpen ||
+      editingFolder ||
+      deletingFolder
+  );
+
+  useEffect(() => {
+    if (isAnyAudioModalOpen) {
+      notifyModalChange(true);
+    }
+    return () => {
+      if (isAnyAudioModalOpen) {
+        notifyModalChange(false);
+      }
+    };
+  }, [isAnyAudioModalOpen]);
 
   // Load tracks and folders on mount
   useEffect(() => {
@@ -978,10 +1006,16 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
         onDrop={(e) => {
           e.preventDefault();
           setIsDraggingOver(false);
-          if (!isProcessingFiles) handleFilesSelected(e.dataTransfer.files);
+          if (!isProcessingFiles) {
+            triggerHaptic('medium');
+            handleFilesSelected(e.dataTransfer.files);
+          }
         }}
         onClick={() => {
-          if (!isProcessingFiles) fileInputRef.current?.click();
+          if (!isProcessingFiles) {
+            triggerHaptic('light');
+            setIsNativePickerOpen(true);
+          }
         }}
         className={`border-2 border-dashed rounded-3xl p-5 sm:p-6 text-center cursor-pointer transition-all relative overflow-hidden ${
           isProcessingFiles
@@ -2374,6 +2408,19 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Native-styled Dedicated File Picker Modal */}
+      <NativeFilePickerModal
+        isOpen={isNativePickerOpen}
+        onClose={() => setIsNativePickerOpen(false)}
+        onFilesSelected={(files) => {
+          setIsNativePickerOpen(false);
+          handleFilesSelected(files);
+        }}
+        folders={folders}
+        currentLang={currentLang}
+        isProcessing={isProcessingFiles}
+      />
     </div>
   );
 };
