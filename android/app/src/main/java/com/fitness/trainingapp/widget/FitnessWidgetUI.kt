@@ -31,7 +31,6 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.text.FontFamily
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -93,28 +92,50 @@ fun SmallFitnessWidget() {
 
     val titleText = if (isAr) "خطة التدريب" else "Trainingsplan"
     val startBtnText = if (isAr) "ابدأ الآن" else "Starten"
+    val refreshDesc = if (isAr) "تحديث الويدجت" else "Widget aktualisieren"
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
         modifier = GlanceModifier.fillMaxSize()
     ) {
-        Image(
-            provider = ImageProvider(R.drawable.ic_widget_logo),
-            contentDescription = "App Icon",
-            modifier = GlanceModifier.size(28.dp)
-        )
-        Spacer(modifier = GlanceModifier.height(6.dp))
-        Text(
-            text = titleText, 
-            style = TextStyle(
-                color = ColorProvider(Color.White), 
-                fontWeight = FontWeight.Bold, 
-                fontSize = 13.sp,
-                fontFamily = FontFamily.SansSerif
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_widget_logo),
+                contentDescription = "App Icon",
+                modifier = GlanceModifier.size(22.dp)
             )
-        )
+            Spacer(modifier = GlanceModifier.width(4.dp))
+            Text(
+                text = titleText, 
+                style = TextStyle(
+                    color = ColorProvider(Color.White), 
+                    fontWeight = FontWeight.Bold, 
+                    fontSize = 12.sp
+                ),
+                modifier = GlanceModifier.defaultWeight()
+            )
+            Box(
+                modifier = GlanceModifier
+                    .size(24.dp)
+                    .background(ColorProvider(Color(0xFF1E3D2F)))
+                    .cornerRadius(6.dp)
+                    .clickable(actionRunCallback<RefreshWidgetAction>()),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    provider = ImageProvider(R.drawable.ic_widget_refresh),
+                    contentDescription = refreshDesc,
+                    modifier = GlanceModifier.size(13.dp)
+                )
+            }
+        }
+
         Spacer(modifier = GlanceModifier.height(8.dp))
+
         Button(
             text = startBtnText,
             onClick = actionStartActivity(createIntent(context, "plan")),
@@ -123,8 +144,7 @@ fun SmallFitnessWidget() {
                 contentColor = ColorProvider(Color(0xFF0F241C))
             ),
             style = TextStyle(
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif
+                fontWeight = FontWeight.Bold
             )
         )
     }
@@ -140,6 +160,7 @@ fun MediumFitnessWidget() {
     val planBtnText = if (isAr) "الخطة" else "Plan"
     val timerBtnText = if (isAr) "المؤقت" else "Timer"
     val audioBtnText = if (isAr) "الصوتيات" else "Audio"
+    val refreshDesc = if (isAr) "تحديث الويدجت" else "Widget aktualisieren"
 
     Column(
         modifier = GlanceModifier.fillMaxSize(),
@@ -160,11 +181,25 @@ fun MediumFitnessWidget() {
                 style = TextStyle(
                     color = ColorProvider(Color.White), 
                     fontWeight = FontWeight.Bold, 
-                    fontSize = 15.sp,
-                    fontFamily = FontFamily.SansSerif
+                    fontSize = 15.sp
                 ),
                 modifier = GlanceModifier.defaultWeight()
             )
+            Spacer(modifier = GlanceModifier.width(6.dp))
+            Box(
+                modifier = GlanceModifier
+                    .size(28.dp)
+                    .background(ColorProvider(Color(0xFF1E3D2F)))
+                    .cornerRadius(8.dp)
+                    .clickable(actionRunCallback<RefreshWidgetAction>()),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    provider = ImageProvider(R.drawable.ic_widget_refresh),
+                    contentDescription = refreshDesc,
+                    modifier = GlanceModifier.size(15.dp)
+                )
+            }
         }
         
         Spacer(modifier = GlanceModifier.defaultWeight())
@@ -177,21 +212,21 @@ fun MediumFitnessWidget() {
                 text = planBtnText,
                 onClick = actionStartActivity(createIntent(context, "plan")),
                 colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White)),
-                style = TextStyle(fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
+                style = TextStyle(fontWeight = FontWeight.Bold)
             )
             Spacer(modifier = GlanceModifier.width(6.dp))
             Button(
                 text = timerBtnText,
                 onClick = actionStartActivity(createIntent(context, "timer")),
                 colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White)),
-                style = TextStyle(fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
+                style = TextStyle(fontWeight = FontWeight.Bold)
             )
             Spacer(modifier = GlanceModifier.width(6.dp))
             Button(
                 text = audioBtnText,
                 onClick = actionStartActivity(createIntent(context, "audio")),
                 colors = ButtonDefaults.buttonColors(backgroundColor = ColorProvider(Color(0xFF215641)), contentColor = ColorProvider(Color.White)),
-                style = TextStyle(fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
+                style = TextStyle(fontWeight = FontWeight.Bold)
             )
         }
     }
