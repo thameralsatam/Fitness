@@ -116,58 +116,6 @@ export const Header: React.FC<HeaderProps> = ({
                   <span>{isAr ? 'خطوط التطبيق (النصوص والعناوين)' : 'Schriftarten anpassen'}</span>
                 </button>
 
-                {/* Language Switch */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onToggleLang();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium rounded-xl text-[#15221b] hover:bg-[#f1f6f3] transition-colors"
-                >
-                  <Globe className="w-4 h-4 text-[#215641] flex-shrink-0" />
-                  <span>{t.menuLang}</span>
-                </button>
-
-                {/* Copy Plan */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onCopyPlan();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium rounded-xl text-[#15221b] hover:bg-[#f1f6f3] transition-colors"
-                >
-                  <Copy className="w-4 h-4 text-[#215641] flex-shrink-0" />
-                  <span>{t.menuCopy}</span>
-                </button>
-
-                {/* Toggle Alternatives */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onToggleAllAlts();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium rounded-xl text-[#15221b] hover:bg-[#f1f6f3] transition-colors"
-                >
-                  <Layers className="w-4 h-4 text-[#215641] flex-shrink-0" />
-                  <span>{t.menuAllAlts}</span>
-                </button>
-
-                {/* Reset Session */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetProgress();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium rounded-xl text-[#15221b] hover:bg-[#f1f6f3] transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4 text-[#215641] flex-shrink-0" />
-                  <span>{t.menuReset}</span>
-                </button>
-
                 {/* Debug Logs Console */}
                 <button
                   type="button"

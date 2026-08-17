@@ -13,6 +13,7 @@ export interface NativeAudioTrackItem {
 export interface NativeAudioPlayerInterface {
   isNativeSupported(): Promise<{ supported: boolean }>;
   cacheTrack(options: { id: string; data: string; mimeType?: string }): Promise<{ success: boolean; id: string }>;
+  cacheTrackChunk(options: { id: string; chunk: string; isFirst: boolean; isLast: boolean }): Promise<{ success: boolean; id: string; size: number }>;
   hasCachedTrack(options: { id: string }): Promise<{ cached: boolean; id: string }>;
   deleteCachedTrack(options: { id: string }): Promise<{ success: boolean; id: string }>;
   clearCache(): Promise<{ success: boolean }>;

@@ -158,6 +158,59 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
     }
 
     @PluginMethod
+    public void cacheTrackChunk(PluginCall call) {
+        String id = call.getString("id");
+        String chunk = call.getString("chunk");
+        Boolean isFirst = call.getBoolean("isFirst", false);
+        Boolean isLast = call.getBoolean("isLast", false);
+
+        Log.d(TAG, "[DEBUG_NATIVE_AUDIO] cacheTrackChunk called for track ID: " + id + ", isFirst: " + isFirst + ", isLast: " + isLast);
+
+        if (id == null || id.isEmpty() || chunk == null || chunk.isEmpty()) {
+            Log.e(TAG, "[DEBUG_NATIVE_AUDIO] cacheTrackChunk error: empty ID or chunk");
+            call.reject("Track ID and chunk data are required.");
+            return;
+        }
+
+        if (chunk.contains(",")) {
+            chunk = chunk.substring(chunk.indexOf(",") + 1);
+        }
+
+        final String finalChunk = chunk;
+        getBridge().executeOnAnExecutor(() -> {
+            try {
+                byte[] decodedBytes = Base64.decode(finalChunk, Base64.DEFAULT);
+                File file = getAudioTrackFile(id);
+
+                if (isFirst) {
+                    Log.d(TAG, "[DEBUG_NATIVE_AUDIO] file write start (first chunk) for ID: " + id);
+                    if (file.exists()) {
+                        file.delete();
+                    }
+                }
+
+                try (FileOutputStream fos = new FileOutputStream(file, true)) {
+                    fos.write(decodedBytes);
+                    fos.flush();
+                }
+
+                if (isLast) {
+                    Log.i(TAG, "[DEBUG_NATIVE_AUDIO] file write end (last chunk). Total file size: " + file.length() + " bytes");
+                }
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("id", id);
+                ret.put("size", file.length());
+                call.resolve(ret);
+            } catch (Exception e) {
+                Log.e(TAG, "[DEBUG_NATIVE_AUDIO] Failed to write chunk: " + e.getMessage(), e);
+                call.reject("Failed to write chunk: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    @PluginMethod
     public void hasCachedTrack(PluginCall call) {
         String id = call.getString("id");
         Log.d(TAG, "[DEBUG_NATIVE_AUDIO] hasCachedTrack called for ID: " + id);

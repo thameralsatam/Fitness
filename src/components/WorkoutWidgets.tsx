@@ -198,7 +198,6 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
             <div className="w-8 h-8 rounded-xl bg-[#eef4f0] text-[#215641] flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
           </div>
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-[#75877d]">

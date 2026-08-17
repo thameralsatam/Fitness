@@ -12,6 +12,7 @@ import { ToolsView } from './components/ToolsView';
 import { ConfirmModal } from './components/ConfirmModal';
 import { SplashScreen } from './components/SplashScreen';
 import { AudioProvider } from './context/AudioContext';
+import { TimerProvider } from './context/TimerContext';
 import { FloatingMiniPlayer } from './components/FloatingMiniPlayer';
 import { FontSettingsModal } from './components/FontSettingsModal';
 import { DebugLogsModal } from './components/DebugLogsModal';
@@ -268,7 +269,8 @@ export default function App() {
   };
 
   return (
-    <AudioProvider lang={currentLang}>
+    <TimerProvider lang={currentLang}>
+      <AudioProvider lang={currentLang}>
       <div className="w-full min-h-screen max-w-[100vw] overflow-x-hidden flex flex-col bg-[#f6f8f6] text-[#15221b] selection:bg-[#215641]/15 selection:text-[#15221b] transition-colors duration-300">
         {/* Animated Native Splash Screen */}
         <AnimatePresence>
@@ -427,7 +429,8 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
-    </AudioProvider>
+      </AudioProvider>
+    </TimerProvider>
   );
 }
 

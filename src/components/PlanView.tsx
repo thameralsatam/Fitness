@@ -59,15 +59,6 @@ export const PlanView: React.FC<PlanViewProps> = ({
               {t.scheduleSub}
             </span>
           </div>
-
-          <button
-            type="button"
-            onClick={onResetToday}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium text-[#75877d] hover:text-[#15221b] hover:bg-[#eef4f0] transition-colors flex-shrink-0"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">{t.progressReset}</span>
-          </button>
         </div>
 
         {/* Progress bar */}

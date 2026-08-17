@@ -13,7 +13,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, lang }) =>
     triggerHaptic('light');
     const timer = setTimeout(() => {
       onFinish();
-    }, 1500); // 1.5s calm smooth presentation
+    }, 5000); // 5s calm smooth presentation
 
     return () => clearTimeout(timer);
   }, [onFinish]);
