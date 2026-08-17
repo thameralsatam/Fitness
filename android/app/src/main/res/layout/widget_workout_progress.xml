@@ -5,7 +5,8 @@
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg"
     android:orientation="vertical"
-    android:padding="14dp">
+    android:padding="12dp"
+    android:gravity="center_vertical">
 
     <!-- Top Header -->
     <LinearLayout
@@ -16,8 +17,8 @@
 
         <ImageView
             android:id="@+id/widget_icon"
-            android:layout_width="26dp"
-            android:layout_height="26dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:src="@mipmap/ic_launcher"
             android:contentDescription="App Icon" />
 
@@ -26,7 +27,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
+            android:layout_marginEnd="6dp"
             android:orientation="vertical">
 
             <TextView
@@ -35,8 +36,9 @@
                 android:layout_height="wrap_content"
                 android:text="خطة التمارين اليومية"
                 android:textColor="#ffffff"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium" />
 
             <TextView
                 android:id="@+id/widget_subtitle"
@@ -44,7 +46,8 @@
                 android:layout_height="wrap_content"
                 android:text="جاهز للجلسة التدريبية"
                 android:textColor="#9ee5be"
-                android:textSize="11sp" />
+                android:textSize="10sp"
+                android:fontFamily="sans-serif" />
         </LinearLayout>
 
         <TextView
@@ -52,19 +55,19 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/widget_btn_bg"
-            android:paddingHorizontal="8dp"
+            android:paddingHorizontal="7dp"
             android:paddingVertical="3dp"
-            android:text="🔥 تتابع مستمر"
+            android:text="🔥 مستمر"
             android:textColor="#6ee7b7"
             android:textSize="10sp"
-            android:textStyle="bold" />
+            android:fontFamily="sans-serif-medium" />
     </LinearLayout>
 
     <!-- Quick Action Launchers Row -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:gravity="center"
         android:orientation="horizontal">
 
@@ -73,41 +76,41 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginEnd="4dp"
+            android:layout_marginEnd="3dp"
             android:background="@drawable/widget_btn_bg"
             android:gravity="center"
-            android:paddingVertical="9dp"
+            android:paddingVertical="8dp"
             android:text="🏋️‍♂️ الخطة"
             android:textColor="#ffffff"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-medium" />
 
         <TextView
             android:id="@+id/btn_open_timer"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginHorizontal="4dp"
+            android:layout_marginHorizontal="3dp"
             android:background="@drawable/widget_btn_bg"
             android:gravity="center"
-            android:paddingVertical="9dp"
+            android:paddingVertical="8dp"
             android:text="⏱️ المؤقت"
             android:textColor="#ffffff"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-medium" />
 
         <TextView
             android:id="@+id/btn_open_audio"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="4dp"
+            android:layout_marginStart="3dp"
             android:background="@drawable/widget_btn_bg"
             android:gravity="center"
-            android:paddingVertical="9dp"
+            android:paddingVertical="8dp"
             android:text="🎵 الصوتيات"
             android:textColor="#ffffff"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-medium" />
     </LinearLayout>
 </LinearLayout>

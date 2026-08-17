@@ -110,18 +110,25 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
 
           {/* Motivation Quote / Status */}
           <div className="flex items-center justify-between text-xs text-emerald-100/90 pt-1 border-t border-white/10">
-            <span className="truncate">
-              {percent === 100
-                ? currentLang === 'ar'
-                  ? '🎉 رائع! أنجزت كل تمارين الخطة اليوم!'
-                  : '🎉 Großartig! Workout für heute beendet!'
-                : percent > 0
-                ? currentLang === 'ar'
+            <span className="truncate flex items-center gap-1.5">
+              {percent === 100 ? (
+                <>
+                  <Award className="w-3.5 h-3.5 text-amber-300 inline flex-shrink-0" />
+                  <span>
+                    {currentLang === 'ar'
+                      ? 'رائع! أنجزت كل تمارين الخطة اليوم!'
+                      : 'Großartig! Workout für heute beendet!'}
+                  </span>
+                </>
+              ) : percent > 0 ? (
+                currentLang === 'ar'
                   ? 'استمر، أنت تتقدم بشكل رائع اليوم!'
                   : 'Bleib dran, du machst tolle Fortschritte!'
-                : currentLang === 'ar'
-                ? 'ابدأ أول تمرين واضغط علامة الإنجاز'
-                : 'Starte die erste Übung und markiere den Fortschritt'}
+              ) : currentLang === 'ar' ? (
+                'ابدأ أول تمرين واضغط علامة الإنجاز'
+              ) : (
+                'Starte die erste Übung und markiere den Fortschritt'
+              )}
             </span>
 
             <button

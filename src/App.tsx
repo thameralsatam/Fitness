@@ -11,6 +11,9 @@ import { StatsView } from './components/StatsView';
 import { ToolsView } from './components/ToolsView';
 import { ConfirmModal } from './components/ConfirmModal';
 import { SplashScreen } from './components/SplashScreen';
+import { WidgetSettingsModal } from './components/WidgetSettingsModal';
+import { AudioProvider } from './context/AudioContext';
+import { FloatingMiniPlayer } from './components/FloatingMiniPlayer';
 import { triggerHaptic } from './utils/haptics';
 
 interface ConfirmModalState {
@@ -25,7 +28,6 @@ interface ConfirmModalState {
 
 export default function App() {
   const [showSplash, setShowSplash] = useState<boolean>(() => {
-    // Show splash once per launch session
     try {
       const hasShown = sessionStorage.getItem('gym_splash_shown');
       return !hasShown;
@@ -43,6 +45,17 @@ export default function App() {
     }
     return 'de';
   });
+
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('gym_dark_mode');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [isWidgetSettingsOpen, setIsWidgetSettingsOpen] = useState<boolean>(false);
 
   const [currentTab, setCurrentTab] = useState<ViewTab>('plan');
 
@@ -94,6 +107,20 @@ export default function App() {
     }
   }, [currentLang]);
 
+  // Persist dark mode preference
+  useEffect(() => {
+    try {
+      localStorage.setItem('gym_dark_mode', String(isDarkMode));
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch {
+      // fallback
+    }
+  }, [isDarkMode]);
+
   // Persist completed exercises
   useEffect(() => {
     try {
@@ -127,11 +154,19 @@ export default function App() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 2400);
+    }, 2500);
   };
 
   const handleToggleLang = () => {
-    setCurrentLang((prev) => (prev === 'de' ? 'ar' : 'de'));
+    triggerHaptic('selection');
+    const newLang = currentLang === 'de' ? 'ar' : 'de';
+    setCurrentLang(newLang);
+    showToast(newLang === 'ar' ? 'تم تغيير اللغة إلى العربية' : 'Sprache auf Deutsch geändert');
+  };
+
+  const handleToggleDarkMode = () => {
+    triggerHaptic('medium');
+    setIsDarkMode((prev) => !prev);
   };
 
   const handleToggleExercise = (id: number) => {
@@ -142,14 +177,13 @@ export default function App() {
         next.delete(id);
       } else {
         next.add(id);
-        triggerHaptic('success');
       }
       return next;
     });
   };
 
   const handleTogglePanel = (id: number) => {
-    triggerHaptic('light');
+    triggerHaptic('selection');
     setOpenPanels((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -162,7 +196,7 @@ export default function App() {
   };
 
   const handleToggleAllAlts = () => {
-    triggerHaptic('medium');
+    triggerHaptic('selection');
     if (openPanels.size === EXERCISES_DATA.length) {
       setOpenPanels(new Set());
     } else {
@@ -170,32 +204,34 @@ export default function App() {
     }
   };
 
-  // Reset progress with confirmation
   const handleRequestResetProgress = () => {
     triggerHaptic('warning');
     setConfirmModal({
       isOpen: true,
-      title: t.confirmResetTitle,
-      description: t.confirmResetDesc,
-      confirmText: t.confirmBtn,
-      cancelText: t.cancelBtn,
+      title: t.modalResetTitle,
+      description: t.modalResetDesc,
+      confirmText: t.confirmReset,
+      cancelText: t.cancel,
       type: 'reset',
       onConfirm: () => {
+        triggerHaptic('success');
         setCompletedExercises(new Set());
-        showToast(t.toastReset);
+        setOpenPanels(new Set());
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        showToast(currentLang === 'de' ? 'Fortschritt zurückgesetzt' : 'تم إعادة تعيين التقدم بنجاح');
       },
     });
   };
 
   const handleCopyPlan = () => {
-    let text =
-      currentLang === 'de'
-        ? 'TRAININGSPLAN (Full Body - 3× pro Woche)\n\n'
-        : 'جدول التمارين (جسم كامل - ٣ أيام بالأسبوع)\n\n';
+    triggerHaptic('light');
+    let text = `${t.brandTitle} · ${t.brandSubtitle}\n\n`;
 
-    EXERCISES_DATA.forEach((item) => {
-      const muscle = currentLang === 'de' ? item.muscleDe : item.muscleAr;
-      text += `${item.id}. ${item.nameDe} (${muscle}) - ${item.sets} × ${item.reps}\n`;
+    EXERCISES_DATA.forEach((item, index) => {
+      const name = currentLang === 'de' ? item.nameDe : `${item.nameDe} (${item.muscleAr})`;
+      const isDone = completedExercises.has(item.id);
+      text += `${index + 1}. [${isDone ? '✓' : ' '}] ${name}\n`;
+      text += `   ${item.sets} ${currentLang === 'de' ? 'Sätze' : 'مجموعات'} × ${item.reps}\n`;
       if (item.alternatives.length > 0) {
         text += `   ${currentLang === 'de' ? 'Alternativen:' : 'البدائل:'} ${item.alternatives.join(
           ', '
@@ -216,10 +252,6 @@ export default function App() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const handleTabChange = (tab: ViewTab) => {
     triggerHaptic('selection');
     setCurrentTab(tab);
@@ -236,13 +268,18 @@ export default function App() {
   };
 
   return (
-    <div className="w-full min-h-screen max-w-[100vw] overflow-x-hidden bg-[#f6f8f6] text-[#15221b] flex flex-col selection:bg-[#215641]/15 selection:text-[#15221b]">
-      {/* Animated Native Splash Screen */}
-      <AnimatePresence>
-        {showSplash && (
-          <SplashScreen onFinish={handleSplashFinish} lang={currentLang} />
-        )}
-      </AnimatePresence>
+    <AudioProvider lang={currentLang}>
+      <div className={`w-full min-h-screen max-w-[100vw] overflow-x-hidden flex flex-col transition-colors duration-300 ${
+        isDarkMode 
+          ? 'bg-[#0b1410] text-slate-100 selection:bg-emerald-500/30 selection:text-white' 
+          : 'bg-[#f6f8f6] text-[#15221b] selection:bg-[#215641]/15 selection:text-[#15221b]'
+      }`}>
+        {/* Animated Native Splash Screen */}
+        <AnimatePresence>
+          {showSplash && (
+            <SplashScreen onFinish={handleSplashFinish} lang={currentLang} />
+          )}
+        </AnimatePresence>
 
       {/* Top Header */}
       <Header
@@ -251,7 +288,9 @@ export default function App() {
         onCopyPlan={handleCopyPlan}
         onToggleAllAlts={handleToggleAllAlts}
         onResetProgress={handleRequestResetProgress}
-        onPrint={handlePrint}
+        onOpenWidgetSettings={() => setIsWidgetSettingsOpen(true)}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={handleToggleDarkMode}
       />
 
       {/* Main View Container */}
@@ -333,11 +372,25 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Persistent Floating Mini Audio Player when browsing other tabs */}
+      <FloatingMiniPlayer
+        currentTab={currentTab}
+        onNavigateTab={handleTabChange}
+        lang={currentLang}
+      />
+
       {/* Liquid Glass Bottom Navigation Dock */}
       <MobileBottomNav
         currentTab={currentTab}
         onTabChange={handleTabChange}
         currentLang={currentLang}
+      />
+
+      {/* Widget Settings Modal */}
+      <WidgetSettingsModal
+        isOpen={isWidgetSettingsOpen}
+        onClose={() => setIsWidgetSettingsOpen(false)}
+        lang={currentLang}
       />
 
       {/* Confirmation Modal */}
@@ -368,5 +421,6 @@ export default function App() {
         )}
       </AnimatePresence>
     </div>
+    </AudioProvider>
   );
 }

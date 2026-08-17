@@ -1690,11 +1690,11 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                         className="w-full h-10 bg-white border border-[#dbe4dc] focus:border-[#215641] rounded-xl px-3 text-xs font-bold text-[#15221b] focus:outline-none cursor-pointer"
                       >
                         <option value="">
-                          {currentLang === 'ar' ? '📁 بدون مجلد (عام)' : '📁 Ohne Ordner'}
+                          {currentLang === 'ar' ? 'بدون مجلد (عام)' : 'Ohne Ordner'}
                         </option>
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>
-                            📁 {f.name}
+                            {f.name}
                           </option>
                         ))}
                       </select>
@@ -1798,11 +1798,11 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                   className="w-full h-11 bg-[#fafcfa] border border-[#dbe4dc] focus:border-[#215641] rounded-xl px-3 text-xs font-bold text-[#15221b] focus:outline-none cursor-pointer"
                 >
                   <option value="">
-                    {currentLang === 'ar' ? '📁 بدون مجلد (عام)' : '📁 Ohne Ordner'}
+                    {currentLang === 'ar' ? 'بدون مجلد (عام)' : 'Ohne Ordner'}
                   </option>
                   {folders.map((f) => (
                     <option key={f.id} value={f.id}>
-                      📁 {f.name}
+                      {f.name}
                     </option>
                   ))}
                 </select>
