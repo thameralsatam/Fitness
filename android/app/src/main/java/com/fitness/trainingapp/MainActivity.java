@@ -20,28 +20,23 @@ public class MainActivity extends BridgeActivity {
 
     private void handleWidgetIntent(Intent intent) {
         if (intent == null) return;
-
+        
         String targetTab = intent.getStringExtra("target_tab");
-        int timerSeconds = intent.getIntExtra("timer_seconds", 0);
         Uri data = intent.getData();
 
         String tab = targetTab;
         if (tab == null && data != null) {
             tab = data.getQueryParameter("tab");
-            if (tab == null && data.getHost() != null && data.getHost().equals("timer")) {
-                tab = "timer";
-            }
         }
 
         if (tab != null) {
             final String finalTab = tab;
-            final int finalSec = timerSeconds;
             if (getBridge() != null && getBridge().getWebView() != null) {
                 getBridge().getWebView().post(new Runnable() {
                     @Override
                     public void run() {
                         getBridge().getWebView().evaluateJavascript(
-                            "window.dispatchEvent(new CustomEvent('widget-navigate', { detail: { tab: '" + finalTab + "', seconds: " + finalSec + " } }));",
+                            "window.dispatchEvent(new CustomEvent('widget-navigate', { detail: { tab: '" + finalTab + "' } }));",
                             null
                         );
                     }

@@ -19,7 +19,6 @@ interface HeaderProps {
   onCopyPlan: () => void;
   onToggleAllAlts: () => void;
   onResetProgress: () => void;
-  onOpenWidgetSettings: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
 }
@@ -30,7 +29,6 @@ export const Header: React.FC<HeaderProps> = ({
   onCopyPlan,
   onToggleAllAlts,
   onResetProgress,
-  onOpenWidgetSettings,
   isDarkMode,
   onToggleDarkMode,
 }) => {
@@ -125,25 +123,6 @@ export const Header: React.FC<HeaderProps> = ({
                     : 'bg-white border-[#dbe4dc] text-[#15221b]'
                 }`}
               >
-                {/* Widget Customization */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenWidgetSettings();
-                    setMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-[13px] font-bold rounded-xl transition-colors ${
-                    isDarkMode 
-                      ? 'text-emerald-300 hover:bg-emerald-900/60' 
-                      : 'text-[#215641] hover:bg-[#f1f6f3]'
-                  }`}
-                >
-                  <Sliders className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  <span>{isAr ? 'تخصيص ويدجتات الجوال' : 'Widget Customization'}</span>
-                </button>
-
-                <div className={`h-[1px] my-1 ${isDarkMode ? 'bg-emerald-900/60' : 'bg-[#e2ebe3]'}`} />
-
                 {/* Language Switch */}
                 <button
                   type="button"

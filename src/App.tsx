@@ -11,7 +11,6 @@ import { StatsView } from './components/StatsView';
 import { ToolsView } from './components/ToolsView';
 import { ConfirmModal } from './components/ConfirmModal';
 import { SplashScreen } from './components/SplashScreen';
-import { WidgetSettingsModal } from './components/WidgetSettingsModal';
 import { AudioProvider } from './context/AudioContext';
 import { FloatingMiniPlayer } from './components/FloatingMiniPlayer';
 import { triggerHaptic } from './utils/haptics';
@@ -54,8 +53,6 @@ export default function App() {
       return false;
     }
   });
-
-  const [isWidgetSettingsOpen, setIsWidgetSettingsOpen] = useState<boolean>(false);
 
   const [currentTab, setCurrentTab] = useState<ViewTab>('plan');
 
@@ -133,7 +130,7 @@ export default function App() {
   // Handle Home Screen Widget Deep-Link Navigation
   useEffect(() => {
     const handleWidgetNavigate = (e: Event) => {
-      const customEvent = e as CustomEvent<{ tab?: ViewTab; seconds?: number }>;
+      const customEvent = e as CustomEvent<{ tab?: ViewTab }>;
       if (customEvent.detail) {
         const { tab } = customEvent.detail;
         if (tab && ['plan', 'timer', 'audio', 'stats', 'tools'].includes(tab)) {
@@ -288,7 +285,6 @@ export default function App() {
         onCopyPlan={handleCopyPlan}
         onToggleAllAlts={handleToggleAllAlts}
         onResetProgress={handleRequestResetProgress}
-        onOpenWidgetSettings={() => setIsWidgetSettingsOpen(true)}
         isDarkMode={isDarkMode}
         onToggleDarkMode={handleToggleDarkMode}
       />
@@ -384,13 +380,6 @@ export default function App() {
         currentTab={currentTab}
         onTabChange={handleTabChange}
         currentLang={currentLang}
-      />
-
-      {/* Widget Settings Modal */}
-      <WidgetSettingsModal
-        isOpen={isWidgetSettingsOpen}
-        onClose={() => setIsWidgetSettingsOpen(false)}
-        lang={currentLang}
       />
 
       {/* Confirmation Modal */}
