@@ -13,8 +13,15 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setupMediaAndWebView();
         setupWidgetBridge();
         handleWidgetIntent(getIntent());
+    }
+
+    private void setupMediaAndWebView() {
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+        }
     }
 
     @Override

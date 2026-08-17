@@ -1,29 +1,17 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Type, Check, X, Sparkles } from 'lucide-react';
+import { Type, Check, X, Sparkles, UploadCloud, Trash2, Smartphone } from 'lucide-react';
 import { Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
+import {
+  saveAndApplyCustomFont,
+  getStoredCustomFontInfo,
+  deleteCustomFont,
+} from '../utils/customFonts';
 
-export interface FontConfig {
-  titleFont: string;
-  bodyFont: string;
-}
-
-export const TITLE_FONTS = [
-  { id: 'kufam', name: 'Kufam', labelAr: 'كوفام (افتراضي - رياضي عريض)', labelDe: 'Kufam (Standard - Kräftig)', value: "'Kufam', sans-serif" },
-  { id: 'cairo', name: 'Cairo', labelAr: 'كايرو (عصري وواضح)', labelDe: 'Cairo (Modern & Klar)', value: "'Cairo', sans-serif" },
-  { id: 'readex', name: 'Readex Pro', labelAr: 'ريدكس برو (هندسي رشيق)', labelDe: 'Readex Pro (Geometrisch)', value: "'Readex Pro', sans-serif" },
-  { id: 'changa', name: 'Changa', labelAr: 'تشانغا (كتلي مميز)', labelDe: 'Changa (Sportlich-Block)', value: "'Changa', sans-serif" },
-  { id: 'system', name: 'System Font', labelAr: 'خط نظام الجوال (System Font)', labelDe: 'System-Schriftart', value: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
-];
-
-export const BODY_FONTS = [
-  { id: 'ibm', name: 'IBM Plex Sans Arabic', labelAr: 'آي بي إم بلكس (افتراضي - مريح للقراءة)', labelDe: 'IBM Plex Sans (Standard)', value: "'IBM Plex Sans Arabic', sans-serif" },
-  { id: 'cairo', name: 'Cairo', labelAr: 'كايرو (سلس ومقروء)', labelDe: 'Cairo (Flüssig)', value: "'Cairo', sans-serif" },
-  { id: 'tajawal', name: 'Tajawal', labelAr: 'تجوّل (عربي أنيق ومتناسق)', labelDe: 'Tajawal (Harmonisch)', value: "'Tajawal', sans-serif" },
-  { id: 'almarai', name: 'Almarai', labelAr: 'المراعي (عالي الوضوح)', labelDe: 'Almarai (Hohe Lesbarkeit)', value: "'Almarai', sans-serif" },
-  { id: 'system', name: 'System Font', labelAr: 'خط نظام الجوال (System Font)', labelDe: 'System-Schriftart', value: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
-];
+export const DEFAULT_TITLE_FONT = "'Kufam', sans-serif";
+export const DEFAULT_BODY_FONT = "'IBM Plex Sans Arabic', sans-serif";
+export const SYSTEM_FONT = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 interface FontSettingsModalProps {
   isOpen: boolean;
@@ -33,6 +21,7 @@ interface FontSettingsModalProps {
   currentBodyFont: string;
   onSelectTitleFont: (fontValue: string) => void;
   onSelectBodyFont: (fontValue: string) => void;
+  onShowToast?: (msg: string) => void;
 }
 
 export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
@@ -43,10 +32,77 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
   currentBodyFont,
   onSelectTitleFont,
   onSelectBodyFont,
+  onShowToast,
 }) => {
   const isAr = lang === 'ar';
+  const titleFileInputRef = useRef<HTMLInputElement | null>(null);
+  const bodyFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [customTitleInfo, setCustomTitleInfo] = useState(() => getStoredCustomFontInfo('title'));
+  const [customBodyInfo, setCustomBodyInfo] = useState(() => getStoredCustomFontInfo('body'));
+  const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCustomTitleInfo(getStoredCustomFontInfo('title'));
+      setCustomBodyInfo(getStoredCustomFontInfo('body'));
+    }
+  }, [isOpen]);
+
+  const handleFileUpload = async (type: 'title' | 'body', file: File | undefined) => {
+    if (!file) return;
+    setIsUploading(true);
+    triggerHaptic('medium');
+
+    const result = await saveAndApplyCustomFont(type, file);
+    setIsUploading(false);
+
+    if (result.success && result.fontValue) {
+      triggerHaptic('success');
+      if (type === 'title') {
+        setCustomTitleInfo(getStoredCustomFontInfo('title'));
+        onSelectTitleFont(result.fontValue);
+      } else {
+        setCustomBodyInfo(getStoredCustomFontInfo('body'));
+        onSelectBodyFont(result.fontValue);
+      }
+      const msg = isAr ? `تم استيراد وتطبيق الخط بنجاح: ${file.name}` : `Schriftart erfolgreich importiert: ${file.name}`;
+      if (onShowToast) onShowToast(msg);
+    } else {
+      triggerHaptic('heavy');
+      const errorMsg = isAr ? 'فشل استيراد ملف الخط، تأكد من الصيغة (TTF, OTF, WOFF)' : 'Fehler beim Laden der Schriftartdatei';
+      if (onShowToast) onShowToast(errorMsg);
+    }
+  };
+
+  const handleDeleteCustom = (type: 'title' | 'body') => {
+    triggerHaptic('warning');
+    deleteCustomFont(type);
+    if (type === 'title') {
+      setCustomTitleInfo(getStoredCustomFontInfo('title'));
+      if (currentTitleFont.includes('CustomTitleFont')) {
+        onSelectTitleFont(DEFAULT_TITLE_FONT);
+      }
+    } else {
+      setCustomBodyInfo(getStoredCustomFontInfo('body'));
+      if (currentBodyFont.includes('CustomBodyFont')) {
+        onSelectBodyFont(DEFAULT_BODY_FONT);
+      }
+    }
+    if (onShowToast) {
+      onShowToast(isAr ? 'تم حذف الخط المخصص والرجوع للافتراضي' : 'Benutzerdefinierte Schriftart entfernt');
+    }
+  };
 
   if (!isOpen) return null;
+
+  const isCustomTitleSelected = currentTitleFont.includes('CustomTitleFont');
+  const isKufamTitleSelected = currentTitleFont === DEFAULT_TITLE_FONT;
+  const isSystemTitleSelected = currentTitleFont === SYSTEM_FONT;
+
+  const isCustomBodySelected = currentBodyFont.includes('CustomBodyFont');
+  const isIbmBodySelected = currentBodyFont === DEFAULT_BODY_FONT;
+  const isSystemBodySelected = currentBodyFont === SYSTEM_FONT;
 
   return (
     <AnimatePresence>
@@ -57,7 +113,29 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+        />
+
+        {/* Hidden File Pickers */}
+        <input
+          type="file"
+          ref={titleFileInputRef}
+          accept=".ttf,.otf,.woff,.woff2,.eot"
+          className="hidden"
+          onChange={(e) => {
+            handleFileUpload('title', e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+        <input
+          type="file"
+          ref={bodyFileInputRef}
+          accept=".ttf,.otf,.woff,.woff2,.eot"
+          className="hidden"
+          onChange={(e) => {
+            handleFileUpload('body', e.target.files?.[0]);
+            e.target.value = '';
+          }}
         />
 
         {/* Modal Window */}
@@ -69,17 +147,17 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
           className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#dbe4dc] p-5 sm:p-6 overflow-hidden z-10 max-h-[90vh] flex flex-col"
         >
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-[#e2ebe3] flex-shrink-0">
+          <div className="flex items-center justify-between pb-3.5 border-b border-[#e2ebe3] flex-shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#eef4f0] text-[#215641] flex items-center justify-center">
-                <Type className="w-4 h-4" />
+              <div className="w-9 h-9 rounded-2xl bg-[#eef4f0] text-[#215641] flex items-center justify-center">
+                <Type className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-display font-bold text-base text-[#15221b]">
-                  {isAr ? 'اختيار خطوط التطبيق' : 'App-Schriftarten anpassen'}
+                <h3 className="font-display font-bold text-[15px] text-[#15221b]">
+                  {isAr ? 'إدارة واستيراد الخطوط' : 'Schriftarten verwalten & importieren'}
                 </h3>
                 <p className="text-[11px] text-[#75877d]">
-                  {isAr ? 'تخصيص خط النصوص وخط العناوين' : 'Schriftart für Titel & Fließtext'}
+                  {isAr ? 'الخطوط الافتراضية أو استيراد خط مخصص من جهازك' : 'Standard oder eigene Schriftartdatei hochladen'}
                 </p>
               </div>
             </div>
@@ -92,91 +170,239 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
             </button>
           </div>
 
-          {/* Scrollable Options List */}
+          {/* Scrollable Content */}
           <div className="overflow-y-auto py-4 space-y-6 flex-1 pr-1">
-            {/* 1. Title / Heading Font Picker */}
-            <div className="space-y-2">
+            {/* 1. Title / Heading Font Section */}
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-extrabold text-[#15221b] flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#215641]" />
-                  <span>{isAr ? 'خط العناوين الرئيسية (Titles Font):' : 'Schriftart für Überschriften:'}</span>
+                  <span>{isAr ? '1. خط العناوين الرئيسية (Titles Font):' : '1. Schriftart für Überschriften:'}</span>
                 </label>
               </div>
 
-              <div className="space-y-1.5">
-                {TITLE_FONTS.map((f) => {
-                  const isSelected = currentTitleFont === f.value;
-                  return (
+              <div className="space-y-2">
+                {/* Option: Default Kufam */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onSelectTitleFont(DEFAULT_TITLE_FONT);
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
+                    isKufamTitleSelected
+                      ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
+                      : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
+                  }`}
+                >
+                  <div className="flex flex-col">
+                    <span style={{ fontFamily: DEFAULT_TITLE_FONT }} className="text-sm font-bold">
+                      {isAr ? 'كوفام (الخط الافتراضي الرياضي)' : 'Kufam (Standard)'}
+                    </span>
+                    <span className="text-[10px] text-[#75877d]">Google Font · Kufam Bold</span>
+                  </div>
+                  {isKufamTitleSelected && (
+                    <div className="w-5 h-5 rounded-full bg-[#215641] text-white flex items-center justify-center flex-shrink-0">
+                      <Check className="w-3 h-3 stroke-[3]" />
+                    </div>
+                  )}
+                </button>
+
+                {/* Option: System Font */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onSelectTitleFont(SYSTEM_FONT);
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
+                    isSystemTitleSelected
+                      ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
+                      : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-[#75877d]" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">{isAr ? 'خط نظام الجوال (System)' : 'System-Schriftart'}</span>
+                      <span className="text-[10px] text-[#75877d]">Android / Device Default</span>
+                    </div>
+                  </div>
+                  {isSystemTitleSelected && (
+                    <div className="w-5 h-5 rounded-full bg-[#215641] text-white flex items-center justify-center flex-shrink-0">
+                      <Check className="w-3 h-3 stroke-[3]" />
+                    </div>
+                  )}
+                </button>
+
+                {/* Option: Custom Uploaded Font if exists */}
+                {customTitleInfo.exists && (
+                  <div
+                    className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                      isCustomTitleSelected
+                        ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
+                        : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b]'
+                    }`}
+                  >
                     <button
-                      key={f.id}
                       type="button"
                       onClick={() => {
                         triggerHaptic('selection');
-                        onSelectTitleFont(f.value);
+                        onSelectTitleFont(customTitleInfo.fontValue);
                       }}
-                      className={`w-full flex items-center justify-between p-2.5 sm:p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
-                        isSelected
-                          ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
-                          : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
-                      }`}
+                      className="flex-1 flex flex-col text-right rtl:text-right ltr:text-left"
                     >
-                      <div className="flex flex-col">
-                        <span style={{ fontFamily: f.value }} className="text-sm font-bold">
-                          {isAr ? f.labelAr : f.labelDe}
-                        </span>
-                        <span className="text-[10px] text-[#75877d]">{f.name}</span>
-                      </div>
-                      {isSelected && (
+                      <span style={{ fontFamily: customTitleInfo.fontValue }} className="text-sm font-bold">
+                        {customTitleInfo.name} ({isAr ? 'خط مستورد' : 'Importiert'})
+                      </span>
+                      <span className="text-[10px] text-[#75877d]">{isAr ? 'خطك المخصص المحفوظ' : 'Benutzerdefiniert'}</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      {isCustomTitleSelected && (
                         <div className="w-5 h-5 rounded-full bg-[#215641] text-white flex items-center justify-center flex-shrink-0">
                           <Check className="w-3 h-3 stroke-[3]" />
                         </div>
                       )}
-                    </button>
-                  );
-                })}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustom('title')}
+                        className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center"
+                        title={isAr ? 'حذف هذا الخط' : 'Löschen'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Import Button for Titles */}
+                <button
+                  type="button"
+                  onClick={() => titleFileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-[#215641]/40 bg-[#f4f8f5] hover:bg-[#eaf2ec] text-[#215641] text-xs font-bold transition-all active:scale-98"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>{isAr ? '📂 استيراد خط مخصص للعناوين (TTF / OTF / WOFF)' : '📂 Eigene Schriftart für Titel importieren'}</span>
+                </button>
               </div>
             </div>
 
-            {/* 2. Body Text Font Picker */}
-            <div className="space-y-2">
+            {/* 2. Body Text Font Section */}
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-extrabold text-[#15221b] flex items-center gap-1.5">
                   <Type className="w-3.5 h-3.5 text-[#215641]" />
-                  <span>{isAr ? 'خط النصوص والقوائم (Body Text Font):' : 'Schriftart für Fließtext & Listen:'}</span>
+                  <span>{isAr ? '2. خط النصوص والقوائم (Body Font):' : '2. Schriftart für Fließtext & Listen:'}</span>
                 </label>
               </div>
 
-              <div className="space-y-1.5">
-                {BODY_FONTS.map((f) => {
-                  const isSelected = currentBodyFont === f.value;
-                  return (
+              <div className="space-y-2">
+                {/* Option: Default IBM Plex */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onSelectBodyFont(DEFAULT_BODY_FONT);
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
+                    isIbmBodySelected
+                      ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
+                      : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
+                  }`}
+                >
+                  <div className="flex flex-col">
+                    <span style={{ fontFamily: DEFAULT_BODY_FONT }} className="text-sm font-medium">
+                      {isAr ? 'آي بي إم بلكس (الخط الافتراضي للنصوص)' : 'IBM Plex Sans Arabic (Standard)'}
+                    </span>
+                    <span className="text-[10px] text-[#75877d]">Google Font · IBM Plex Arabic Regular</span>
+                  </div>
+                  {isIbmBodySelected && (
+                    <div className="w-5 h-5 rounded-full bg-[#215641] text-white flex items-center justify-center flex-shrink-0">
+                      <Check className="w-3 h-3 stroke-[3]" />
+                    </div>
+                  )}
+                </button>
+
+                {/* Option: System Font */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onSelectBodyFont(SYSTEM_FONT);
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
+                    isSystemBodySelected
+                      ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
+                      : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-[#75877d]" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{isAr ? 'خط نظام الجوال (System)' : 'System-Schriftart'}</span>
+                      <span className="text-[10px] text-[#75877d]">Android / Device Default</span>
+                    </div>
+                  </div>
+                  {isSystemBodySelected && (
+                    <div className="w-5 h-5 rounded-full bg-[#215641] text-white flex items-center justify-center flex-shrink-0">
+                      <Check className="w-3 h-3 stroke-[3]" />
+                    </div>
+                  )}
+                </button>
+
+                {/* Option: Custom Uploaded Font if exists */}
+                {customBodyInfo.exists && (
+                  <div
+                    className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                      isCustomBodySelected
+                        ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
+                        : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b]'
+                    }`}
+                  >
                     <button
-                      key={f.id}
                       type="button"
                       onClick={() => {
                         triggerHaptic('selection');
-                        onSelectBodyFont(f.value);
+                        onSelectBodyFont(customBodyInfo.fontValue);
                       }}
-                      className={`w-full flex items-center justify-between p-2.5 sm:p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
-                        isSelected
-                          ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
-                          : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
-                      }`}
+                      className="flex-1 flex flex-col text-right rtl:text-right ltr:text-left"
                     >
-                      <div className="flex flex-col">
-                        <span style={{ fontFamily: f.value }} className="text-sm font-medium">
-                          {isAr ? f.labelAr : f.labelDe}
-                        </span>
-                        <span className="text-[10px] text-[#75877d]">{f.name}</span>
-                      </div>
-                      {isSelected && (
+                      <span style={{ fontFamily: customBodyInfo.fontValue }} className="text-sm font-medium">
+                        {customBodyInfo.name} ({isAr ? 'خط مستورد' : 'Importiert'})
+                      </span>
+                      <span className="text-[10px] text-[#75877d]">{isAr ? 'خطك المخصص المحفوظ' : 'Benutzerdefiniert'}</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      {isCustomBodySelected && (
                         <div className="w-5 h-5 rounded-full bg-[#215641] text-white flex items-center justify-center flex-shrink-0">
                           <Check className="w-3 h-3 stroke-[3]" />
                         </div>
                       )}
-                    </button>
-                  );
-                })}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustom('body')}
+                        className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center"
+                        title={isAr ? 'حذف هذا الخط' : 'Löschen'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Import Button for Body */}
+                <button
+                  type="button"
+                  onClick={() => bodyFileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-[#215641]/40 bg-[#f4f8f5] hover:bg-[#eaf2ec] text-[#215641] text-xs font-bold transition-all active:scale-98"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>{isAr ? '📂 استيراد خط مخصص للنصوص (TTF / OTF / WOFF)' : '📂 Eigene Schriftart für Fließtext importieren'}</span>
+                </button>
               </div>
             </div>
           </div>

@@ -15,6 +15,7 @@ import { AudioProvider } from './context/AudioContext';
 import { FloatingMiniPlayer } from './components/FloatingMiniPlayer';
 import { FontSettingsModal } from './components/FontSettingsModal';
 import { triggerHaptic } from './utils/haptics';
+import { initializeCustomFonts } from './utils/customFonts';
 
 interface ConfirmModalState {
   isOpen: boolean;
@@ -106,6 +107,11 @@ export default function App() {
   });
 
   const t = I18N[currentLang];
+
+  // Restore custom fonts on app boot
+  useEffect(() => {
+    initializeCustomFonts();
+  }, []);
 
   // Sync language attribute to html document & native widget
   useEffect(() => {

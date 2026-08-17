@@ -141,7 +141,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     }
   }, [currentTrackIndex, tracks]);
 
-  // Configure Media Session API for mobile & browser background playback
+  // Configure Media Session API for mobile & browser background playback and lock-screen
   useEffect(() => {
     if (typeof window !== 'undefined' && 'mediaSession' in navigator && currentTrack) {
       const trackName = currentTrack.name;
@@ -149,13 +149,26 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         currentLang === 'ar' ? 'المحفزات الصوتية للتمارين' : 'Trainingsplan Motivation Audio';
       const artistName = currentLang === 'ar' ? 'تمارين اليوم' : 'Full Body Workout';
 
+      const iconUrl = typeof window !== 'undefined' ? `${window.location.origin}/icon-512.png` : '/icon-512.png';
+      const appleIconUrl = typeof window !== 'undefined' ? `${window.location.origin}/apple-touch-icon.png` : '/apple-touch-icon.png';
+
       navigator.mediaSession.metadata = new MediaMetadata({
         title: trackName,
         artist: artistName,
         album: albumName,
         artwork: [
           {
-            src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24" fill="%23215641"><rect width="24" height="24" rx="6" fill="%23121c17"/><path d="m6.5 6.5 11 11M17.5 6.5l-11 11" stroke="%2334d399" stroke-width="2"/></svg>',
+            src: iconUrl,
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: appleIconUrl,
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" rx="115" fill="%2313271e"/><path d="m160 160 192 192M352 160l-192 192" stroke="%2334d399" stroke-width="36" stroke-linecap="round"/></svg>',
             sizes: '512x512',
             type: 'image/svg+xml',
           },
@@ -166,7 +179,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         try {
           navigator.mediaSession.setActionHandler(action, handler);
         } catch {
-          // Action not supported in browser
+          // Action not supported in this browser version
         }
       };
 
@@ -194,7 +207,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         handleNext();
       });
 
-      // Crucial: Stop handler handles notification close ("زر اكس / إيقاف")
+      setHandler('seekbackward', () => {
+        handleSkip(-10);
+      });
+
+      setHandler('seekforward', () => {
+        handleSkip(10);
+      });
+
+      // Crucial: Stop handler handles notification close / stop button
       setHandler('stop', () => {
         stopAudio();
       });
@@ -208,12 +229,24 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     }
   }, [currentTrack, currentLang]);
 
-  // Sync MediaSession playback state
+  // Sync MediaSession playback state & position state for lockscreen scrubber
   useEffect(() => {
     if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+      
+      if (duration > 0 && 'setPositionState' in navigator.mediaSession) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: Math.max(0, duration),
+            playbackRate: playbackRate || 1,
+            position: Math.min(Math.max(0, currentTime), duration),
+          });
+        } catch (e) {
+          // Ignore unsupported position state bounds
+        }
+      }
     }
-  }, [isPlaying]);
+  }, [isPlaying, currentTime, duration, playbackRate]);
 
   const playTrackAtIndex = (index: number) => {
     const list = tracksRef.current;

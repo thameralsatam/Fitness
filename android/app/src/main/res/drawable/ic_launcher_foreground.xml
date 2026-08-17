@@ -5,38 +5,49 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="0.65"
-        android:scaleY="0.65"
+        android:scaleX="0.68"
+        android:scaleY="0.68"
+        android:rotation="-15"
         android:pivotX="54"
         android:pivotY="54">
         <!-- Dumbbell Bar -->
         <path
-            android:fillColor="#E2EBE3"
-            android:pathData="M32,50 L76,50 C78.2,50 80,51.8 80,54 C80,56.2 78.2,58 76,58 L32,58 C29.8,58 28,56.2 28,54 C28,51.8 29.8,50 32,50 Z" />
+            android:fillColor="#F1F5F9"
+            android:pathData="M38,50 L70,50 C72.2,50 74,51.8 74,54 C74,56.2 72.2,58 70,58 L38,58 C35.8,58 34,56.2 34,54 C34,51.8 35.8,50 38,50 Z" />
         
-        <!-- Left Inner Weight Plate -->
-        <path
-            android:fillColor="#34D399"
-            android:pathData="M24,34 L32,34 C34.2,34 36,35.8 36,38 L36,70 C36,72.2 34.2,74 32,74 L24,74 C21.8,74 20,72.2 20,70 L20,38 C20,35.8 21.8,34 24,34 Z" />
-        
-        <!-- Left Outer Weight Plate -->
-        <path
-            android:fillColor="#059669"
-            android:pathData="M14,39 L20,39 C21.1,39 22,39.9 22,41 L22,67 C22,68.1 21.1,69 20,69 L14,69 C12.9,69 12,68.1 12,67 L12,41 C12,39.9 12.9,39 14,39 Z" />
-
-        <!-- Right Inner Weight Plate -->
-        <path
-            android:fillColor="#34D399"
-            android:pathData="M76,34 L84,34 C86.2,34 88,35.8 88,38 L88,70 C88,72.2 86.2,74 84,74 L76,74 C73.8,74 72,72.2 72,70 L72,38 C72,35.8 73.8,34 76,34 Z" />
-
-        <!-- Right Outer Weight Plate -->
-        <path
-            android:fillColor="#059669"
-            android:pathData="M88,39 L94,39 C95.1,39 96,39.9 96,41 L96,67 C96,68.1 95.1,69 94,69 L88,69 C86.9,69 86,68.1 86,67 L86,41 C86,39.9 86.9,39 88,39 Z" />
-
-        <!-- Center Accent Badge -->
+        <!-- Center Accent Grip -->
         <path
             android:fillColor="#6EE7B7"
-            android:pathData="M51,46 L57,46 C58.1,46 59,46.9 59,48 L59,60 C59,61.1 58.1,62 57,62 L51,62 C49.9,62 49,61.1 49,60 L49,48 C49,46.9 49.9,46 51,46 Z" />
+            android:pathData="M50,48 L58,48 C59.1,48 60,48.9 60,50 L60,58 C60,59.1 59.1,60 58,60 L50,60 C48.9,60 48,59.1 48,58 L48,50 C48,48.9 48.9,48 50,48 Z" />
+
+        <!-- Left Outer Plate -->
+        <path
+            android:fillColor="#047857"
+            android:pathData="M21,42 L27,42 C28.1,42 29,42.9 29,44 L29,64 C29,65.1 28.1,66 27,66 L21,66 C19.9,66 19,65.1 19,64 L19,44 C19,42.9 19.9,42 21,42 Z" />
+
+        <!-- Left Middle Plate -->
+        <path
+            android:fillColor="#059669"
+            android:pathData="M28,37 L34,37 C35.1,37 36,37.9 36,39 L36,69 C36,70.1 35.1,71 34,71 L28,71 C26.9,71 26,70.1 26,69 L26,39 C26,37.9 26.9,37 28,37 Z" />
+
+        <!-- Left Inner Plate -->
+        <path
+            android:fillColor="#34D399"
+            android:pathData="M35,31 L42,31 C43.1,31 44,31.9 44,33 L44,75 C44,76.1 43.1,77 42,77 L35,77 C33.9,77 33,76.1 33,75 L33,33 C33,31.9 33.9,31 35,31 Z" />
+
+        <!-- Right Inner Plate -->
+        <path
+            android:fillColor="#34D399"
+            android:pathData="M66,31 L73,31 C74.1,31 75,31.9 75,33 L75,75 C75,76.1 74.1,77 73,77 L66,77 C64.9,77 64,76.1 64,75 L64,33 C64,31.9 64.9,31 66,31 Z" />
+
+        <!-- Right Middle Plate -->
+        <path
+            android:fillColor="#059669"
+            android:pathData="M74,37 L80,37 C81.1,37 82,37.9 82,39 L82,69 C82,70.1 81.1,71 80,71 L74,71 C72.9,71 72,70.1 72,69 L72,39 C72,37.9 72.9,37 74,37 Z" />
+
+        <!-- Right Outer Plate -->
+        <path
+            android:fillColor="#047857"
+            android:pathData="M81,42 L87,42 C88.1,42 89,42.9 89,44 L89,64 C89,65.1 88.1,66 87,66 L81,66 C79.9,66 79,65.1 79,64 L79,44 C79,42.9 79.9,42 81,42 Z" />
     </group>
 </vector>
