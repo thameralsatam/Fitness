@@ -330,37 +330,57 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   // Helper to ensure track is cached into native storage
   const ensureNativeTrackCached = async (track: AudioTrack) => {
     try {
+      console.log('[DEBUG_AUDIO] Checking cache status for track:', track.id, 'Name:', track.name);
       const { cached } = await NativeAudioPlayer.hasCachedTrack({ id: track.id });
+      console.log('[DEBUG_AUDIO] Cache status for track:', track.id, 'is cached:', cached);
       if (!cached) {
+        if (!track.blob) {
+          console.error('[DEBUG_AUDIO] Cannot cache track natively - track.blob is missing or null!', track.id);
+          return false;
+        }
+        console.log('[DEBUG_AUDIO] Blob info: size =', track.blob.size, 'type =', track.blob.type);
         const base64Data = await blobToBase64(track.blob);
-        await NativeAudioPlayer.cacheTrack({
+        console.log('[DEBUG_AUDIO] Base64 converted, length:', base64Data.length);
+        const res = await NativeAudioPlayer.cacheTrack({
           id: track.id,
           data: base64Data,
           mimeType: track.type || track.blob?.type || 'audio/mpeg',
         });
+        console.log('[DEBUG_AUDIO] cacheTrack result:', res);
       }
       return true;
     } catch (e) {
-      console.error('Failed to cache track natively:', track.id, e);
+      console.error('[DEBUG_AUDIO] Failed to cache track natively:', track.id, e);
       return false;
     }
   };
 
   const playTrackAtIndex = async (index: number) => {
     const list = tracksRef.current;
-    if (index < 0 || index >= list.length) return;
+    if (index < 0 || index >= list.length) {
+      console.error('[DEBUG_AUDIO] playTrackAtIndex index out of bounds:', index, 'list size:', list.length);
+      return;
+    }
 
     const track = list[index];
-    if (!track) return;
+    if (!track) {
+      console.error('[DEBUG_AUDIO] playTrackAtIndex track at index', index, 'is null/undefined');
+      return;
+    }
+
+    console.log('[DEBUG_AUDIO] playTrackAtIndex:', index, 'track ID:', track.id, 'name:', track.name, 'isNative:', isNative);
 
     if (isNative) {
       try {
-        await ensureNativeTrackCached(track);
+        const cacheSuccess = await ensureNativeTrackCached(track);
+        console.log('[DEBUG_AUDIO] ensureNativeTrackCached success:', cacheSuccess);
 
         const currentActiveList =
           displayedTracksRef.current.length > 0
             ? displayedTracksRef.current
             : tracksRef.current;
+
+        console.log('[DEBUG_AUDIO] Playlist tracks count:', currentActiveList.length);
 
         const playlistData: NativeAudioTrackItem[] = currentActiveList.map((t) => ({
           id: t.id,
@@ -373,12 +393,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         }));
 
         const startIndexInPlaylist = currentActiveList.findIndex((t) => t.id === track.id);
+        console.log('[DEBUG_AUDIO] startIndexInPlaylist:', startIndexInPlaylist);
 
-        await NativeAudioPlayer.setPlaylist({
+        console.log('[DEBUG_AUDIO] Calling setPlaylist on native...');
+        const setPlaylistRes = await NativeAudioPlayer.setPlaylist({
           tracks: playlistData,
           startIndex: Math.max(0, startIndexInPlaylist),
           startPosition: 0,
         });
+        console.log('[DEBUG_AUDIO] setPlaylist result:', setPlaylistRes);
 
         await NativeAudioPlayer.setPlaybackSpeed({ speed: playbackRate });
         await NativeAudioPlayer.setRepeatMode({ mode: playbackMode });
@@ -394,7 +417,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
           }
         });
       } catch (err) {
-        console.error('Failed to play native track:', err);
+        console.error('[DEBUG_AUDIO] Failed to play native track error:', err);
         setIsPlaying(false);
       }
     } else {

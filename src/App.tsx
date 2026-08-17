@@ -14,6 +14,7 @@ import { SplashScreen } from './components/SplashScreen';
 import { AudioProvider } from './context/AudioContext';
 import { FloatingMiniPlayer } from './components/FloatingMiniPlayer';
 import { FontSettingsModal } from './components/FontSettingsModal';
+import { DebugLogsModal } from './components/DebugLogsModal';
 import { triggerHaptic } from './utils/haptics';
 import { initializeCustomFonts } from './utils/customFonts';
 
@@ -68,6 +69,7 @@ export default function App() {
   });
 
   const [isFontModalOpen, setIsFontModalOpen] = useState<boolean>(false);
+  const [isDebugLogsOpen, setIsDebugLogsOpen] = useState<boolean>(false);
 
   const [currentTab, setCurrentTab] = useState<ViewTab>('plan');
 
@@ -283,6 +285,7 @@ export default function App() {
           onToggleAllAlts={handleToggleAllAlts}
           onResetProgress={handleRequestResetProgress}
           onOpenFontSettings={() => setIsFontModalOpen(true)}
+          onOpenDebugLogs={() => setIsDebugLogsOpen(true)}
         />
 
         {/* Main View Container */}
@@ -387,6 +390,13 @@ export default function App() {
           currentBodyFont={bodyFont}
           onSelectTitleFont={setTitleFont}
           onSelectBodyFont={setBodyFont}
+        />
+
+        {/* Debug Logs Console */}
+        <DebugLogsModal
+          isOpen={isDebugLogsOpen}
+          onClose={() => setIsDebugLogsOpen(false)}
+          currentLang={currentLang}
         />
 
         {/* Confirmation Modal */}

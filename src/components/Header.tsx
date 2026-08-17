@@ -6,7 +6,8 @@ import {
   Layers, 
   RotateCcw, 
   Type, 
-  Dumbbell 
+  Dumbbell,
+  Bug
 } from 'lucide-react';
 import { Language } from '../types';
 import { I18N } from '../data/workoutData';
@@ -18,6 +19,7 @@ interface HeaderProps {
   onToggleAllAlts: () => void;
   onResetProgress: () => void;
   onOpenFontSettings: () => void;
+  onOpenDebugLogs: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleAllAlts,
   onResetProgress,
   onOpenFontSettings,
+  onOpenDebugLogs,
 }) => {
   const t = I18N[currentLang];
   const [menuOpen, setMenuOpen] = useState(false);
@@ -163,6 +166,19 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <RotateCcw className="w-4 h-4 text-[#215641] flex-shrink-0" />
                   <span>{t.menuReset}</span>
+                </button>
+
+                {/* Debug Logs Console */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenDebugLogs();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] font-bold rounded-xl text-[#215641] bg-[#eef4f0]/50 hover:bg-[#eef4f0] transition-colors border border-[#dbe4dc]/50"
+                >
+                  <Bug className="w-4 h-4 text-[#215641] flex-shrink-0" />
+                  <span>{isAr ? 'سجل التشخيص الفني' : 'Debug Logs Console'}</span>
                 </button>
               </div>
             )}

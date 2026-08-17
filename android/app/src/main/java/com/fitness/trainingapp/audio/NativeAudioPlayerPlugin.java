@@ -123,7 +123,10 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
         String id = call.getString("id");
         String base64Data = call.getString("data");
 
+        Log.d(TAG, "[DEBUG_NATIVE_AUDIO] cacheTrack called for track ID: " + id);
+
         if (id == null || id.isEmpty() || base64Data == null || base64Data.isEmpty()) {
+            Log.e(TAG, "[DEBUG_NATIVE_AUDIO] cacheTrack error: empty ID or data");
             call.reject("Track ID and base64 audio data are required.");
             return;
         }
@@ -134,11 +137,14 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
 
         try {
             byte[] decodedBytes = Base64.decode(base64Data, Base64.DEFAULT);
+            Log.d(TAG, "[DEBUG_NATIVE_AUDIO] Decoded bytes length: " + decodedBytes.length);
             File file = getAudioTrackFile(id);
+            Log.d(TAG, "[DEBUG_NATIVE_AUDIO] Target file path: " + file.getAbsolutePath());
             try (FileOutputStream fos = new FileOutputStream(file)) {
                 fos.write(decodedBytes);
                 fos.flush();
             }
+            Log.i(TAG, "[DEBUG_NATIVE_AUDIO] Successfully wrote " + decodedBytes.length + " bytes to " + file.getAbsolutePath());
 
             JSObject ret = new JSObject();
             ret.put("success", true);
@@ -146,7 +152,7 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
             ret.put("size", decodedBytes.length);
             call.resolve(ret);
         } catch (Exception e) {
-            Log.e(TAG, "Failed to cache audio track: " + e.getMessage(), e);
+            Log.e(TAG, "[DEBUG_NATIVE_AUDIO] Failed to cache audio track: " + e.getMessage(), e);
             call.reject("Failed to cache audio track: " + e.getMessage(), e);
         }
     }
@@ -154,13 +160,17 @@ public class NativeAudioPlayerPlugin extends Plugin implements PlaybackService.P
     @PluginMethod
     public void hasCachedTrack(PluginCall call) {
         String id = call.getString("id");
+        Log.d(TAG, "[DEBUG_NATIVE_AUDIO] hasCachedTrack called for ID: " + id);
         if (id == null || id.isEmpty()) {
             call.reject("Track ID is required.");
             return;
         }
         File file = getAudioTrackFile(id);
+        boolean exists = file.exists();
+        long length = exists ? file.length() : 0;
+        Log.d(TAG, "[DEBUG_NATIVE_AUDIO] Checked file: " + file.getAbsolutePath() + " exists: " + exists + " length: " + length);
         JSObject ret = new JSObject();
-        ret.put("cached", file.exists() && file.length() > 0);
+        ret.put("cached", exists && length > 0);
         ret.put("id", id);
         call.resolve(ret);
     }

@@ -162,11 +162,13 @@ public class PlaybackService extends MediaSessionService {
 
             @Override
             public void onPlayerError(@NonNull PlaybackException error) {
-                Log.e(TAG, "ExoPlayer error occurred: " + error.getMessage(), error);
+                Log.e(TAG, "[DEBUG_PLAYBACK] ExoPlayer ERROR occurred: " + error.getMessage(), error);
+                Log.e(TAG, "[DEBUG_PLAYBACK] Error code: " + error.errorCode + ", Cause: " + error.getCause());
                 String errorMessage = error.getMessage() != null ? error.getMessage() : "Unknown playback error";
                 String errorCodeName = PlaybackException.getErrorCodeName(error.errorCode);
                 if (errorCodeName != null) {
                     errorMessage += " (" + errorCodeName + ")";
+                    Log.e(TAG, "[DEBUG_PLAYBACK] Error code name: " + errorCodeName);
                 }
                 if (eventListener != null) {
                     eventListener.onError(errorMessage);
@@ -207,17 +209,22 @@ public class PlaybackService extends MediaSessionService {
     }
 
     public void setPlaylistAndPlay(List<MediaTrackData> tracks, int startIndex, long startPositionMs) {
+        Log.i(TAG, "[DEBUG_PLAYBACK] setPlaylistAndPlay called. Tracks count: " + tracks.size() + ", startIndex: " + startIndex + ", startPosMs: " + startPositionMs);
         playlist.clear();
         playlist.addAll(tracks);
 
         List<MediaItem> mediaItems = new ArrayList<>();
         for (MediaTrackData track : tracks) {
             File trackFile = getTrackFile(track.id);
-            if (!trackFile.exists()) {
-                Log.w(TAG, "Audio track file not found for id: " + track.id);
+            boolean exists = trackFile.exists();
+            long length = exists ? trackFile.length() : 0;
+            Log.d(TAG, "[DEBUG_PLAYBACK] Track ID: " + track.id + ", Name: " + track.name + ", File path: " + trackFile.getAbsolutePath() + " exists: " + exists + " length: " + length);
+            if (!exists) {
+                Log.w(TAG, "[DEBUG_PLAYBACK] Audio track file NOT found for ID: " + track.id);
             }
 
             String determinedMimeType = normalizeMimeType(track.mimeType, track.name);
+            Log.d(TAG, "[DEBUG_PLAYBACK] Determined mime type: " + determinedMimeType);
 
             MediaMetadata mediaMetadata = new MediaMetadata.Builder()
                 .setTitle(track.name)
@@ -236,10 +243,16 @@ public class PlaybackService extends MediaSessionService {
         }
 
         if (!mediaItems.isEmpty()) {
+            Log.i(TAG, "[DEBUG_PLAYBACK] Setting media items in ExoPlayer. Math.max(0, startIndex)=" + Math.max(0, startIndex));
             player.setMediaItems(mediaItems, Math.max(0, startIndex), Math.max(0, startPositionMs));
+            Log.i(TAG, "[DEBUG_PLAYBACK] Calling player.prepare()");
             player.prepare();
+            Log.i(TAG, "[DEBUG_PLAYBACK] Calling player.play()");
             player.play();
             currentTrackIndex = Math.max(0, startIndex);
+            Log.i(TAG, "[DEBUG_PLAYBACK] ExoPlayer state after play() - isPlaying: " + player.isPlaying() + ", PlaybackState: " + player.getPlaybackState());
+        } else {
+            Log.e(TAG, "[DEBUG_PLAYBACK] Cannot start playback because mediaItems list is empty!");
         }
     }
 
