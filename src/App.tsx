@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ViewTab, Language } from './types';
-import { EXERCISES_DATA, I18N } from './data/workoutData';
+import { ViewTab, Language, WorkoutPlan, ExerciseItem } from './types';
+import { DEFAULT_WORKOUT_PLAN, I18N } from './data/workoutData';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { PlanView } from './components/PlanView';
@@ -16,8 +16,19 @@ import { TimerProvider } from './context/TimerContext';
 import { FloatingMiniPlayer } from './components/FloatingMiniPlayer';
 import { FontSettingsModal } from './components/FontSettingsModal';
 import { DebugLogsModal } from './components/DebugLogsModal';
+import { SettingsModal } from './components/SettingsModal';
+import { ActiveWorkoutModal } from './components/ActiveWorkoutModal';
+import { LibraryModal } from './components/LibraryModal';
+import { ExerciseEditModal } from './components/ExerciseEditModal';
+import { ProfileView } from './components/ProfileView';
 import { triggerHaptic } from './utils/haptics';
 import { initializeCustomFonts } from './utils/customFonts';
+import {
+  getStoredLibraryExercises,
+  saveLibraryExercises,
+  getStoredActivePlan,
+  saveActivePlan,
+} from './utils/libraryManager';
 
 interface ConfirmModalState {
   isOpen: boolean;
@@ -30,6 +41,15 @@ interface ConfirmModalState {
 }
 
 export default function App() {
+  // Library & Workout Plan states backed by localStorage
+  const [libraryExercises, setLibraryExercises] = useState<ExerciseItem[]>(() => {
+    return getStoredLibraryExercises();
+  });
+
+  const [activePlan, setActivePlan] = useState<WorkoutPlan>(() => {
+    return getStoredActivePlan();
+  });
+
   const [showSplash, setShowSplash] = useState<boolean>(() => {
     try {
       const hasShown = sessionStorage.getItem('gym_splash_shown');
@@ -71,6 +91,10 @@ export default function App() {
 
   const [isFontModalOpen, setIsFontModalOpen] = useState<boolean>(false);
   const [isDebugLogsOpen, setIsDebugLogsOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isActiveWorkoutOpen, setIsActiveWorkoutOpen] = useState<boolean>(false);
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState<boolean>(false);
+  const [editingExercise, setEditingExercise] = useState<ExerciseItem | null>(null);
 
   const [currentTab, setCurrentTab] = useState<ViewTab>('plan');
 
@@ -86,7 +110,7 @@ export default function App() {
 
   const [openPanels, setOpenPanels] = useState<Set<number>>(new Set());
 
-  const [totalSessions] = useState<number>(() => {
+  const [totalSessions, setTotalSessions] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('gym_sessions');
       if (saved) return parseInt(saved, 10) || 1;
@@ -140,51 +164,43 @@ export default function App() {
   useEffect(() => {
     try {
       document.documentElement.style.setProperty('--font-body', bodyFont);
-      document.body.style.fontFamily = bodyFont;
       localStorage.setItem('gym_font_body', bodyFont);
     } catch {
       // fallback
     }
   }, [bodyFont]);
 
-  // Persist completed exercises
-  useEffect(() => {
-    try {
-      localStorage.setItem('gym_completed', JSON.stringify(Array.from(completedExercises)));
-    } catch {
-      // fallback
-    }
-  }, [completedExercises]);
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 2500);
+    setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const handleToggleLang = () => {
+  const handleLanguageChange = (lang: Language) => {
     triggerHaptic('selection');
-    const newLang = currentLang === 'de' ? 'ar' : 'de';
-    setCurrentLang(newLang);
-    showToast(newLang === 'ar' ? 'تم تغيير اللغة إلى العربية' : 'Sprache auf Deutsch geändert');
+    setCurrentLang(lang);
   };
 
   const handleToggleExercise = (id: number) => {
-    triggerHaptic('medium');
+    triggerHaptic('selection');
     setCompletedExercises((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
+        triggerHaptic('success');
+      }
+      try {
+        localStorage.setItem('gym_completed', JSON.stringify(Array.from(next)));
+      } catch {
+        // fallback
       }
       return next;
     });
   };
 
   const handleTogglePanel = (id: number) => {
-    triggerHaptic('selection');
+    triggerHaptic('light');
     setOpenPanels((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -198,10 +214,10 @@ export default function App() {
 
   const handleToggleAllAlts = () => {
     triggerHaptic('selection');
-    if (openPanels.size === EXERCISES_DATA.length) {
+    if (openPanels.size === activePlan.exercises.length) {
       setOpenPanels(new Set());
     } else {
-      setOpenPanels(new Set(EXERCISES_DATA.map((e) => e.id)));
+      setOpenPanels(new Set(activePlan.exercises.map((e) => e.id)));
     }
   };
 
@@ -209,15 +225,20 @@ export default function App() {
     triggerHaptic('warning');
     setConfirmModal({
       isOpen: true,
-      title: t.modalResetTitle,
-      description: t.modalResetDesc,
-      confirmText: t.confirmReset,
-      cancelText: t.cancel,
+      title: t.modalResetTitle || t.confirmResetTitle,
+      description: t.modalResetDesc || t.confirmResetDesc,
+      confirmText: t.confirmReset || t.confirmBtn,
+      cancelText: t.cancel || t.cancelBtn,
       type: 'reset',
       onConfirm: () => {
         triggerHaptic('success');
         setCompletedExercises(new Set());
         setOpenPanels(new Set());
+        try {
+          localStorage.removeItem('gym_completed');
+        } catch {
+          // fallback
+        }
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         showToast(currentLang === 'de' ? 'Fortschritt zurückgesetzt' : 'تم إعادة تعيين التقدم بنجاح');
       },
@@ -226,9 +247,11 @@ export default function App() {
 
   const handleCopyPlan = () => {
     triggerHaptic('light');
-    let text = `${t.brandTitle} · ${t.brandSubtitle}\n\n`;
+    const planTitle = currentLang === 'de' ? activePlan.nameDe : activePlan.nameAr;
+    const planSubtitle = currentLang === 'de' ? activePlan.frequencyDe : activePlan.frequencyAr;
+    let text = `${planTitle} · ${planSubtitle}\n\n`;
 
-    EXERCISES_DATA.forEach((item, index) => {
+    activePlan.exercises.forEach((item, index) => {
       const name = currentLang === 'de' ? item.nameDe : `${item.nameDe} (${item.muscleAr})`;
       const isDone = completedExercises.has(item.id);
       text += `${index + 1}. [${isDone ? '✓' : ' '}] ${name}\n`;
@@ -240,8 +263,9 @@ export default function App() {
       }
     });
 
+    const notes = currentLang === 'de' ? activePlan.notesDe : activePlan.notesAr;
     text += `\n${currentLang === 'de' ? 'Hinweise:' : 'الملاحظات:'}\n`;
-    t.notes.forEach((note) => {
+    notes.forEach((note) => {
       text += `• ${note}\n`;
     });
 
@@ -251,6 +275,90 @@ export default function App() {
     } catch {
       showToast('Kopiert!');
     }
+  };
+
+  // Library & Plan Modification Handlers
+  const handleUpdateLibrary = (newLib: ExerciseItem[]) => {
+    setLibraryExercises(newLib);
+    saveLibraryExercises(newLib);
+    showToast(currentLang === 'ar' ? 'تم تحديث مكتبة الأجهزة' : 'Bibliothek aktualisiert');
+  };
+
+  const handleAddExerciseToPlan = (exercise: ExerciseItem) => {
+    const updatedPlan: WorkoutPlan = {
+      ...activePlan,
+      exercises: [...activePlan.exercises, exercise],
+    };
+    setActivePlan(updatedPlan);
+    saveActivePlan(updatedPlan);
+    showToast(
+      currentLang === 'ar'
+        ? `تمت إضافة "${exercise.nameDe}" إلى جدول التمرين`
+        : `"${exercise.nameDe}" zum Plan hinzugefügt`
+    );
+  };
+
+  const handleSaveExerciseInPlan = (updated: ExerciseItem) => {
+    const updatedExercises = activePlan.exercises.map((e) => (e.id === updated.id ? updated : e));
+    const updatedPlan: WorkoutPlan = {
+      ...activePlan,
+      exercises: updatedExercises,
+    };
+    setActivePlan(updatedPlan);
+    saveActivePlan(updatedPlan);
+    showToast(currentLang === 'ar' ? 'تم حفظ تعديل التمرين' : 'Übung aktualisiert');
+  };
+
+  const handleRemoveExerciseFromPlan = (id: number) => {
+    const updatedExercises = activePlan.exercises.filter((e) => e.id !== id);
+    const updatedPlan: WorkoutPlan = {
+      ...activePlan,
+      exercises: updatedExercises,
+    };
+    setActivePlan(updatedPlan);
+    saveActivePlan(updatedPlan);
+    showToast(currentLang === 'ar' ? 'تم حذف الجهاز من الجدول' : 'Gerät aus dem Plan entfernt');
+  };
+
+  const handleSwapExerciseInPlan = (oldId: number, replacement: ExerciseItem) => {
+    const updatedExercises = activePlan.exercises.map((e) => (e.id === oldId ? replacement : e));
+    const updatedPlan: WorkoutPlan = {
+      ...activePlan,
+      exercises: updatedExercises,
+    };
+    setActivePlan(updatedPlan);
+    saveActivePlan(updatedPlan);
+    showToast(
+      currentLang === 'ar'
+        ? `تم استبدال الجهاز بـ "${replacement.nameDe}"`
+        : `Ersetzt durch "${replacement.nameDe}"`
+    );
+  };
+
+  const handleFinishActiveWorkout = (completedIds: number[]) => {
+    setCompletedExercises((prev) => {
+      const next = new Set([...prev, ...completedIds]);
+      try {
+        localStorage.setItem('gym_completed', JSON.stringify(Array.from(next)));
+      } catch {
+        // fallback
+      }
+      return next;
+    });
+
+    const newSessions = totalSessions + 1;
+    setTotalSessions(newSessions);
+    try {
+      localStorage.setItem('gym_sessions', newSessions.toString());
+    } catch {
+      // fallback
+    }
+
+    showToast(
+      currentLang === 'ar'
+        ? 'رائع جداً! تم تسجيل الجلسة بنجاح'
+        : 'Super! Workout erfolgreich absolviert'
+    );
   };
 
   const handleTabChange = (tab: ViewTab) => {
@@ -275,19 +383,20 @@ export default function App() {
         {/* Animated Native Splash Screen */}
         <AnimatePresence>
           {showSplash && (
-            <SplashScreen onFinish={handleSplashFinish} lang={currentLang} />
+            <SplashScreen
+              onFinish={handleSplashFinish}
+              lang={currentLang}
+              planTitle={currentLang === 'de' ? activePlan.nameDe : activePlan.nameAr}
+              planSubtitle={currentLang === 'de' ? activePlan.frequencyDe : activePlan.frequencyAr}
+            />
           )}
         </AnimatePresence>
 
         {/* Top Header */}
         <Header
           currentLang={currentLang}
-          onToggleLang={handleToggleLang}
-          onCopyPlan={handleCopyPlan}
-          onToggleAllAlts={handleToggleAllAlts}
-          onResetProgress={handleRequestResetProgress}
-          onOpenFontSettings={() => setIsFontModalOpen(true)}
-          onOpenDebugLogs={() => setIsDebugLogsOpen(true)}
+          planTitle={currentLang === 'de' ? activePlan.nameDe : activePlan.nameAr}
+          planSubtitle={currentLang === 'de' ? activePlan.frequencyDe : activePlan.frequencyAr}
         />
 
         {/* Main View Container */}
@@ -302,7 +411,7 @@ export default function App() {
                 transition={{ duration: 0.2 }}
               >
                 <PlanView
-                  exercises={EXERCISES_DATA}
+                  exercises={activePlan.exercises}
                   completedExercises={completedExercises}
                   openPanels={openPanels}
                   currentLang={currentLang}
@@ -311,6 +420,10 @@ export default function App() {
                   onResetToday={handleRequestResetProgress}
                   onNavigateTab={handleTabChange}
                   totalSessions={totalSessions}
+                  plan={activePlan}
+                  onStartActiveWorkout={() => setIsActiveWorkoutOpen(true)}
+                  onOpenLibrary={() => setIsLibraryModalOpen(true)}
+                  onOpenEditExercise={(exercise) => setEditingExercise(exercise)}
                 />
               </motion.div>
             )}
@@ -363,6 +476,30 @@ export default function App() {
                   currentLang={currentLang}
                   completedExercises={completedExercises}
                   totalSessions={totalSessions}
+                  plan={activePlan}
+                />
+              </motion.div>
+            )}
+
+            {currentTab === 'profile' && (
+              <motion.div
+                key="view-profile"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ProfileView
+                  currentLang={currentLang}
+                  onSelectLang={handleLanguageChange}
+                  onOpenFontSettings={() => setIsFontModalOpen(true)}
+                  onOpenDebugLogs={() => setIsDebugLogsOpen(true)}
+                  onOpenLibrary={() => setIsLibraryModalOpen(true)}
+                  onResetProgress={handleRequestResetProgress}
+                  onCopyPlan={handleCopyPlan}
+                  totalSessions={totalSessions}
+                  completedExercisesCount={completedExercises.size}
+                  plan={activePlan}
                 />
               </motion.div>
             )}
@@ -381,6 +518,55 @@ export default function App() {
           currentTab={currentTab}
           onTabChange={handleTabChange}
           currentLang={currentLang}
+        />
+
+        {/* Active Guided Workout Session Modal */}
+        <ActiveWorkoutModal
+          isOpen={isActiveWorkoutOpen}
+          onClose={() => setIsActiveWorkoutOpen(false)}
+          plan={activePlan}
+          currentLang={currentLang}
+          onFinishWorkout={handleFinishActiveWorkout}
+        />
+
+        {/* Full Exercise & Machine Library Modal */}
+        <LibraryModal
+          isOpen={isLibraryModalOpen}
+          onClose={() => setIsLibraryModalOpen(false)}
+          currentLang={currentLang}
+          libraryExercises={libraryExercises}
+          onUpdateLibrary={handleUpdateLibrary}
+          activePlan={activePlan}
+          onAddExerciseToPlan={handleAddExerciseToPlan}
+        />
+
+        {/* Quick Exercise Card Editor / Swapper Modal */}
+        <ExerciseEditModal
+          isOpen={editingExercise !== null}
+          onClose={() => setEditingExercise(null)}
+          exercise={editingExercise}
+          currentLang={currentLang}
+          libraryExercises={libraryExercises}
+          onSaveExercise={handleSaveExerciseInPlan}
+          onRemoveFromPlan={handleRemoveExerciseFromPlan}
+          onSwapExercise={handleSwapExerciseInPlan}
+          onOpenFullLibrary={() => setIsLibraryModalOpen(true)}
+        />
+
+        {/* Settings Modal */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          currentLang={currentLang}
+          onSelectLang={(lang) => {
+            setCurrentLang(lang);
+            showToast(lang === 'ar' ? 'تم ضبط لغة التطبيق إلى العربية' : 'Sprache auf Deutsch festgelegt');
+          }}
+          onOpenFontSettings={() => setIsFontModalOpen(true)}
+          onOpenDebugLogs={() => setIsDebugLogsOpen(true)}
+          onOpenLibrary={() => setIsLibraryModalOpen(true)}
+          onResetProgress={handleRequestResetProgress}
+          onCopyPlan={handleCopyPlan}
         />
 
         {/* Font Settings Modal */}
@@ -433,4 +619,3 @@ export default function App() {
     </TimerProvider>
   );
 }
-

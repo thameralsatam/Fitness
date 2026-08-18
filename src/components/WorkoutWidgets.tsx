@@ -1,20 +1,18 @@
-import React from 'react';
-import { motion } from 'motion/react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Play, 
-  Pause, 
-  RotateCcw, 
-  Sparkles, 
+  Pause,
+  RotateCcw,
   Flame, 
-  CheckCircle2, 
-  Volume2, 
-  Clock, 
-  Music,
-  ChevronRight,
-  TrendingUp,
-  Award
+  BookOpen,
+  Timer as TimerIcon,
+  ChevronDown,
+  Plus,
+  Minus
 } from 'lucide-react';
 import { triggerHaptic } from '../utils/haptics';
+import { useTimer } from '../context/TimerContext';
 
 interface WorkoutWidgetsProps {
   currentLang: 'ar' | 'de';
@@ -22,11 +20,9 @@ interface WorkoutWidgetsProps {
   totalExercises: number;
   currentStreak: number;
   totalSessions: number;
-  onNavigateTab: (tab: 'plan' | 'timer' | 'audio' | 'stats' | 'tools') => void;
-  // Audio state
-  currentTrackName?: string;
-  isPlayingAudio?: boolean;
-  onTogglePlayAudio?: () => void;
+  onNavigateTab?: (tab: 'plan' | 'audio' | 'tools' | 'stats' | 'profile') => void;
+  onStartActiveWorkout?: () => void;
+  onOpenLibrary?: () => void;
 }
 
 export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
@@ -34,181 +30,275 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
   completedCount,
   totalExercises,
   currentStreak,
-  totalSessions,
-  onNavigateTab,
-  currentTrackName,
-  isPlayingAudio,
-  onTogglePlayAudio,
+  onStartActiveWorkout,
+  onOpenLibrary,
 }) => {
   const percent = totalExercises > 0 ? Math.round((completedCount / totalExercises) * 100) : 0;
+  const isAr = currentLang === 'ar';
+  const [showRestTimer, setShowRestTimer] = useState<boolean>(false);
+
+  const {
+    remainingMs,
+    selectedDuration,
+    isRunning,
+    pauseTimer,
+    resumeTimer,
+    resetTimer,
+    formattedTime,
+    setTimerConfig,
+  } = useTimer();
+
+  const handleSelectPreset = (sec: number) => {
+    triggerHaptic('light');
+    setTimerConfig(sec);
+  };
+
+  const handleAdjustTime = (deltaSec: number) => {
+    triggerHaptic('selection');
+    const newSec = Math.max(10, selectedDuration + deltaSec);
+    setTimerConfig(newSec);
+  };
+
+  const progressFraction = selectedDuration > 0 ? (selectedDuration * 1000 - remainingMs) / (selectedDuration * 1000) : 0;
+  const strokeDashoffset = 264 * (1 - progressFraction);
 
   return (
-    <div className="space-y-3.5 mb-6">
-      {/* Top Banner Widget: Daily Progress & Motivation */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#1b3d2f] via-[#215641] to-[#163629] text-white shadow-md relative overflow-hidden"
-      >
-        {/* Subtle decorative circles */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-400/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-teal-400/10 rounded-full blur-xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col gap-3.5">
+    <div className="space-y-3 mb-4">
+      {/* Calm, Refined Daily Progress Card */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#dbe4dc] text-[#15221b] shadow-xs">
+        <div className="flex flex-col gap-3">
           {/* Header Row */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-md text-[11px] font-bold text-emerald-300 flex items-center gap-1 border border-white/10">
-                <Sparkles className="w-3 h-3 text-emerald-300" />
-                {currentLang === 'ar' ? 'ملخص الجلسة' : 'Session Tracker'}
-              </span>
-              <span className="text-[11px] text-emerald-200/80 font-medium flex items-center gap-1">
-                <Flame className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                {currentLang === 'ar' ? `التتابع: ${currentStreak || 1} أيام` : `Streak: ${currentStreak || 1} Tage`}
-              </span>
+            {/* Streak Indicator */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#edf4ef] text-[#215641] text-xs font-bold border border-[#dbe4dc]/60">
+              <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+              <span>{isAr ? `التتابع: ${currentStreak || 1} أيام` : `Streak: ${currentStreak || 1} Tage`}</span>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('light');
-                onNavigateTab('stats');
-              }}
-              className="text-[11px] font-bold text-emerald-300 hover:text-white flex items-center gap-0.5 transition-colors"
-            >
-              <span>{currentLang === 'ar' ? 'الإحصائيات' : 'Statistiken'}</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            {/* Actions: Inline Rest Timer Toggle & SVG-Only Library Button */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setShowRestTimer((prev) => !prev);
+                }}
+                title={isAr ? 'مؤقت الراحة' : 'Pausen-Timer'}
+                aria-label={isAr ? 'مؤقت الراحة' : 'Pausen-Timer'}
+                className={`p-2 rounded-xl border transition-all active:scale-95 flex items-center justify-center ${
+                  showRestTimer || isRunning
+                    ? 'bg-[#215641] text-white border-[#215641]'
+                    : 'bg-[#edf4ef] text-[#215641] hover:bg-[#e2ede5] border-[#dbe4dc]/70'
+                }`}
+              >
+                <TimerIcon className="w-4 h-4 stroke-[2.2]" />
+              </button>
+
+              {onOpenLibrary && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onOpenLibrary();
+                  }}
+                  title={isAr ? 'مكتبة الأجهزة والتمارين' : 'Geräte-Bibliothek'}
+                  aria-label={isAr ? 'مكتبة الأجهزة والتمارين' : 'Geräte-Bibliothek'}
+                  className="p-2 rounded-xl bg-[#edf4ef] text-[#215641] hover:bg-[#e2ede5] border border-[#dbe4dc]/70 transition-all active:scale-95 flex items-center justify-center"
+                >
+                  <BookOpen className="w-4 h-4 stroke-[2.2]" />
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Progress Bar & Stats */}
+          {/* Progress Numbers & Bar */}
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-extrabold tracking-tight font-display">
-                  {completedCount} <span className="text-sm font-medium text-emerald-300/80">/ {totalExercises}</span>
+                <span className="text-2xl sm:text-3xl font-black font-display text-[#15221b] tracking-tight">
+                  {completedCount} <span className="text-xs sm:text-sm font-semibold text-[#75877d]">/ {totalExercises}</span>
                 </span>
-                <span className="text-xs text-emerald-200/80 font-medium">
-                  {currentLang === 'ar' ? 'تمارين مكتملة' : 'Übungen abgeschlossen'}
+                <span className="text-xs font-semibold text-[#4f6156]">
+                  {isAr ? 'تمارين مكتملة' : 'Übungen abgeschlossen'}
                 </span>
               </div>
-              <span className="text-sm font-extrabold text-emerald-300 font-mono">
+              <span className="text-sm font-extrabold text-[#215641] font-mono">
                 {percent}%
               </span>
             </div>
 
-            {/* Custom rounded progress bar */}
-            <div className="w-full h-2.5 bg-black/25 rounded-full overflow-hidden p-0.5 border border-white/10">
+            {/* Minimalist Progress Bar */}
+            <div className="w-full h-2 bg-[#edf4ef] rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${percent}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-                className="h-full bg-gradient-to-r from-teal-300 via-emerald-400 to-emerald-300 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.6)]"
+                transition={{ duration: 0.6, ease: 'easeOut' }}
+                className="h-full bg-[#215641] rounded-full"
               />
             </div>
           </div>
 
-          {/* Motivation Quote / Status */}
-          <div className="flex items-center justify-between text-xs text-emerald-100/90 pt-1 border-t border-white/10">
-            <span className="truncate flex items-center gap-1.5">
-              {percent === 100 ? (
-                <>
-                  <Award className="w-3.5 h-3.5 text-amber-300 inline flex-shrink-0" />
-                  <span>
-                    {currentLang === 'ar'
-                      ? 'رائع! أنجزت كل تمارين الخطة اليوم!'
-                      : 'Großartig! Workout für heute beendet!'}
-                  </span>
-                </>
-              ) : percent > 0 ? (
-                currentLang === 'ar'
-                  ? 'استمر، أنت تتقدم بشكل رائع اليوم!'
-                  : 'Bleib dran, du machst tolle Fortschritte!'
-              ) : currentLang === 'ar' ? (
-                'ابدأ أول تمرين واضغط علامة الإنجاز'
-              ) : (
-                'Starte die erste Übung und markiere den Fortschritt'
-              )}
-            </span>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('medium');
-                onNavigateTab('timer');
-              }}
-              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 transition-all text-white border border-white/15 flex-shrink-0"
-            >
-              <Clock className="w-3 h-3 text-teal-300" />
-              <span>{currentLang === 'ar' ? 'المؤقت' : 'Timer'}</span>
-            </button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Mini Companion Widgets Row */}
-      <div className="grid grid-cols-2 gap-2.5">
-        {/* Widget 1: Quick Audio Player Companion */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            triggerHaptic('light');
-            onNavigateTab('audio');
-          }}
-          className="p-3.5 rounded-2xl bg-white border border-[#dbe4dc] shadow-xs hover:border-[#bad3c3] transition-all cursor-pointer flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="w-8 h-8 rounded-xl bg-[#eef4f0] text-[#215641] flex items-center justify-center">
-              <Music className="w-4 h-4" />
-            </div>
-            {onTogglePlayAudio && currentTrackName && (
+          {/* Start Workout Action */}
+          {onStartActiveWorkout && (
+            <div className="pt-1">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  triggerHaptic('medium');
-                  onTogglePlayAudio();
+                onClick={() => {
+                  triggerHaptic('success');
+                  onStartActiveWorkout();
                 }}
-                className="w-7 h-7 rounded-lg bg-[#215641] text-white flex items-center justify-center shadow-xs active:scale-90 transition-transform"
+                className="w-full py-3 px-4 rounded-xl bg-[#215641] hover:bg-[#194332] active:scale-[0.99] text-white font-display font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-xs"
               >
-                {isPlayingAudio ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+                <Play className="w-4 h-4 fill-white" />
+                <span>
+                  {percent === 100
+                    ? isAr
+                      ? 'إعادة جلسة التمرين النشط'
+                      : 'Workout erneut starten'
+                    : isAr
+                    ? 'بدء التمرين ومتابعة الجولات'
+                    : 'Workout starten (Geführt)'}
+                </span>
               </button>
-            )}
-          </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#75877d]">
-              {currentLang === 'ar' ? 'المشغل الصوتي' : 'Audio Player'}
             </div>
-            <div className="text-xs font-bold text-[#15221b] truncate mt-0.5">
-              {currentTrackName || (currentLang === 'ar' ? 'تصفح المقاطع' : 'Tracks öffnen')}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Widget 2: Quick Tools & Calculator */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            triggerHaptic('light');
-            onNavigateTab('tools');
-          }}
-          className="p-3.5 rounded-2xl bg-white border border-[#dbe4dc] shadow-xs hover:border-[#bad3c3] transition-all cursor-pointer flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="w-8 h-8 rounded-xl bg-[#eef4f0] text-[#215641] flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#75877d]">
-              {currentLang === 'ar' ? 'أدوات وحاسبة' : 'Fitness Rechner'}
-            </div>
-            <div className="text-xs font-bold text-[#15221b] truncate mt-0.5">
-              {currentLang === 'ar' ? '1RM & حاسبة السعرات' : '1RM & Kalorien'}
-            </div>
-          </div>
-        </motion.div>
+          )}
+        </div>
       </div>
+
+      {/* Integrated Pausen-Timer in Training Section */}
+      <AnimatePresence>
+        {showRestTimer && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -6 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -6 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#dbe4dc] text-[#15221b] shadow-xs space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-2.5 border-b border-[#e2ebe3]">
+                <div className="flex items-center gap-2 text-[#215641]">
+                  <TimerIcon className="w-4 h-4 stroke-[2.4]" />
+                  <span className="font-display font-bold text-sm text-[#15221b]">
+                    {isAr ? 'مؤقت الراحة (Pausen-Timer)' : 'Pausen-Timer'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRestTimer(false)}
+                  className="text-xs text-[#75877d] hover:text-[#15221b] font-medium"
+                >
+                  {isAr ? 'إخفاء' : 'Schließen'}
+                </button>
+              </div>
+
+              {/* Dial & Controls Row */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Circular Mini Dial */}
+                <div className="flex items-center gap-3.5">
+                  <div className="relative w-20 h-20 flex-shrink-0 flex items-center justify-center">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                      <circle
+                        className="fill-none stroke-[#edf4ef]"
+                        cx="50"
+                        cy="50"
+                        r="42"
+                        strokeWidth="6"
+                      />
+                      <circle
+                        className="fill-none stroke-[#215641] transition-all duration-300 ease-linear"
+                        cx="50"
+                        cy="50"
+                        r="42"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                        strokeDasharray="264"
+                        style={{ strokeDashoffset }}
+                      />
+                    </svg>
+                    <div className="absolute flex flex-col items-center">
+                      <span className="font-display font-extrabold text-base text-[#15221b]" dir="ltr">
+                        {formattedTime}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Main Play / Pause & Reset Buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        if (isRunning) pauseTimer();
+                        else resumeTimer();
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-[#215641] text-white hover:bg-[#184232] active:scale-95 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all"
+                    >
+                      {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+                      <span>{isRunning ? (isAr ? 'إيقاف' : 'Pause') : (isAr ? 'تشغيل' : 'Start')}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        resetTimer();
+                      }}
+                      className="p-2.5 rounded-xl bg-[#edf4ef] text-[#4f6156] hover:bg-[#e2ede5] active:scale-95 transition-all"
+                      title={isAr ? 'إعادة ضبط' : 'Zurücksetzen'}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Presets & +-30s Adjusters */}
+                <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                  {[60, 90, 120].map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => handleSelectPreset(sec)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
+                        selectedDuration === sec
+                          ? 'bg-[#215641] text-white font-bold'
+                          : 'bg-[#edf4ef] text-[#4f6156] hover:bg-[#e2ede5]'
+                      }`}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+
+                  <div className="h-4 w-px bg-[#dbe4dc] mx-0.5" />
+
+                  {/* -30s button */}
+                  <button
+                    type="button"
+                    onClick={() => handleAdjustTime(-30)}
+                    className="px-2 py-1.5 rounded-lg bg-[#edf4ef] hover:bg-[#e2ede5] text-[#215641] text-xs font-bold active:scale-95 flex items-center gap-0.5"
+                    title={isAr ? 'إنقاص 30 ثانية' : '-30s verringern'}
+                  >
+                    <Minus className="w-3 h-3" />
+                    <span>30s</span>
+                  </button>
+
+                  {/* +30s button */}
+                  <button
+                    type="button"
+                    onClick={() => handleAdjustTime(30)}
+                    className="px-2 py-1.5 rounded-lg bg-[#edf4ef] hover:bg-[#e2ede5] text-[#215641] text-xs font-bold active:scale-95 flex items-center gap-0.5"
+                    title={isAr ? 'زيادة 30 ثانية' : '+30s hinzufügen'}
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>30s</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

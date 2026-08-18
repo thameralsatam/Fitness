@@ -1,5 +1,5 @@
 export type Language = 'de' | 'ar';
-export type ViewTab = 'plan' | 'timer' | 'audio' | 'tools' | 'stats';
+export type ViewTab = 'plan' | 'timer' | 'audio' | 'tools' | 'stats' | 'profile';
 
 export interface ExerciseItem {
   id: number;
@@ -9,6 +9,20 @@ export interface ExerciseItem {
   sets: string;
   reps: string;
   alternatives: string[];
+}
+
+export interface WorkoutPlan {
+  id: string;
+  nameDe: string;
+  nameAr: string;
+  scheduleDaysDe: string;
+  scheduleDaysAr: string;
+  frequencyDe: string;
+  frequencyAr: string;
+  trainingDays: number[]; // 0=Mo, 1=Di, 2=Mi, 3=Do, 4=Fr, 5=Sa, 6=So
+  exercises: ExerciseItem[];
+  notesDe: string[];
+  notesAr: string[];
 }
 
 export interface GoalItem {

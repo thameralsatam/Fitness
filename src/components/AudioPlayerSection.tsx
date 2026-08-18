@@ -123,9 +123,9 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
 
-  // Active 3-dots dropdown track ID and folder ID
+  // Active 3-dots dropdown track ID and folder actions modal
   const [activeMenuTrackId, setActiveMenuTrackId] = useState<string | null>(null);
-  const [activeMenuFolderId, setActiveMenuFolderId] = useState<string | null>(null);
+  const [folderForOptionsMenu, setFolderForOptionsMenu] = useState<AudioFolder | null>(null);
 
   // Modals state
   const [detailsModalTrack, setDetailsModalTrack] = useState<AudioTrack | null>(null);
@@ -151,7 +151,6 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   useEffect(() => {
     const handleWindowClick = () => {
       setActiveMenuTrackId(null);
-      setActiveMenuFolderId(null);
     };
     window.addEventListener('click', handleWindowClick);
     return () => window.removeEventListener('click', handleWindowClick);
@@ -167,7 +166,8 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
       isAddExistingToFolderModalOpen ||
       isNewFolderModalOpen ||
       editingFolder ||
-      deletingFolder
+      deletingFolder ||
+      folderForOptionsMenu
   );
 
   useEffect(() => {
@@ -825,7 +825,6 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
           {folders.map((folder) => {
             const count = tracks.filter((t) => t.folderId === folder.id).length;
             const isSelected = selectedFolderId === folder.id;
-            const isFolderMenuOpen = activeMenuFolderId === folder.id;
 
             return (
               <div
@@ -856,84 +855,20 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                   </span>
                 </button>
 
-                {/* 3-dots Menu Button for Folder (ONLY SHOWN WHEN FOLDER IS SELECTED) */}
+                {/* 3-dots Menu Button for Folder (Opens clean Action Sheet / Modal) */}
                 {isSelected && (
-                  <div
-                    className="relative flex-shrink-0 pl-1.5 pr-0.5 flex items-center"
-                    onClick={(e) => e.stopPropagation()}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFolderForOptionsMenu(folder);
+                      triggerHaptic('light');
+                    }}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-all cursor-pointer mr-1 ml-0.5"
+                    title={currentLang === 'ar' ? 'خيارات المجلد' : 'Ordner-Optionen'}
                   >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenuFolderId((prev) => (prev === folder.id ? null : folder.id));
-                      }}
-                      className="w-5 h-5 rounded-md flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-all cursor-pointer"
-                      title={currentLang === 'ar' ? 'خيارات المجلد' : 'Ordner-Optionen'}
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Dropdown Menu for Folder */}
-                    <AnimatePresence>
-                      {isFolderMenuOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                          transition={{ duration: 0.15 }}
-                          className="absolute z-50 top-full mt-1.5 left-0 sm:left-auto sm:right-0 w-48 bg-white rounded-2xl shadow-2xl border border-[#dbe4dc] p-1.5 space-y-0.5"
-                          dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
-                        >
-                          {/* 1. Add audio from existing library to this folder */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuFolderId(null);
-                              setIsAddExistingToFolderModalOpen(true);
-                            }}
-                            className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-[#215641] hover:bg-[#eef4f0] rounded-xl transition-colors text-right"
-                          >
-                            <Plus className="w-3.5 h-3.5 text-[#215641]" />
-                            <span>{currentLang === 'ar' ? 'إضافة من الصوتيات' : 'Aus Bibliothek hinzufügen'}</span>
-                          </button>
-
-                          {/* 2. Rename Folder */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuFolderId(null);
-                              setEditingFolder(folder);
-                              setEditFolderNameInput(folder.name);
-                            }}
-                            className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-[#15221b] hover:bg-[#eef4f0] rounded-xl transition-colors text-right"
-                          >
-                            <Pencil className="w-3.5 h-3.5 text-[#4f6156]" />
-                            <span>{currentLang === 'ar' ? 'تعديل الاسم' : 'Umbenennen'}</span>
-                          </button>
-
-                          <div className="border-t border-[#edf4ef] my-1" />
-
-                          {/* 3. Delete Folder */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuFolderId(null);
-                              setDeletingFolder(folder);
-                              setDeleteFolderMode('keep_tracks');
-                            }}
-                            className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-colors text-right"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                            <span>{currentLang === 'ar' ? 'حذف المجلد' : 'Löschen'}</span>
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                    <MoreVertical className="w-3.5 h-3.5" />
+                  </button>
                 )}
               </div>
             );
@@ -1021,6 +956,8 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
             {displayedTracks.map((track, idx) => {
               const isSelected = track.id === tracks[currentTrackIndex]?.id;
               const isMenuOpen = activeMenuTrackId === track.id;
+              // If it's near the bottom of the list, open the menu upwards so it doesn't cause extra layout expansion
+              const openUpwards = idx >= Math.max(1, displayedTracks.length - 2);
 
               return (
                 <div
@@ -1095,15 +1032,19 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                         <MoreVertical className="w-4 h-4" />
                       </button>
 
-                      {/* Dropdown Menu */}
+                      {/* Dropdown Menu - smart upward or downward positioning */}
                       <AnimatePresence>
                         {isMenuOpen && (
                           <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                            initial={{ opacity: 0, scale: 0.95, y: openUpwards ? 4 : -4 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                            exit={{ opacity: 0, scale: 0.95, y: openUpwards ? 4 : -4 }}
                             transition={{ duration: 0.15 }}
-                            className="absolute z-30 left-0 sm:left-auto sm:right-0 mt-1 w-48 bg-white rounded-2xl shadow-xl border border-[#dbe4dc] p-1.5 space-y-0.5"
+                            className={`absolute z-30 ${
+                              currentLang === 'ar' ? 'left-0' : 'right-0'
+                            } ${
+                              openUpwards ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                            } w-48 bg-white rounded-2xl shadow-xl border border-[#dbe4dc] p-1.5 space-y-0.5`}
                             dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
                           >
                             {/* 1. Details Button */}
@@ -2118,6 +2059,111 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                   className="px-4 h-11 rounded-xl bg-[#f1f6f3] hover:bg-[#e2ece5] text-[#4f6156] text-xs font-bold transition-all"
                 >
                   {currentLang === 'ar' ? 'إلغاء' : 'Abbrechen'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ================= MODAL: Folder Actions Dialog ================= */}
+      <AnimatePresence>
+        {folderForOptionsMenu && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
+            onClick={() => setFolderForOptionsMenu(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-white rounded-3xl p-5 border border-[#dbe4dc] shadow-2xl space-y-3.5"
+              dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
+            >
+              <div className="flex items-center justify-between pb-2.5 border-b border-[#edf4ef]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#edf4ef] text-[#215641] flex items-center justify-center">
+                    <Folder className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-sm text-[#15221b]">
+                      {folderForOptionsMenu.name}
+                    </h3>
+                    <p className="text-[11px] text-[#75877d]">
+                      {currentLang === 'ar' ? 'إدارة وخيارات المجلد' : 'Ordner verwalten'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFolderForOptionsMenu(null)}
+                  className="w-7 h-7 rounded-full bg-[#f8faf8] hover:bg-[#edf4ef] text-[#75877d] flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                {/* 1. Add audio from existing library to this folder */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFolderForOptionsMenu(null);
+                    setIsAddExistingToFolderModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 text-xs font-bold text-[#215641] bg-[#edf4ef] hover:bg-[#e2ede5] rounded-2xl transition-all text-start"
+                >
+                  <Plus className="w-4 h-4 text-[#215641] flex-shrink-0" />
+                  <div>
+                    <div>{currentLang === 'ar' ? 'إضافة صوتيات للمجلد' : 'Tracks hinzufügen'}</div>
+                    <div className="text-[10px] font-normal text-[#4f6156]">
+                      {currentLang === 'ar' ? 'إضافة مقاطع من مكتبة الصوتيات الحالية' : 'Aus vorhandener Bibliothek zuweisen'}
+                    </div>
+                  </div>
+                </button>
+
+                {/* 2. Rename Folder */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const f = folderForOptionsMenu;
+                    setFolderForOptionsMenu(null);
+                    setEditingFolder(f);
+                    setEditFolderNameInput(f.name);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 text-xs font-bold text-[#15221b] bg-[#f8faf8] hover:bg-[#edf4ef] rounded-2xl transition-all border border-[#e2ebe3] text-start"
+                >
+                  <Pencil className="w-4 h-4 text-[#4f6156] flex-shrink-0" />
+                  <div>
+                    <div>{currentLang === 'ar' ? 'تعديل اسم المجلد' : 'Ordner umbenennen'}</div>
+                    <div className="text-[10px] font-normal text-[#75877d]">
+                      {currentLang === 'ar' ? 'تغيير تسمية هذا المجلد' : 'Namen des Ordners bearbeiten'}
+                    </div>
+                  </div>
+                </button>
+
+                {/* 3. Delete Folder */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const f = folderForOptionsMenu;
+                    setFolderForOptionsMenu(null);
+                    setDeletingFolder(f);
+                    setDeleteFolderMode('keep_tracks');
+                  }}
+                  className="w-full flex items-center gap-3 p-3 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100/80 rounded-2xl transition-all text-start"
+                >
+                  <Trash2 className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <div>
+                    <div>{currentLang === 'ar' ? 'حذف المجلد' : 'Ordner löschen'}</div>
+                    <div className="text-[10px] font-normal text-red-500/80">
+                      {currentLang === 'ar' ? 'حذف المجلد مع خيار الإبقاء على الصوتيات' : 'Ordner entfernen'}
+                    </div>
+                  </div>
                 </button>
               </div>
             </motion.div>

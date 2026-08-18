@@ -21,8 +21,15 @@ import {
   Dumbbell,
   BarChart2,
 } from 'lucide-react';
-import { Language, ProgressionPhase, MuscleVolume } from '../types';
-import { I18N, PHASES_DATA, MUSCLE_DIST_DATA, EXERCISES_DATA } from '../data/workoutData';
+import { Language, ProgressionPhase, MuscleVolume, WorkoutPlan, ExerciseItem } from '../types';
+import { 
+  I18N, 
+  PHASES_DATA, 
+  MUSCLE_DIST_DATA, 
+  EXERCISES_DATA,
+  getPlanMuscleDistribution,
+  getPlanRepRangeSummary
+} from '../data/workoutData';
 
 export interface SessionLog {
   id: string;
@@ -38,6 +45,7 @@ interface StatsViewProps {
   currentLang: Language;
   completedExercises?: Set<number>;
   totalSessions: number;
+  plan?: WorkoutPlan;
 }
 
 type StatsSubTab = 'overview' | 'logbook' | 'guidelines';
@@ -45,9 +53,18 @@ type StatsSubTab = 'overview' | 'logbook' | 'guidelines';
 export const StatsView: React.FC<StatsViewProps> = ({
   currentLang,
   completedExercises,
+  plan,
 }) => {
   const t = I18N[currentLang];
   const [activeSubTab, setActiveSubTab] = useState<StatsSubTab>('overview');
+
+  const exercises = plan ? plan.exercises : EXERCISES_DATA;
+  const totalExercisesCount = exercises.length;
+  const allExerciseIds = exercises.map((e) => e.id);
+  const trainingDays = plan?.trainingDays ?? [0, 2, 4];
+  const muscleDistData = getPlanMuscleDistribution(exercises);
+  const repRangeText = getPlanRepRangeSummary(exercises);
+  const planNotes = plan ? (currentLang === 'de' ? plan.notesDe : plan.notesAr) : t.notes;
 
   // Stored Session Logs in localStorage
   const [sessionLogs, setSessionLogs] = useState<SessionLog[]>(() => {
@@ -63,10 +80,12 @@ export const StatsView: React.FC<StatsViewProps> = ({
         id: 'seed_1',
         date: currentLang === 'ar' ? 'الجلسة السابقة (الأربعاء)' : 'Vorherige Einheit (Mi)',
         timestamp: Date.now() - 2 * 24 * 3600 * 1000,
-        completedExerciseIds: [1, 2, 3, 4, 5, 6, 7, 8],
-        exercisesCompleted: 8,
-        totalExercises: 8,
-        notes: currentLang === 'ar' ? 'التزام تام بجميع الأجهزة 8 مع RIR 2' : 'Alle 8 Geräte mit RIR 2 absolviert',
+        completedExerciseIds: allExerciseIds,
+        exercisesCompleted: totalExercisesCount,
+        totalExercises: totalExercisesCount,
+        notes: currentLang === 'ar' 
+          ? `التزام تام بجميع الأجهزة ${totalExercisesCount} مع RIR 2` 
+          : `Alle ${totalExercisesCount} Geräte mit RIR 2 absolviert`,
       },
     ];
   });
@@ -74,7 +93,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
   const [isLogFormOpen, setIsLogFormOpen] = useState(false);
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [logNotesInput, setLogNotesInput] = useState('');
-  const [selectedExerciseIds, setSelectedExerciseIds] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8]);
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState<number[]>(allExerciseIds);
   const [showLogSuccessToast, setShowLogSuccessToast] = useState(false);
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set(['seed_1']));
 
@@ -94,7 +113,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
     if (completedExercises && completedExercises.size > 0) {
       setSelectedExerciseIds(Array.from(completedExercises));
     } else {
-      setSelectedExerciseIds([1, 2, 3, 4, 5, 6, 7, 8]);
+      setSelectedExerciseIds(allExerciseIds);
     }
     setIsLogFormOpen(true);
   };
@@ -103,7 +122,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
   const handleEditLog = (log: SessionLog) => {
     setEditingLogId(log.id);
     setLogNotesInput(log.notes || '');
-    setSelectedExerciseIds(log.completedExerciseIds || [1, 2, 3, 4, 5, 6, 7, 8]);
+    setSelectedExerciseIds(log.completedExerciseIds || allExerciseIds);
     setIsLogFormOpen(true);
   };
 
@@ -115,7 +134,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
   };
 
   const handleSelectAllExercises = () => {
-    setSelectedExerciseIds([1, 2, 3, 4, 5, 6, 7, 8]);
+    setSelectedExerciseIds(allExerciseIds);
   };
 
   const handleDeselectAllExercises = () => {
@@ -135,6 +154,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               ...log,
               completedExerciseIds: selectedExerciseIds,
               exercisesCompleted: selectedExerciseIds.length,
+              totalExercises: totalExercisesCount,
               notes: logNotesInput.trim() || undefined,
             };
           }
@@ -169,7 +189,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
         timestamp: Date.now(),
         completedExerciseIds: selectedExerciseIds,
         exercisesCompleted: selectedExerciseIds.length,
-        totalExercises: 8,
+        totalExercises: totalExercisesCount,
         notes: logNotesInput.trim() || undefined,
       };
 
@@ -204,10 +224,13 @@ export const StatsView: React.FC<StatsViewProps> = ({
   );
 
   const avgCompletionRate =
-    totalLoggedSessionsCount > 0
+    totalLoggedSessionsCount > 0 && totalExercisesCount > 0
       ? Math.round(
           (sessionLogs.reduce(
-            (acc, log) => acc + (log.completedExerciseIds ? log.completedExerciseIds.length : log.exercisesCompleted) / 8,
+            (acc, log) =>
+              acc +
+              (log.completedExerciseIds ? log.completedExerciseIds.length : log.exercisesCompleted) /
+                (log.totalExercises || totalExercisesCount),
             0
           ) /
             totalLoggedSessionsCount) *
@@ -218,7 +241,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
   // Most completed machine
   const machineFrequencyMap: Record<number, number> = {};
   sessionLogs.forEach((log) => {
-    const ids = log.completedExerciseIds || [1, 2, 3, 4, 5, 6, 7, 8];
+    const ids = log.completedExerciseIds || allExerciseIds;
     ids.forEach((id) => {
       machineFrequencyMap[id] = (machineFrequencyMap[id] || 0) + 1;
     });
@@ -328,7 +351,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
             {currentLang === 'ar' ? 'نطاق التكرارات' : 'Wdh.-Bereich'}
           </span>
           <div className="font-display font-black text-xl sm:text-2xl text-[#15221b]">
-            8–12
+            {repRangeText}
           </div>
           <span className="text-[9px] sm:text-[10px] text-[#95a59c] block truncate">
             {currentLang === 'ar' ? 'تكرار لكل مجموعة' : 'Wdh. pro Satz'}
@@ -400,12 +423,12 @@ export const StatsView: React.FC<StatsViewProps> = ({
                   </h3>
                 </div>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#edf4ef] text-[#215641]">
-                  8 {currentLang === 'ar' ? 'أجهزة رئيسية' : 'Geräte'}
+                  {totalExercisesCount} {currentLang === 'ar' ? 'أجهزة رئيسية' : 'Geräte'}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {EXERCISES_DATA.map((ex) => {
+                {exercises.map((ex) => {
                   const count = machineFrequencyMap[ex.id] || 0;
                   const pct = totalLoggedSessionsCount > 0 ? Math.round((count / totalLoggedSessionsCount) * 100) : 0;
                   return (
@@ -497,7 +520,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
               <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center min-w-0">
                 {t.days.map((day, idx) => {
-                  const isTraining = [0, 2, 4].includes(idx);
+                  const isTraining = trainingDays.includes(idx);
                   return (
                     <div
                       key={idx}
@@ -533,7 +556,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                {MUSCLE_DIST_DATA.map((m: MuscleVolume, idx) => (
+                {muscleDistData.map((m: MuscleVolume, idx) => (
                   <div
                     key={idx}
                     className="flex items-center justify-between p-2.5 sm:p-3 bg-[#f8faf8] rounded-2xl border border-[#e2ebe3] min-w-0 gap-2"
@@ -603,8 +626,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold text-[#7be3af]">
                         {currentLang === 'ar'
-                          ? `حدد الأجهزة المنفذة (${selectedExerciseIds.length}/8):`
-                          : `Absolvierte Geräte (${selectedExerciseIds.length}/8):`}
+                          ? `حدد الأجهزة المنفذة (${selectedExerciseIds.length}/${totalExercisesCount}):`
+                          : `Absolvierte Geräte (${selectedExerciseIds.length}/${totalExercisesCount}):`}
                       </span>
                       <div className="flex items-center gap-2">
                         <button
@@ -612,7 +635,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
                           onClick={handleSelectAllExercises}
                           className="text-[10px] text-white/80 hover:text-white underline"
                         >
-                          {currentLang === 'ar' ? 'تحديد الكل' : 'Alle währen'}
+                          {currentLang === 'ar' ? 'تحديد الكل' : 'Alle wählen'}
                         </button>
                         <span>•</span>
                         <button
@@ -627,7 +650,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
                     {/* Machine Checkboxes Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1">
-                      {EXERCISES_DATA.map((ex) => {
+                      {exercises.map((ex) => {
                         const isChecked = selectedExerciseIds.includes(ex.id);
                         return (
                           <button
@@ -813,7 +836,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
                               className="pt-2 border-t border-[#edf4ef] overflow-hidden"
                             >
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
-                                {EXERCISES_DATA.map((ex) => {
+                                {exercises.map((ex) => {
                                   const done = completedIds.includes(ex.id);
                                   return (
                                     <div
@@ -904,7 +927,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               </div>
 
               <ul className="space-y-2 text-xs text-[#4f6156] leading-relaxed">
-                {t.notes.map((note, idx) => (
+                {planNotes.map((note, idx) => (
                   <li key={idx} className="flex items-start gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#215641] mt-1.5 flex-shrink-0" />
                     <span>{note}</span>

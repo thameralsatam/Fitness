@@ -48,25 +48,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       ),
     },
     {
-      id: 'timer',
-      label: t.navTimer,
-      icon: (isActive: boolean) => (
-        <svg
-          width="21"
-          height="21"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR}
-          strokeWidth={isActive ? "2.2" : "1.8"}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
-      ),
-    },
-    {
       id: 'audio',
       label: t.navAudio,
       icon: (isActive: boolean) => (
@@ -129,6 +110,25 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         </svg>
       ),
     },
+    {
+      id: 'profile',
+      label: t.navProfile || (currentLang === 'ar' ? 'البروفايل' : 'Profil'),
+      icon: (isActive: boolean) => (
+        <svg
+          width="21"
+          height="21"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR}
+          strokeWidth={isActive ? "2.2" : "1.8"}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -147,70 +147,70 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         {/* Liquid glass & frosted blur layer */}
         <div className="bn-liquid-glass" />
 
-          {/* Row of navigation buttons */}
-          <div className="relative z-10 flex items-center justify-around px-2 py-1.5 w-full">
-            {navItems.map(({ id, icon, label }) => {
-              const isActive = currentTab === id;
+        {/* Row of navigation buttons */}
+        <div className="relative z-10 flex items-center justify-around px-2 py-1.5 w-full">
+          {navItems.map(({ id, icon, label }) => {
+            const isActive = currentTab === id;
 
-              return (
-                <button
-                  type="button"
-                  key={id}
-                  onClick={() => onTabChange(id)}
-                  className="flex-1 bg-transparent border-0 cursor-pointer flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-2xl relative group outline-none select-none transition-transform active:scale-95"
-                >
-                  {/* Subtle glass lens pill background when active */}
-                  {isActive && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        inset: "2px",
-                        borderRadius: "20px",
-                        background: "rgba(255, 255, 255, 0.52)",
-                        border: "1px solid rgba(255, 255, 255, 0.85)",
-                        boxShadow: "0 2px 8px rgba(15, 34, 27, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
-                        animation: "bn-active-bg-in 0.35s cubic-bezier(0.34,1.4,0.64,1) forwards",
-                      }}
-                    />
-                  )}
-
-                  {/* Icon with bounce-in animation on enter */}
+            return (
+              <button
+                type="button"
+                key={id}
+                onClick={() => onTabChange(id)}
+                className="flex-1 bg-transparent border-0 cursor-pointer flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-2xl relative group outline-none select-none transition-transform active:scale-95"
+              >
+                {/* Subtle glass lens pill background when active */}
+                {isActive && (
                   <div
                     style={{
-                      position: "relative",
-                      zIndex: 2,
-                      filter: "drop-shadow(0 1px 0 rgba(255, 255, 255, 0.7))",
-                      animation: isActive
-                        ? "bn-icon-enter 0.4s cubic-bezier(0.34,1.4,0.64,1)"
-                        : undefined,
-                    }}
-                  >
-                    {icon(isActive)}
-                  </div>
-
-                  {/* Active dot / indicator bar */}
-                  <div
-                    style={{
-                      height: "3.5px",
-                      borderRadius: "2px",
-                      background: isActive ? "#215641" : "transparent",
-                      boxShadow: isActive ? "0 1px 2px rgba(33, 86, 65, 0.35)" : "none",
-                      transition: "all 0.3s ease",
-                      animation: isActive
-                        ? "bn-dot-expand 0.35s cubic-bezier(0.34,1.4,0.64,1) forwards"
-                        : undefined,
-                      width: isActive ? "16px" : "0px",
-                      position: "relative",
-                      zIndex: 2,
+                      position: "absolute",
+                      inset: "2px",
+                      borderRadius: "20px",
+                      background: "rgba(255, 255, 255, 0.52)",
+                      border: "1px solid rgba(255, 255, 255, 0.85)",
+                      boxShadow: "0 2px 8px rgba(15, 34, 27, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
+                      animation: "bn-active-bg-in 0.35s cubic-bezier(0.34,1.4,0.64,1) forwards",
                     }}
                   />
+                )}
 
-                  <span className="sr-only">{label}</span>
-                </button>
-              );
-            })}
-          </div>
+                {/* Icon with bounce-in animation on enter */}
+                <div
+                  style={{
+                    position: "relative",
+                    zIndex: 2,
+                    filter: "drop-shadow(0 1px 0 rgba(255, 255, 255, 0.7))",
+                    animation: isActive
+                      ? "bn-icon-enter 0.4s cubic-bezier(0.34,1.4,0.64,1)"
+                      : undefined,
+                  }}
+                >
+                  {icon(isActive)}
+                </div>
+
+                {/* Active dot / indicator bar */}
+                <div
+                  style={{
+                    height: "3.5px",
+                    borderRadius: "2px",
+                    background: isActive ? "#215641" : "transparent",
+                    boxShadow: isActive ? "0 1px 2px rgba(33, 86, 65, 0.35)" : "none",
+                    transition: "all 0.3s ease",
+                    animation: isActive
+                      ? "bn-dot-expand 0.35s cubic-bezier(0.34,1.4,0.64,1) forwards"
+                      : undefined,
+                    width: isActive ? "16px" : "0px",
+                    position: "relative",
+                    zIndex: 2,
+                  }}
+                />
+
+                <span className="sr-only">{label}</span>
+              </button>
+            );
+          })}
         </div>
-      </nav>
-    );
-  };
+      </div>
+    </nav>
+  );
+};

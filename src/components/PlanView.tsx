@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Check, ChevronDown, Info, RotateCcw } from 'lucide-react';
-import { ExerciseItem, Language } from '../types';
+import { Check, ChevronDown, Info, RotateCcw, Edit2, Plus, Dumbbell } from 'lucide-react';
+import { ExerciseItem, Language, WorkoutPlan, ViewTab } from '../types';
 import { I18N } from '../data/workoutData';
 import { WorkoutWidgets } from './WorkoutWidgets';
 import { triggerHaptic } from '../utils/haptics';
@@ -13,8 +13,12 @@ interface PlanViewProps {
   onToggleExercise: (id: number) => void;
   onTogglePanel: (id: number) => void;
   onResetToday: () => void;
-  onNavigateTab?: (tab: 'plan' | 'timer' | 'audio' | 'stats' | 'tools') => void;
+  onNavigateTab?: (tab: ViewTab) => void;
   totalSessions?: number;
+  plan?: WorkoutPlan;
+  onStartActiveWorkout?: () => void;
+  onOpenLibrary?: () => void;
+  onOpenEditExercise?: (exercise: ExerciseItem) => void;
 }
 
 export const PlanView: React.FC<PlanViewProps> = ({
@@ -27,12 +31,29 @@ export const PlanView: React.FC<PlanViewProps> = ({
   onResetToday,
   onNavigateTab,
   totalSessions = 1,
+  plan,
+  onStartActiveWorkout,
+  onOpenLibrary,
+  onOpenEditExercise,
 }) => {
   const t = I18N[currentLang];
+  const isAr = currentLang === 'ar';
   const [notesOpen, setNotesOpen] = useState(false);
 
   const completedCount = exercises.filter((e) => completedExercises.has(e.id)).length;
-  const progressPercent = Math.round((completedCount / exercises.length) * 100);
+  const progressPercent = exercises.length > 0 ? Math.round((completedCount / exercises.length) * 100) : 0;
+
+  const scheduleDaysText = plan 
+    ? (currentLang === 'de' ? plan.scheduleDaysDe : plan.scheduleDaysAr)
+    : t.scheduleDays;
+
+  const scheduleSubText = plan
+    ? (currentLang === 'de' ? plan.frequencyDe : plan.frequencyAr)
+    : t.scheduleSub;
+
+  const notesList = plan
+    ? (currentLang === 'de' ? plan.notesDe : plan.notesAr)
+    : t.notes;
 
   return (
     <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-5 animate-in fade-in duration-200">
@@ -45,6 +66,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
           currentStreak={Math.max(1, completedCount > 0 ? 3 : 1)}
           totalSessions={totalSessions}
           onNavigateTab={onNavigateTab}
+          onStartActiveWorkout={onStartActiveWorkout}
+          onOpenLibrary={onOpenLibrary}
         />
       )}
 
@@ -53,12 +76,25 @@ export const PlanView: React.FC<PlanViewProps> = ({
         <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#e2ebe3] min-w-0">
           <div className="min-w-0">
             <h2 className="font-display font-black text-sm sm:text-lg text-[#15221b] tracking-tight truncate">
-              {t.scheduleDays}
+              {scheduleDaysText}
             </h2>
             <span className="text-[11px] sm:text-xs font-semibold text-[#215641] block truncate">
-              {t.scheduleSub}
+              {scheduleSubText}
             </span>
           </div>
+
+          {onOpenLibrary && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('selection');
+                onOpenLibrary();
+              }}
+              className="text-xs font-bold text-[#215641] hover:underline flex items-center gap-1 flex-shrink-0"
+            >
+              <span>{isAr ? 'تخصيص الخطة' : 'Plan anpassen'}</span>
+            </button>
+          )}
         </div>
 
         {/* Progress bar */}
@@ -80,7 +116,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
       {/* Exercises List */}
       <section className="space-y-3 min-w-0" aria-label="Übungen">
-        {exercises.map((item) => {
+        {exercises.map((item, index) => {
           const isDone = completedExercises.has(item.id);
           const isOpen = openPanels.has(item.id);
 
@@ -98,38 +134,52 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onToggleExercise(item.id)}
-                  aria-label={`Übung ${item.id} abschließen`}
+                  aria-label={`Übung ${index + 1} abschließen`}
                   className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-display font-black text-sm transition-all flex-shrink-0 active:scale-95 ${
                     isDone
                       ? 'bg-[#215641] text-white shadow-xs'
                       : 'bg-[#e6f1eb] text-[#215641] hover:bg-[#d6e8de]'
                   }`}
                 >
-                  {isDone ? <Check className="w-5 h-5 stroke-[2.8]" /> : item.id}
+                  {isDone ? <Check className="w-5 h-5 stroke-[2.8]" /> : index + 1}
                 </button>
 
-                {/* Details */}
-                <div className="flex-1 min-w-0">
+                {/* Details (Click to edit) */}
+                <div
+                  onClick={() => onOpenEditExercise && onOpenEditExercise(item)}
+                  className="flex-1 min-w-0 cursor-pointer group"
+                >
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="inline-block px-2 py-0.5 rounded-md bg-[#edf4ef] text-[#1b4b38] text-[11px] font-semibold">
                       {currentLang === 'de' ? item.muscleDe : item.muscleAr}
                     </span>
+                    {onOpenEditExercise && (
+                      <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-[#75877d] flex items-center gap-0.5">
+                        <Edit2 className="w-2.5 h-2.5" />
+                        <span>{isAr ? 'تعديل' : 'Bearbeiten'}</span>
+                      </span>
+                    )}
                   </div>
 
-                  <h3 className="font-display font-bold text-xs sm:text-base text-[#15221b] mt-1 leading-snug break-words">
+                  <h3 className="font-display font-bold text-xs sm:text-base text-[#15221b] group-hover:text-[#215641] transition-colors mt-1 leading-snug break-words">
                     {item.nameDe}
                   </h3>
                 </div>
 
                 {/* Sets & Reps Capsule */}
-                <div className="flex flex-col items-end text-right flex-shrink-0 bg-[#eef4f0] px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border border-[#e2ebe3]">
+                <button
+                  type="button"
+                  onClick={() => onOpenEditExercise && onOpenEditExercise(item)}
+                  className="flex flex-col items-end text-right flex-shrink-0 bg-[#eef4f0] hover:bg-[#e4ede6] px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border border-[#e2ebe3] transition-colors cursor-pointer"
+                  title={isAr ? 'تعديل المجموعات والتكرارات' : 'Sätze & Wdh. anpassen'}
+                >
                   <span className="font-display font-black text-xs sm:text-sm text-[#15221b] whitespace-nowrap">
                     {item.sets} × {item.reps}
                   </span>
                   <span className="text-[9px] sm:text-[10px] font-medium text-[#75877d] whitespace-nowrap">
                     {t.capsuleLabel}
                   </span>
-                </div>
+                </button>
               </div>
 
               {/* Alternatives Accordion */}
@@ -171,6 +221,21 @@ export const PlanView: React.FC<PlanViewProps> = ({
             </article>
           );
         })}
+
+        {/* Add Exercise from Library Shortcut */}
+        {onOpenLibrary && (
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('selection');
+              onOpenLibrary();
+            }}
+            className="w-full py-3.5 px-4 rounded-2xl border-2 border-dashed border-[#bad3c3] hover:border-[#215641] bg-[#f8faf8] hover:bg-[#edf4ef] text-[#215641] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{isAr ? 'إضافة جهاز أو تمرين من المكتبة إلى الجدول' : 'Übung aus Bibliothek hinzufügen'}</span>
+          </button>
+        )}
       </section>
 
       {/* Important Notes Section */}
@@ -196,7 +261,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
         {notesOpen && (
           <div className="px-4 pb-4 pt-1 border-t border-[#e2ebe3] space-y-2.5 animate-in fade-in duration-150 min-w-0">
             <ul className="space-y-2 min-w-0">
-              {t.notes.map((note, idx) => (
+              {notesList.map((note, idx) => (
                 <li
                   key={idx}
                   className="flex items-start gap-2.5 text-xs sm:text-sm text-[#4f6156] leading-relaxed min-w-0"

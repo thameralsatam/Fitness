@@ -6,9 +6,16 @@ import { triggerHaptic } from '../utils/haptics';
 interface SplashScreenProps {
   onFinish: () => void;
   lang: 'ar' | 'de';
+  planTitle?: string;
+  planSubtitle?: string;
 }
 
-export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, lang }) => {
+export const SplashScreen: React.FC<SplashScreenProps> = ({ 
+  onFinish, 
+  lang,
+  planTitle,
+  planSubtitle
+}) => {
   useEffect(() => {
     triggerHaptic('light');
     const timer = setTimeout(() => {
@@ -17,6 +24,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, lang }) =>
 
     return () => clearTimeout(timer);
   }, [onFinish]);
+
+  const defaultTitle = lang === 'ar' ? 'خطة تدريب الجسم بالكامل' : 'Trainingsplan Full Body';
+  const defaultSubtitle = lang === 'ar' ? '٣ أيام أسبوعياً · تمارين متكاملة' : '3× pro Woche · Ganzkörper';
 
   return (
     <motion.div
@@ -35,11 +45,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, lang }) =>
         </div>
 
         <h1 className="font-display text-lg sm:text-xl font-extrabold text-[#15221b] tracking-tight">
-          {lang === 'ar' ? 'خطة تدريب الجسم بالكامل' : 'Trainingsplan Full Body'}
+          {planTitle || defaultTitle}
         </h1>
 
         <p className="font-body text-xs font-semibold text-[#215641] mt-1">
-          {lang === 'ar' ? '3 أيام أسبوعياً · تمارين متكاملة' : '3× pro Woche · Ganzkörper'}
+          {planSubtitle || defaultSubtitle}
         </p>
       </div>
     </motion.div>

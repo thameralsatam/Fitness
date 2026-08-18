@@ -13,6 +13,7 @@ export const TimerView: React.FC<TimerViewProps> = ({ currentLang }) => {
   const t = I18N[currentLang];
   
   const {
+    remainingMs,
     secondsLeft,
     selectedDuration,
     isRunning,
@@ -30,13 +31,13 @@ export const TimerView: React.FC<TimerViewProps> = ({ currentLang }) => {
   const [customMinutes, setCustomMinutes] = useState<number>(1);
   const [customSeconds, setCustomSeconds] = useState<number>(30);
 
-  // Sync custom inputs to timer configuration when in custom mode and not running
+  // Sync custom inputs to timer configuration when in custom mode and not in the middle of a countdown
   useEffect(() => {
-    if (isCustomMode && !isRunning) {
+    if (isCustomMode && remainingMs === selectedDuration * 1000) {
       const totalSec = customHours * 3600 + customMinutes * 60 + customSeconds;
       setTimerConfig(totalSec);
     }
-  }, [customHours, customMinutes, customSeconds, isCustomMode, isRunning]);
+  }, [customHours, customMinutes, customSeconds, isCustomMode, remainingMs, selectedDuration]);
 
   // If selected duration changes (e.g. from preset click), ensure custom inputs are synced
   useEffect(() => {
@@ -64,7 +65,7 @@ export const TimerView: React.FC<TimerViewProps> = ({ currentLang }) => {
     }
   };
 
-  const progressFraction = selectedDuration > 0 ? (selectedDuration - secondsLeft) / selectedDuration : 0;
+  const progressFraction = selectedDuration > 0 ? (selectedDuration * 1000 - remainingMs) / (selectedDuration * 1000) : 0;
   const strokeDashoffset = 440 * (1 - progressFraction);
 
   const CustomUnitCounter = ({ label, value, onChange, max }: { label: string; value: number; onChange: (v: number) => void; max: number }) => (
@@ -137,11 +138,11 @@ export const TimerView: React.FC<TimerViewProps> = ({ currentLang }) => {
           </svg>
 
           <div className="absolute flex flex-col items-center justify-center">
-            <span className="font-display font-black text-4xl sm:text-5xl text-[#15221b] tracking-tighter">
+            <span className="font-display font-black text-4xl sm:text-5xl text-[#15221b] tracking-tighter" dir="ltr">
               {formattedTime}
             </span>
             <span className="text-[11px] font-bold text-[#75877d] uppercase tracking-widest mt-1">
-              {secondsLeft === 0
+              {remainingMs === 0
                 ? t.timerDone
                 : isRunning
                 ? currentLang === 'ar' ? 'جاري الاستراحة...' : 'PAUSE LÄUFT'
@@ -152,8 +153,8 @@ export const TimerView: React.FC<TimerViewProps> = ({ currentLang }) => {
 
         {/* Preset & Custom Selectors */}
         <div className="space-y-4 w-full max-w-sm">
-          <div className="flex items-center justify-center gap-2">
-            <div className="flex items-center gap-1 bg-[#f1f6f3] p-1 rounded-2xl border border-[#e2ebe3]">
+          <div className="flex items-center justify-center">
+            <div className="inline-flex items-center gap-1 bg-[#f1f6f3] p-1 rounded-2xl border border-[#e2ebe3] shadow-2xs">
               {[
                 { sec: 60, label: '60s' },
                 { sec: 90, label: currentLang === 'ar' ? '90s (موصى به)' : '90s (Empfohlen)' },
@@ -164,39 +165,38 @@ export const TimerView: React.FC<TimerViewProps> = ({ currentLang }) => {
                   type="button"
                   disabled={isRunning}
                   onClick={() => handleSelectPreset(preset.sec)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 active:scale-95 ${
                     !isCustomMode && selectedDuration === preset.sec
                       ? 'bg-[#215641] text-white shadow-xs font-bold'
-                      : 'text-[#4f6156] hover:bg-white/50 hover:text-[#15221b]'
+                      : 'text-[#4f6156] hover:bg-white/60 hover:text-[#15221b]'
                   }`}
                 >
                   {preset.label}
                 </button>
               ))}
+
+              <button
+                type="button"
+                disabled={isRunning}
+                onClick={() => {
+                  setIsCustomMode(!isCustomMode);
+                  if (!isCustomMode) {
+                    const totalSec = customHours * 3600 + customMinutes * 60 + customSeconds;
+                    setTimerConfig(totalSec);
+                  }
+                  triggerHaptic('light');
+                }}
+                title={currentLang === 'ar' ? 'تخصيص الوقت' : 'Zeit anpassen'}
+                aria-label={currentLang === 'ar' ? 'تخصيص الوقت' : 'Zeit anpassen'}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center transition-all disabled:opacity-40 active:scale-95 ${
+                  isCustomMode
+                    ? 'bg-[#215641] text-white shadow-xs font-bold'
+                    : 'text-[#4f6156] hover:bg-white/60 hover:text-[#15221b]'
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5" />
+              </button>
             </div>
-
-            <span className="w-px h-5 bg-[#e2ebe3] mx-1" />
-
-            <button
-              type="button"
-              disabled={isRunning}
-              onClick={() => {
-                setIsCustomMode(!isCustomMode);
-                if (!isCustomMode) {
-                  const totalSec = customHours * 3600 + customMinutes * 60 + customSeconds;
-                  setTimerConfig(totalSec);
-                }
-                triggerHaptic('light');
-              }}
-              title={currentLang === 'ar' ? 'تخصيص الوقت' : 'Zeit anpassen'}
-              className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-all disabled:opacity-40 active:scale-95 ${
-                isCustomMode
-                  ? 'bg-[#215641] text-white border-transparent shadow-xs'
-                  : 'bg-white text-[#4f6156] border-[#dbe4dc] hover:bg-[#edf4ef] hover:text-[#215641]'
-              }`}
-            >
-              <Sliders className="w-4 h-4" />
-            </button>
           </div>
 
           {/* Tactile Custom Picker Panel */}

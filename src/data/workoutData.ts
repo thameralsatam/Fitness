@@ -1,4 +1,4 @@
-import { ExerciseItem, GoalItem, ProgressionPhase, MuscleVolume } from '../types';
+import { ExerciseItem, GoalItem, ProgressionPhase, MuscleVolume, WorkoutPlan } from '../types';
 
 export const EXERCISES_DATA: ExerciseItem[] = [
   {
@@ -184,6 +184,71 @@ export const PHASES_DATA: ProgressionPhase[] = [
   }
 ];
 
+export const DEFAULT_WORKOUT_PLAN: WorkoutPlan = {
+  id: 'default_full_body_3day',
+  nameDe: "Full Body · 3 Tage",
+  nameAr: "جسم كامل · ٣ أيام",
+  scheduleDaysDe: "Montag · Mittwoch · Freitag",
+  scheduleDaysAr: "الإثنين · الأربعاء · الجمعة",
+  frequencyDe: "3× pro Woche",
+  frequencyAr: "٣ أيام أسبوعياً",
+  trainingDays: [0, 2, 4], // 0=Mo, 2=Mi, 4=Fr
+  exercises: EXERCISES_DATA,
+  notesDe: [
+    "Die ersten zwei Wochen: 2 Sätze pro Übung, danach auf die volle Satzanzahl steigern.",
+    "Warm-up: 5–10 Minuten leicht vor dem Krafttraining.",
+    "Pause: ca. 90 Sekunden zwischen den Sätzen.",
+    "RIR 2: Satz beenden, wenn noch ca. 2 weitere Wiederholungen möglich wären, anstatt bis zum Muskelversagen zu gehen.",
+    "Sobald die Obergrenze der Wiederholungen mit sauberer Technik leicht fällt, das Gewicht moderat steigern.",
+    "Kein ständiger Wechsel des Trainingsplans nötig."
+  ],
+  notesAr: [
+    "أول أسبوعين: مجموعتان (2 Sätze) لكل تمرين، ثم الانتقال إلى العدد الكامل.",
+    "الإحماء (Warm-up): 5–10 دقائق خفيف قبل أوزان الحديد.",
+    "الراحة (Pause): حوالي 90 ثانية بين المجموعات.",
+    "مقياس الجهد (RIR 2): التوقف عندما يكون بالإمكان أداء حوالي تكرارين إضافيين، وليس أداءهما فعلياً.",
+    "عند الوصول إلى الحد الأعلى من التكرارات بسهولة مع تكنيك جيد، تتم زيادة الوزن قليلاً.",
+    "لا حاجة لتغيير البرنامج باستمرار."
+  ]
+};
+
+// Dynamically compute muscle group volume distribution from any exercise list
+export function getPlanMuscleDistribution(exercises: ExerciseItem[]): MuscleVolume[] {
+  const muscleMap = new Map<string, { nameDe: string; nameAr: string; totalSets: number }>();
+
+  exercises.forEach((ex) => {
+    // Simplify muscle group key (e.g. "Beine", "Brust", "Rücken", etc.)
+    const key = ex.muscleDe.split('(')[0].trim() || ex.muscleDe;
+    const setsCount = parseInt(ex.sets, 10) || 2;
+
+    const existing = muscleMap.get(key);
+    if (existing) {
+      existing.totalSets += setsCount;
+    } else {
+      muscleMap.set(key, {
+        nameDe: ex.muscleDe,
+        nameAr: ex.muscleAr,
+        totalSets: setsCount,
+      });
+    }
+  });
+
+  return Array.from(muscleMap.values()).map((m) => ({
+    nameDe: m.nameDe,
+    nameAr: m.nameAr,
+    setsDe: `${m.totalSets} Sätze / Einheit`,
+    setsAr: `${m.totalSets} مجموعات / حصة`,
+  }));
+}
+
+// Dynamically compute rep range from any exercise list
+export function getPlanRepRangeSummary(exercises: ExerciseItem[]): string {
+  if (!exercises || exercises.length === 0) return '8–12';
+  const uniqueReps = Array.from(new Set(exercises.map((e) => e.reps.trim())));
+  if (uniqueReps.length === 1) return uniqueReps[0];
+  return uniqueReps.join(' / ');
+}
+
 export const MUSCLE_DIST_DATA: MuscleVolume[] = [
   { nameDe: "Beine & Gesäß", nameAr: "الأرجل والأرداف", setsDe: "6 Sätze / Einheit", setsAr: "٦ مجموعات / حصة" },
   { nameDe: "Rücken (Lat & Mitte)", nameAr: "الظهر (اللاتس والترابيز)", setsDe: "6 Sätze / Einheit", setsAr: "٦ مجموعات / حصة" },
@@ -222,6 +287,7 @@ export const I18N = {
     navTools: "Tools",
     navStats: "Statistik",
     navGoals: "Ziele",
+    navProfile: "Profil",
     audioViewTitle: "Smarter Workout-Audioplayer",
     audioViewDesc: "Eigene Trainings-Audio- & Videodateien lokal im Browser speichern und werbefrei abspielen.",
     toolsTitle: "Smarte Trainings-Tools",
@@ -305,6 +371,7 @@ export const I18N = {
     navTools: "الأدوات",
     navStats: "الإحصائيات",
     navGoals: "الأهداف",
+    navProfile: "البروفايل",
     audioViewTitle: "مشغل صوتيات التمرين الذكي",
     audioViewDesc: "شغّل مقاطعك الصوتية والفيديوهات المحفوظة محلياً بجودة عالية وبدون إعلانات أثناء تمرينك.",
     toolsTitle: "أدوات ومساعد التدريب الذكي",

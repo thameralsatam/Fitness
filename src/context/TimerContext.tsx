@@ -4,6 +4,7 @@ import { triggerHaptic } from '../utils/haptics';
 import { Language } from '../types';
 
 interface TimerContextType {
+  remainingMs: number;
   secondsLeft: number;
   selectedDuration: number;
   isRunning: boolean;
@@ -22,7 +23,7 @@ const TimerContext = createContext<TimerContextType | undefined>(undefined);
 export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language }> = ({ children, lang }) => {
   const [currentLang, setCurrentLang] = useState<Language>(lang);
   const [selectedDuration, setSelectedDuration] = useState<number>(90);
-  const [secondsLeft, setSecondsLeft] = useState<number>(90);
+  const [remainingMs, setRemainingMs] = useState<number>(90 * 1000);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,27 +53,35 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
     try {
       const storedEndTime = localStorage.getItem('timer_endTime');
       const storedDuration = localStorage.getItem('timer_duration');
+      const storedRemainingMs = localStorage.getItem('timer_remainingMs');
       const storedIsRunning = localStorage.getItem('timer_isRunning');
 
+      let dur = 90;
       if (storedDuration) {
-        const dur = parseInt(storedDuration, 10);
+        dur = parseInt(storedDuration, 10);
         setSelectedDuration(dur);
-        setSecondsLeft(dur);
       }
 
       if (storedIsRunning === 'true' && storedEndTime) {
         const endTime = parseInt(storedEndTime, 10);
-        const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+        const left = Math.max(0, endTime - Date.now());
         
-        if (remaining > 0) {
-          setSecondsLeft(remaining);
+        if (left > 0) {
+          setRemainingMs(left);
           setIsRunning(true);
         } else {
           // Timer finished while app was completely closed
-          setSecondsLeft(0);
+          setRemainingMs(0);
           setIsRunning(false);
           clearStorage();
         }
+      } else if (storedRemainingMs) {
+        const ms = parseInt(storedRemainingMs, 10);
+        setRemainingMs(ms);
+        setIsRunning(false);
+      } else {
+        setRemainingMs(dur * 1000);
+        setIsRunning(false);
       }
     } catch (e) {
       console.error('[TimerContext] Failed to restore timer state:', e);
@@ -81,6 +90,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
 
   const clearStorage = () => {
     localStorage.removeItem('timer_endTime');
+    localStorage.removeItem('timer_remainingMs');
     localStorage.removeItem('timer_isRunning');
   };
 
@@ -162,37 +172,37 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
     }
   };
 
-  // Core ticking effect
+  // Core ticking effect with smooth 50ms sub-second precision
   useEffect(() => {
     if (isRunning) {
-      // Periodic check based on absolute timestamps to remain robust to background throttling
       timerRef.current = setInterval(() => {
         const storedEndTime = localStorage.getItem('timer_endTime');
         if (storedEndTime) {
           const endTime = parseInt(storedEndTime, 10);
-          const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+          const left = Math.max(0, endTime - Date.now());
           
-          setSecondsLeft(remaining);
+          setRemainingMs(left);
 
-          if (remaining <= 0) {
+          if (left <= 0) {
             setIsRunning(false);
             if (timerRef.current) clearInterval(timerRef.current);
             triggerCompletionEffects();
             clearStorage();
           }
         } else {
-          // Fallback if endTime is missing
-          setSecondsLeft((prev) => {
-            if (prev <= 1) {
+          setRemainingMs((prev) => {
+            const next = Math.max(0, prev - 50);
+            if (next <= 0) {
               setIsRunning(false);
               if (timerRef.current) clearInterval(timerRef.current);
               triggerCompletionEffects();
+              clearStorage();
               return 0;
             }
-            return prev - 1;
+            return next;
           });
         }
-      }, 1000);
+      }, 50);
     } else {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -212,13 +222,15 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
   const startTimer = (seconds: number) => {
     if (seconds <= 0) return;
     
-    const targetEndTime = Date.now() + seconds * 1000;
+    const ms = seconds * 1000;
+    const targetEndTime = Date.now() + ms;
     localStorage.setItem('timer_endTime', targetEndTime.toString());
     localStorage.setItem('timer_duration', seconds.toString());
+    localStorage.setItem('timer_remainingMs', ms.toString());
     localStorage.setItem('timer_isRunning', 'true');
 
     setSelectedDuration(seconds);
-    setSecondsLeft(seconds);
+    setRemainingMs(ms);
     setIsRunning(true);
 
     triggerHaptic('selection');
@@ -226,28 +238,39 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
   };
 
   const pauseTimer = () => {
+    const storedEndTime = localStorage.getItem('timer_endTime');
+    let currentLeft = remainingMs;
+    if (storedEndTime) {
+      currentLeft = Math.max(0, parseInt(storedEndTime, 10) - Date.now());
+    }
+    
+    setRemainingMs(currentLeft);
     setIsRunning(false);
+
+    localStorage.setItem('timer_remainingMs', currentLeft.toString());
     localStorage.setItem('timer_isRunning', 'false');
     localStorage.removeItem('timer_endTime');
+
     cancelNotification();
     triggerHaptic('medium');
   };
 
   const resumeTimer = () => {
-    if (secondsLeft <= 0) return;
+    if (remainingMs <= 0) return;
     
-    const targetEndTime = Date.now() + secondsLeft * 1000;
+    const targetEndTime = Date.now() + remainingMs;
     localStorage.setItem('timer_endTime', targetEndTime.toString());
     localStorage.setItem('timer_isRunning', 'true');
 
     setIsRunning(true);
     triggerHaptic('selection');
-    scheduleNotification(secondsLeft);
+    scheduleNotification(remainingMs / 1000);
   };
 
   const resetTimer = () => {
     setIsRunning(false);
-    setSecondsLeft(selectedDuration);
+    const ms = selectedDuration * 1000;
+    setRemainingMs(ms);
     clearStorage();
     cancelNotification();
     triggerHaptic('light');
@@ -255,17 +278,19 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
 
   const setTimerConfig = (seconds: number) => {
     setSelectedDuration(seconds);
-    setSecondsLeft(seconds);
+    const ms = seconds * 1000;
+    setRemainingMs(ms);
     setIsRunning(false);
     localStorage.setItem('timer_duration', seconds.toString());
     clearStorage();
     cancelNotification();
   };
 
-  // Convert time to string
-  const hours = Math.floor(secondsLeft / 3600);
-  const minutes = Math.floor((secondsLeft % 3600) / 60);
-  const remainderSeconds = secondsLeft % 60;
+  // Convert time to formatted string (clean MM:SS / HH:MM:SS) while keeping millisecond precision in the background
+  const displaySeconds = Math.ceil(remainingMs / 1000);
+  const hours = Math.floor(displaySeconds / 3600);
+  const minutes = Math.floor((displaySeconds % 3600) / 60);
+  const remainderSeconds = displaySeconds % 60;
 
   let formattedTime = '';
   if (hours > 0) {
@@ -274,9 +299,12 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
     formattedTime = `${String(minutes).padStart(2, '0')}:${String(remainderSeconds).padStart(2, '0')}`;
   }
 
+  const secondsLeft = displaySeconds;
+
   return (
     <TimerContext.Provider
       value={{
+        remainingMs,
         secondsLeft,
         selectedDuration,
         isRunning,
