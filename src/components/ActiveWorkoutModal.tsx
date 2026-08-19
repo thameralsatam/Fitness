@@ -17,11 +17,15 @@ import {
   Layers,
   ArrowRight,
   Save,
-  Trash2
+  Trash2,
+  Film,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { ExerciseItem, Language, WorkoutPlan } from '../types';
+import { ExerciseItem, Language, WorkoutPlan, ExerciseMediaItem } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
+import { MediaViewerModal } from './MediaViewerModal';
+import { getExerciseMediaList } from '../utils/mediaStorage';
 
 interface ActiveWorkoutModalProps {
   isOpen: boolean;
@@ -51,9 +55,32 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [isFinished, setIsFinished] = useState<boolean>(false);
   const [showAlternatives, setShowAlternatives] = useState<boolean>(false);
   const [showExitConfirm, setShowExitConfirm] = useState<boolean>(false);
+  const [currentMediaList, setCurrentMediaList] = useState<ExerciseMediaItem[]>([]);
+  const [activeMediaViewer, setActiveMediaViewer] = useState<{
+    name: string;
+    list: ExerciseMediaItem[];
+    index: number;
+  } | null>(null);
 
   const timerRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const currentExercise: ExerciseItem | undefined = exercises[currentExIdx];
+
+  // Load media whenever current exercise changes
+  useEffect(() => {
+    if (currentExercise) {
+      if (currentExercise.media && currentExercise.media.length > 0) {
+        setCurrentMediaList(currentExercise.media);
+      } else {
+        getExerciseMediaList(currentExercise.id).then((stored) => {
+          setCurrentMediaList(stored || []);
+        });
+      }
+    } else {
+      setCurrentMediaList([]);
+    }
+  }, [currentExercise]);
 
   // Lock body scroll & modal notification
   useEffect(() => {
@@ -79,7 +106,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     }
   }, [isOpen]);
 
-  const currentExercise: ExerciseItem | undefined = exercises[currentExIdx];
   const totalSets = currentExercise ? Math.max(1, parseInt(currentExercise.sets, 10) || 3) : 3;
 
   // Sound chime helper
@@ -362,6 +388,33 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                     <span>{currentExercise.reps} {isAr ? 'عدّات مع RIR 2' : 'Wdh. (RIR 2)'}</span>
                   </div>
                 </div>
+
+                {/* Technique Demo Media Button (Photos / Videos) */}
+                {currentMediaList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      setActiveMediaViewer({
+                        name: currentExercise.nameDe,
+                        list: currentMediaList,
+                        index: 0,
+                      });
+                    }}
+                    className="w-full py-2.5 px-4 rounded-2xl bg-[#edf5f0] hover:bg-[#e0ece3] border border-[#d2e2d7] text-[#1b4332] text-xs font-display font-bold transition-all flex items-center justify-center gap-2 active:scale-98 shadow-2xs cursor-pointer"
+                  >
+                    {currentMediaList.some((m) => m.type === 'video') ? (
+                      <Film className="w-4 h-4 text-[#215641]" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4 text-[#215641]" />
+                    )}
+                    <span>
+                      {isAr
+                        ? `مشاهدة فيديو/صور أداء التمرين (${currentMediaList.length})`
+                        : `Ausführungs-Video/Foto ansehen (${currentMediaList.length})`}
+                    </span>
+                  </button>
+                )}
 
                 {/* Alternatives Accordion */}
                 {currentExercise.alternatives && currentExercise.alternatives.length > 0 && (
@@ -651,6 +704,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             )}
           </AnimatePresence>
         </motion.div>
+
+        {/* Media Technique Lightbox Modal */}
+        {activeMediaViewer && (
+          <MediaViewerModal
+            isOpen={!!activeMediaViewer}
+            onClose={() => setActiveMediaViewer(null)}
+            exerciseName={activeMediaViewer.name}
+            mediaList={activeMediaViewer.list}
+            initialIndex={activeMediaViewer.index}
+            currentLang={currentLang}
+          />
+        )}
       </div>
     </AnimatePresence>
   );

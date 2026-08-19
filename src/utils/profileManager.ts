@@ -92,7 +92,7 @@ export const DEFAULT_PROFILE: UserProfile = {
   avatarUrl: '',
   avatarType: 'preset',
   presetId: 'ath1',
-  bio: 'Full Body & Hypertrophy',
+  bio: 'Fitness & Hypertrophy',
   weightKg: 78,
   heightCm: 178,
   weeklyTarget: 3,

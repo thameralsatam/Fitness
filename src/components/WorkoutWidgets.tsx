@@ -4,7 +4,7 @@ import {
   Play, 
   Pause,
   RotateCcw,
-  Flame, 
+  Zap, 
   BookOpen,
   Timer as TimerIcon,
   ChevronDown,
@@ -70,9 +70,13 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
           {/* Header Row */}
           <div className="flex items-center justify-between">
             {/* Streak Indicator */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#edf4ef] text-[#215641] text-xs font-bold border border-[#dbe4dc]/60">
-              <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-              <span>{isAr ? `التتابع: ${currentStreak || 1} أيام` : `Streak: ${currentStreak || 1} Tage`}</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#edf4ef] text-[#215641] text-xs font-bold border border-[#dbe4dc]/60 shadow-2xs">
+              <Zap className="w-3.5 h-3.5 text-[#215641] fill-[#215641]/20 stroke-[2.3]" />
+              <span>
+                {isAr
+                  ? `تتابع: ${currentStreak || 1} ${currentStreak === 1 ? 'يوم' : 'أيام'}`
+                  : `Streak: ${currentStreak || 1} ${currentStreak === 1 ? 'Tag' : 'Tage'}`}
+              </span>
             </div>
 
             {/* Actions: Inline Rest Timer Toggle & SVG-Only Library Button */}

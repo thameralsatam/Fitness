@@ -79,7 +79,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     const updated: UserProfile = {
       ...profile,
       name: editName.trim() || (isAr ? 'بطل التدريب' : 'Champion'),
-      bio: editBio.trim() || (isAr ? 'بناء عضلي ولياقة شاملة' : 'Hypertrophy & Full Body'),
+      bio: editBio.trim() || (isAr ? 'بناء عضلي ولياقة شاملة' : 'Fitness & Hypertrophy'),
       weightKg: Math.max(30, editWeight || 75),
       heightCm: Math.max(100, editHeight || 175),
       weeklyTarget: Math.max(1, editWeeklyTarget || 3),

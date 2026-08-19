@@ -28,6 +28,7 @@ import {
   saveLibraryExercises,
   getStoredActivePlan,
   saveActivePlan,
+  hardResetApp,
 } from './utils/libraryManager';
 
 interface ConfirmModalState {
@@ -76,7 +77,7 @@ export default function App() {
     } catch {
       // fallback
     }
-    return "'Kufam', sans-serif";
+    return "'Thmanyah Sans', system-ui, -apple-system, sans-serif";
   });
 
   const [bodyFont, setBodyFont] = useState<string>(() => {
@@ -86,7 +87,7 @@ export default function App() {
     } catch {
       // fallback
     }
-    return "'IBM Plex Sans Arabic', sans-serif";
+    return "'Thmanyah Sans', system-ui, -apple-system, sans-serif";
   });
 
   const [isFontModalOpen, setIsFontModalOpen] = useState<boolean>(false);
@@ -320,6 +321,52 @@ export default function App() {
     showToast(currentLang === 'ar' ? 'تم حذف الجهاز من الجدول' : 'Gerät aus dem Plan entfernt');
   };
 
+  const handleClearAllExercisesFromPlan = () => {
+    triggerHaptic('warning');
+    setConfirmModal({
+      isOpen: true,
+      title: currentLang === 'ar' ? 'تفريغ جدول التمارين' : 'Plan leeren',
+      description:
+        currentLang === 'ar'
+          ? 'هل أنت تأكد من رغبتك في تفريغ الجدول الحالي وحذف جميع التمارين منه؟'
+          : 'Möchtest du wirklich alle Übungen aus dem aktuellen Plan entfernen?',
+      confirmText: currentLang === 'ar' ? 'نعم، تفريغ الجدول' : 'Ja, Plan leeren',
+      cancelText: currentLang === 'ar' ? 'إلغاء' : 'Abbrechen',
+      type: 'danger',
+      onConfirm: () => {
+        triggerHaptic('success');
+        const updatedPlan: WorkoutPlan = {
+          ...activePlan,
+          exercises: [],
+        };
+        setActivePlan(updatedPlan);
+        saveActivePlan(updatedPlan);
+        setCompletedExercises(new Set());
+        setOpenPanels(new Set());
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        showToast(currentLang === 'ar' ? 'تم تفريغ الجدول من جميع التمارين بنجاح' : 'Plan wurde geleert');
+      },
+    });
+  };
+
+  const handleFactoryReset = () => {
+    triggerHaptic('warning');
+    setConfirmModal({
+      isOpen: true,
+      title: currentLang === 'ar' ? 'إعادة ضبط مصنع شاملة للموقع' : 'Werkseinstellungen',
+      description:
+        currentLang === 'ar'
+          ? 'هل أنت متأكد من رغبتك في مسح كافة التمارين وسجلات التخزين المحلي وإعادة ضبط الموقع بالكامل من الصفر؟'
+          : 'Möchtest du wirklich alle lokalen Daten löschen und die Anwendung komplett neu starten?',
+      confirmText: currentLang === 'ar' ? 'نعم، مسح وإعادة ضبط' : 'Ja, alles löschen',
+      cancelText: currentLang === 'ar' ? 'إلغاء' : 'Abbrechen',
+      type: 'danger',
+      onConfirm: () => {
+        hardResetApp();
+      },
+    });
+  };
+
   const handleSwapExerciseInPlan = (oldId: number, replacement: ExerciseItem) => {
     const updatedExercises = activePlan.exercises.map((e) => (e.id === oldId ? replacement : e));
     const updatedPlan: WorkoutPlan = {
@@ -424,6 +471,8 @@ export default function App() {
                   onStartActiveWorkout={() => setIsActiveWorkoutOpen(true)}
                   onOpenLibrary={() => setIsLibraryModalOpen(true)}
                   onOpenEditExercise={(exercise) => setEditingExercise(exercise)}
+                  onRemoveExercise={handleRemoveExerciseFromPlan}
+                  onClearPlan={handleClearAllExercisesFromPlan}
                 />
               </motion.div>
             )}
@@ -477,6 +526,11 @@ export default function App() {
                   completedExercises={completedExercises}
                   totalSessions={totalSessions}
                   plan={activePlan}
+                  onUpdateTrainingDays={(newDays) => {
+                    const updated = { ...activePlan, trainingDays: newDays };
+                    setActivePlan(updated);
+                    saveActivePlan(updated);
+                  }}
                 />
               </motion.div>
             )}
@@ -567,6 +621,8 @@ export default function App() {
           onOpenLibrary={() => setIsLibraryModalOpen(true)}
           onResetProgress={handleRequestResetProgress}
           onCopyPlan={handleCopyPlan}
+          onFactoryReset={handleFactoryReset}
+          libraryExercisesCount={libraryExercises.length}
         />
 
         {/* Font Settings Modal */}

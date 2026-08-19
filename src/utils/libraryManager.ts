@@ -11,6 +11,13 @@ const ACTIVE_PLAN_STORAGE_KEY = 'gym_active_workout_plan';
  */
 export function getStoredLibraryExercises(): ExerciseItem[] {
   try {
+    // Populate/Restore full 103-machine library on v104 update
+    if (!localStorage.getItem('gym_force_populate_library_v104')) {
+      localStorage.setItem('gym_force_populate_library_v104', 'true');
+      saveLibraryExercises(EXERCISES_DATA);
+      return EXERCISES_DATA;
+    }
+
     const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -22,10 +29,8 @@ export function getStoredLibraryExercises(): ExerciseItem[] {
     console.error('Error reading exercise library from localStorage:', err);
   }
 
-  // Fallback / Initial seed migration
-  const initialLibrary = [...EXERCISES_DATA];
-  saveLibraryExercises(initialLibrary);
-  return initialLibrary;
+  saveLibraryExercises(EXERCISES_DATA);
+  return EXERCISES_DATA;
 }
 
 /**
@@ -77,12 +82,11 @@ export function deleteLibraryExercise(id: number): ExerciseItem[] {
 }
 
 /**
- * Reset library to default built-in exercises
+ * Reset library to default built-in exercises (103 machines)
  */
 export function resetLibraryToDefaults(): ExerciseItem[] {
-  const defaults = [...EXERCISES_DATA];
-  saveLibraryExercises(defaults);
-  return defaults;
+  saveLibraryExercises(EXERCISES_DATA);
+  return EXERCISES_DATA;
 }
 
 /**
@@ -90,10 +94,18 @@ export function resetLibraryToDefaults(): ExerciseItem[] {
  */
 export function getStoredActivePlan(): WorkoutPlan {
   try {
+    // Unconditional force wipe of initial default exercises on v99 key
+    if (!localStorage.getItem('gym_force_empty_plan_v99')) {
+      localStorage.setItem('gym_force_empty_plan_v99', 'true');
+      const emptyPlan = { ...DEFAULT_WORKOUT_PLAN, exercises: [] };
+      saveActivePlan(emptyPlan);
+      return emptyPlan;
+    }
+
     const raw = localStorage.getItem(ACTIVE_PLAN_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.exercises) && parsed.exercises.length > 0) {
+      if (parsed && Array.isArray(parsed.exercises)) {
         return parsed;
       }
     }
@@ -102,8 +114,22 @@ export function getStoredActivePlan(): WorkoutPlan {
   }
 
   // Fallback to default
-  saveActivePlan(DEFAULT_WORKOUT_PLAN);
-  return DEFAULT_WORKOUT_PLAN;
+  const emptyPlan = { ...DEFAULT_WORKOUT_PLAN, exercises: [] };
+  saveActivePlan(emptyPlan);
+  return emptyPlan;
+}
+
+/**
+ * Hard Reset / Factory Reset all application data from localStorage & sessionStorage
+ */
+export function hardResetApp(): void {
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch (err) {
+    console.error('Error clearing storage:', err);
+  }
+  window.location.reload();
 }
 
 /**

@@ -1,6 +1,15 @@
 export type Language = 'de' | 'ar';
 export type ViewTab = 'plan' | 'timer' | 'audio' | 'tools' | 'stats' | 'profile';
 
+export interface ExerciseMediaItem {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  name: string;
+  size?: number;
+  createdAt?: number;
+}
+
 export interface ExerciseItem {
   id: number;
   muscleDe: string;
@@ -9,6 +18,7 @@ export interface ExerciseItem {
   sets: string;
   reps: string;
   alternatives: string[];
+  media?: ExerciseMediaItem[];
 }
 
 export interface WorkoutPlan {

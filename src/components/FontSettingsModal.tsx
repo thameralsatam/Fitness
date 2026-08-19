@@ -9,8 +9,8 @@ import {
   deleteCustomFont,
 } from '../utils/customFonts';
 
-export const DEFAULT_TITLE_FONT = "'Kufam', sans-serif";
-export const DEFAULT_BODY_FONT = "'IBM Plex Sans Arabic', sans-serif";
+export const DEFAULT_TITLE_FONT = "'Thmanyah Sans', system-ui, -apple-system, sans-serif";
+export const DEFAULT_BODY_FONT = "'Thmanyah Sans', system-ui, -apple-system, sans-serif";
 export const SYSTEM_FONT = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 interface FontSettingsModalProps {
@@ -182,7 +182,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
               </div>
 
               <div className="space-y-2">
-                {/* Option: Default Kufam */}
+                {/* Option: Default Thmanyah Sans */}
                 <button
                   type="button"
                   onClick={() => {
@@ -197,9 +197,9 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                 >
                   <div className="flex flex-col">
                     <span style={{ fontFamily: DEFAULT_TITLE_FONT }} className="text-sm font-bold">
-                      {isAr ? 'كوفام (الخط الافتراضي الرياضي)' : 'Kufam (Standard)'}
+                      {isAr ? 'خط ثمانية (Thmanyah Sans - الافتراضي)' : 'Thmanyah Sans (Standard)'}
                     </span>
-                    <span className="text-[10px] text-[#75877d]">Google Font · Kufam Bold</span>
+                    <span className="text-[10px] text-[#75877d]">Thmanyah Sans Medium</span>
                   </div>
                   {isKufamTitleSelected && (
                     <div className="w-5 h-5 rounded-full bg-[#215641] text-white flex items-center justify-center flex-shrink-0">
@@ -299,7 +299,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
               </div>
 
               <div className="space-y-2">
-                {/* Option: Default IBM Plex */}
+                {/* Option: Default Thmanyah Sans */}
                 <button
                   type="button"
                   onClick={() => {
@@ -314,9 +314,9 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                 >
                   <div className="flex flex-col">
                     <span style={{ fontFamily: DEFAULT_BODY_FONT }} className="text-sm font-medium">
-                      {isAr ? 'آي بي إم بلكس (الخط الافتراضي للنصوص)' : 'IBM Plex Sans Arabic (Standard)'}
+                      {isAr ? 'خط ثمانية (Thmanyah Sans - الافتراضي)' : 'Thmanyah Sans (Standard)'}
                     </span>
-                    <span className="text-[10px] text-[#75877d]">Google Font · IBM Plex Arabic Regular</span>
+                    <span className="text-[10px] text-[#75877d]">Thmanyah Sans Medium</span>
                   </div>
                   {isIbmBodySelected && (
                     <div className="w-5 h-5 rounded-full bg-[#215641] text-white flex items-center justify-center flex-shrink-0">

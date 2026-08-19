@@ -25,8 +25,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
     return () => clearTimeout(timer);
   }, [onFinish]);
 
-  const defaultTitle = lang === 'ar' ? 'خطة تدريب الجسم بالكامل' : 'Trainingsplan Full Body';
-  const defaultSubtitle = lang === 'ar' ? '٣ أيام أسبوعياً · تمارين متكاملة' : '3× pro Woche · Ganzkörper';
+  const defaultTitle = lang === 'ar' ? 'تطبيق التمارين واللياقة' : 'Workout & Fitness';
+  const defaultSubtitle = lang === 'ar' ? 'تمارين مخصصة · أدوات ومتابعة ذكية' : 'Individuelles Training · Smarte Begleitung';
 
   return (
     <motion.div

@@ -1,6 +1,6 @@
 {
-  "name": "Trainingsplan Full Body",
-  "description": "Ein klarer, zweisprachiger Full-Body-Trainingsplan (Deutsch & Arabisch) für Einsteiger mit Geräten und Alternativen.",
+  "name": "Gym Workout & Fitness",
+  "description": "Smarter Trainings- und Fitnessbegleiter auf Deutsch & Arabisch mit flexibler Übungsverwaltung und professionellen Tools.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

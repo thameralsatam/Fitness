@@ -1,9 +1,17 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Thmanyah Sans';
+  src: url('/fonts/thmanyahsans-Medium.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
-    --font-display: 'Kufam', sans-serif;
-    --font-body: 'IBM Plex Sans Arabic', sans-serif;
+    --font-display: 'Thmanyah Sans', system-ui, -apple-system, sans-serif;
+    --font-body: 'Thmanyah Sans', system-ui, -apple-system, sans-serif;
   }
 
   *, *::before, *::after {
@@ -30,7 +38,7 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  h1, h2, h3, h4, .font-display {
+  h1, h2, h3, h4, .font-display, .font-sans {
     font-family: var(--font-display);
   }
 

@@ -226,8 +226,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     if (typeof window !== 'undefined' && 'mediaSession' in navigator && currentTrack) {
       const trackName = currentTrack.name;
       const albumName =
-        currentLang === 'ar' ? 'المحفزات الصوتية للتمارين' : 'Trainingsplan Motivation Audio';
-      const artistName = currentLang === 'ar' ? 'تمارين اليوم' : 'Full Body Workout';
+        currentLang === 'ar' ? 'المحفزات الصوتية للتمارين' : 'Workout Motivation Audio';
+      const artistName = currentLang === 'ar' ? 'جلسة التمرين' : 'Workout Session';
 
       const iconUrl = typeof window !== 'undefined' ? `${window.location.origin}/icon-512.png` : '/icon-512.png';
       const appleIconUrl = typeof window !== 'undefined' ? `${window.location.origin}/apple-touch-icon.png` : '/apple-touch-icon.png';
@@ -439,8 +439,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         const playlistData: NativeAudioTrackItem[] = currentActiveList.map((t) => ({
           id: t.id,
           name: t.name,
-          artist: currentLang === 'ar' ? 'تمارين اليوم' : 'Full Body Workout',
-          album: currentLang === 'ar' ? 'المحفزات الصوتية للتمارين' : 'Trainingsplan Motivation Audio',
+          artist: currentLang === 'ar' ? 'جلسة التمرين' : 'Workout Session',
+          album: currentLang === 'ar' ? 'المحفزات الصوتية للتمارين' : 'Workout Motivation Audio',
           duration: t.duration || 0,
           order: t.order || 0,
           mimeType: t.type || t.blob?.type || 'audio/mpeg',

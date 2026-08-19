@@ -30,6 +30,8 @@ interface SettingsModalProps {
   onOpenLibrary?: () => void;
   onResetProgress?: () => void;
   onCopyPlan?: () => void;
+  onFactoryReset?: () => void;
+  libraryExercisesCount?: number;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -42,6 +44,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenLibrary,
   onResetProgress,
   onCopyPlan,
+  onFactoryReset,
+  libraryExercisesCount = 0,
 }) => {
   const isAr = currentLang === 'ar';
   const ArrowIcon = isAr ? ChevronLeft : ChevronRight;
@@ -224,8 +228,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="text-sm font-bold text-[#15221b]">
                           {isAr ? 'إدارة مكتبة الأجهزة والتمارين' : 'Übungs- & Geräte-Bibliothek'}
                         </div>
-                        <div className="text-xs text-[#75877d]">
-                          {isAr ? 'إضافة وتعديل وحذف الأجهزة المحفوظة محلياً' : 'Geräte hinzufügen, anpassen & verwalten'}
+                        <div className="text-xs font-semibold text-[#215641] mt-0.5">
+                          {isAr
+                            ? `${libraryExercisesCount} أجهزة وتمارين محفوظة محلياً`
+                            : `${libraryExercisesCount} Geräte & Übungen lokal gespeichert`}
                         </div>
                       </div>
                     </div>
@@ -319,12 +325,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onClose();
                         onResetProgress();
                       }}
-                      className="py-2.5 px-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                      className="py-2.5 px-3 rounded-xl bg-[#edf4ef] text-[#215641] hover:bg-[#dbe8de] text-xs font-bold transition-all flex items-center justify-center gap-1.5"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                      <span>{isAr ? 'تصفير التقدم' : 'Zurücksetzen'}</span>
+                      <span>{isAr ? 'تصفير اليوم' : 'Zurücksetzen'}</span>
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* Factory Reset Action */}
+              {onFactoryReset && (
+                <div className="pt-2 border-t border-[#eef4f0]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('warning');
+                      onClose();
+                      onFactoryReset();
+                    }}
+                    className="w-full py-3 px-3.5 rounded-2xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200/60 font-bold text-xs transition-all flex items-center justify-center gap-2 active:scale-98 shadow-2xs"
+                  >
+                    <RotateCcw className="w-4 h-4 stroke-[2.2]" />
+                    <span>{isAr ? 'إعادة ضبط مصنع شاملة للموقع (مسح التخزين)' : 'Werkseinstellungen (Alle Daten löschen)'}</span>
+                  </button>
                 </div>
               )}
             </div>

@@ -48,25 +48,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       ),
     },
     {
-      id: 'audio',
-      label: t.navAudio,
-      icon: (isActive: boolean) => (
-        <svg
-          width="21"
-          height="21"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR}
-          strokeWidth={isActive ? "2.2" : "1.8"}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-          <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-        </svg>
-      ),
-    },
-    {
       id: 'tools',
       label: t.navTools,
       icon: (isActive: boolean) => (
@@ -87,6 +68,25 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           <line x1="14" y1="14" x2="16" y2="14" />
           <line x1="8" y1="18" x2="10" y2="18" />
           <line x1="14" y1="18" x2="16" y2="18" />
+        </svg>
+      ),
+    },
+    {
+      id: 'audio',
+      label: t.navAudio,
+      icon: (isActive: boolean) => (
+        <svg
+          width="21"
+          height="21"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR}
+          strokeWidth={isActive ? "2.2" : "1.8"}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+          <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
         </svg>
       ),
     },
