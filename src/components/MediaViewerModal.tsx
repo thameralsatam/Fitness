@@ -14,6 +14,7 @@ import { ExerciseMediaItem } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
 import { ConfirmModal } from './ConfirmModal';
+import { CustomVideoPlayer } from './CustomVideoPlayer';
 
 interface MediaViewerModalProps {
   isOpen: boolean;
@@ -128,23 +129,21 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           </div>
 
           {/* Media Player Area */}
-          <div className="relative flex-1 flex items-center justify-center bg-black/60 p-2 sm:p-4 min-h-[260px] sm:min-h-[380px] overflow-hidden">
+          <div className="relative flex-1 flex items-center justify-center bg-black/80 p-0 sm:p-2 min-h-[280px] sm:min-h-[400px] overflow-hidden">
             {currentItem.type === 'video' ? (
-              <video
+              <CustomVideoPlayer
                 key={currentItem.url}
                 src={currentItem.url}
-                controls
-                autoPlay
-                loop
-                playsInline
-                className="max-h-[60vh] sm:max-h-[65vh] w-auto max-w-full rounded-2xl shadow-lg object-contain bg-black"
+                autoPlay={true}
+                loop={true}
+                currentLang={currentLang}
               />
             ) : (
               <img
                 key={currentItem.url}
                 src={currentItem.url}
                 alt={currentItem.name || exerciseName}
-                className="max-h-[60vh] sm:max-h-[65vh] w-auto max-w-full rounded-2xl shadow-lg object-contain"
+                className="max-h-[60vh] sm:max-h-[65vh] w-auto max-w-full rounded-2xl shadow-lg object-contain p-2"
               />
             )}
 
