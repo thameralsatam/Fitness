@@ -9,7 +9,10 @@ export async function fileToBase64(blob: Blob): Promise<string> {
       const base64 = res.includes(',') ? res.split(',')[1] : res;
       resolve(base64);
     };
-    reader.onerror = (err) => reject(err);
+    reader.onerror = (err) => {
+      console.error('[transcribeService] FileReader error converting blob to base64:', err);
+      reject(err);
+    };
     reader.readAsDataURL(blob);
   });
 }
@@ -19,27 +22,65 @@ export async function transcribeAudioTrack(
   mimeType = 'audio/mp3',
   lang: 'ar' | 'de' = 'ar'
 ): Promise<LyricLine[]> {
-  const audioBase64 = await fileToBase64(blob);
-
-  const response = await fetch('/api/transcribe', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      audioBase64,
-      mimeType,
-      language: lang,
-    }),
+  console.log('[transcribeService] Starting transcription for audio blob...', {
+    blobSize: blob.size,
+    mimeType,
+    lang,
   });
 
-  const data = await response.json();
+  let audioBase64: string;
+  try {
+    audioBase64 = await fileToBase64(blob);
+    console.log('[transcribeService] Audio converted to base64 successfully, base64 length:', audioBase64.length);
+  } catch (convErr) {
+    console.error('[transcribeService] Error converting audio to base64:', convErr);
+    throw new Error(lang === 'ar' ? 'فشل قراءة ملف الصوت' : 'Fehler beim Lesen der Audiodatei');
+  }
+
+  let response: Response;
+  try {
+    console.log('[transcribeService] Sending request to /api/transcribe...');
+    response = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        audioBase64,
+        mimeType,
+        language: lang,
+      }),
+    });
+  } catch (networkErr: any) {
+    console.error('[transcribeService] Network / Fetch error to /api/transcribe:', networkErr);
+    throw new Error(
+      lang === 'ar'
+        ? `خطأ في الاتصال بالخادم: ${networkErr?.message || networkErr}`
+        : `Verbindungsfehler: ${networkErr?.message || networkErr}`
+    );
+  }
+
+  let data: any;
+  try {
+    data = await response.json();
+    console.log('[transcribeService] Received response from /api/transcribe:', {
+      status: response.status,
+      ok: response.ok,
+      data,
+    });
+  } catch (parseErr) {
+    console.error('[transcribeService] Error parsing JSON response from server:', parseErr);
+    throw new Error(lang === 'ar' ? 'استجابة غير صالحة من الخادم' : 'Ungültige Serverantwort');
+  }
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || (lang === 'ar' ? 'فشل استخراج الكلمات' : 'Transkription fehlgeschlagen'));
+    const errorMsg = data?.error || (lang === 'ar' ? 'فشل استخراج الكلمات' : 'Transkription fehlgeschlagen');
+    console.error('[transcribeService] Transcription failed:', errorMsg, data);
+    throw new Error(errorMsg);
   }
 
   const rawLyrics: Array<{ time: number; text: string }> = data.lyrics || [];
+  console.log('[transcribeService] Successfully parsed lyrics count:', rawLyrics.length);
 
   // Map and normalize
   return rawLyrics.map((item, idx) => ({

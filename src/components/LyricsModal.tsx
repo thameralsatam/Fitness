@@ -16,18 +16,22 @@ import {
   AlertCircle,
   FileText,
   Sliders,
-  Mic,
-  MicOff,
+  Sparkles,
+  Loader2,
   MoreVertical,
   Volume2,
-  Sparkles,
-  ChevronRight,
-  Maximize2,
+  Activity,
+  AlignLeft,
+  FastForward,
 } from 'lucide-react';
 import { AudioTrack } from '../utils/audioDb';
 import { LyricLine, Language } from '../types';
 import { exportToLrcFormat, parseLrcFormat } from '../utils/transcribeService';
-import { localSpeechEngine } from '../utils/localSpeechRecognizer';
+import {
+  detectAcousticPhrases,
+  mechanicallyAlignTextToAudio,
+  generateMechanicalPhrases,
+} from '../utils/localAudioSegmenter';
 import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
 import { useAudio } from '../context/AudioContext';
@@ -58,13 +62,19 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
   } = useAudio();
 
   const isAr = currentLang === 'ar';
-  const [activeTab, setActiveTab] = useState<'karaoke' | 'editor' | 'raw_lrc'>('karaoke');
-  const [isLiveListening, setIsLiveListening] = useState<boolean>(false);
-  const [speechStatusMsg, setSpeechStatusMsg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'karaoke' | 'editor' | 'auto_align' | 'raw_lrc'>('karaoke');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isOffsetOpen, setIsOffsetOpen] = useState<boolean>(false);
+
+  // Auto align text input state
+  const [pasteTextInput, setPasteTextInput] = useState<string>('');
+
+  // Live Tap-to-sync state
+  const [tapSyncIndex, setTapSyncIndex] = useState<number>(0);
 
   // Local editable lines state
   const [editableLyrics, setEditableLyrics] = useState<LyricLine[]>(track.lyrics || []);
@@ -96,17 +106,11 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
     }
   }, [track, track.lyrics]);
 
-  // Clean up speech listener on unmount
-  useEffect(() => {
-    return () => {
-      localSpeechEngine.stop();
-    };
-  }, []);
-
-  // Keyboard escape
+  // Keyboard shortcuts (Escape, Space for Tap Sync)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (!isOpen) return;
+      if (e.key === 'Escape') {
         onClose();
       }
     };
@@ -144,60 +148,88 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
     }
   }, [activeLineIndex, autoScroll, activeTab]);
 
-  // Toggle Live Local Speech Recognition
-  const handleToggleLocalListening = () => {
-    if (isLiveListening) {
-      localSpeechEngine.stop();
-      setIsLiveListening(false);
-      setSpeechStatusMsg(null);
+  // Mechanical Waveform Analysis (100% Client-Side Web Audio API)
+  const handleMechanicalWaveAnalysis = async () => {
+    if (!track.blob) {
+      setStatusMsg(isAr ? 'ملف الصوت غير متوفر في الذاكرة' : 'Audiodatei nicht gefunden');
+      return;
+    }
+
+    setIsProcessing(true);
+    setStatusMsg(null);
+    triggerHaptic('medium');
+
+    try {
+      console.log('[MechanicalEngine] Analyzing acoustic phrases locally via Web Audio API...');
+      const phrases = await generateMechanicalPhrases(track.blob, currentLang);
+      if (phrases.length > 0) {
+        await updateTrackLyrics(track.id, phrases);
+        setEditableLyrics(phrases);
+        setRawLrcText(exportToLrcFormat(phrases, track.name));
+        setActiveTab('karaoke');
+        triggerHaptic('success');
+      } else {
+        setStatusMsg(isAr ? 'لم يتم العثور على فواصل صوتية واضحة' : 'Keine Audioabschnitte erkannt');
+      }
+    } catch (err: any) {
+      console.error('[MechanicalEngine] Local analysis error:', err);
+      setStatusMsg(err?.message || (isAr ? 'حدث خطأ أثناء تحليل الصوت محلياً' : 'Fehler bei der Audioanalyse'));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Mechanical Text-to-Audio Waveform Alignment (100% Client-Side)
+  const handleAutoAlignPastedText = async () => {
+    if (!pasteTextInput.trim()) {
+      setStatusMsg(isAr ? 'الرجاء لصق الكلمات أولاً' : 'Bitte zuerst Text einfügen');
+      return;
+    }
+
+    if (!track.blob) {
+      setStatusMsg(isAr ? 'ملف الصوت غير متوفر في الذاكرة' : 'Audiodatei nicht gefunden');
+      return;
+    }
+
+    setIsProcessing(true);
+    setStatusMsg(null);
+    triggerHaptic('medium');
+
+    try {
+      console.log('[MechanicalEngine] Aligning text lines to audio waveform locally...');
+      const alignedLines = await mechanicallyAlignTextToAudio(pasteTextInput, track.blob);
+      if (alignedLines.length > 0) {
+        await updateTrackLyrics(track.id, alignedLines);
+        setEditableLyrics(alignedLines);
+        setRawLrcText(exportToLrcFormat(alignedLines, track.name));
+        setPasteTextInput('');
+        setActiveTab('karaoke');
+        triggerHaptic('success');
+      } else {
+        setStatusMsg(isAr ? 'لم يتم العثور على أسطر صالحة' : 'Keine Zeilen gefunden');
+      }
+    } catch (err: any) {
+      console.error('[MechanicalEngine] Auto-align error:', err);
+      setStatusMsg(err?.message || (isAr ? 'حدث خطأ أثناء المحاذاة الميكانيكية' : 'Fehler bei der Zuordnung'));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Live Tap-To-Sync Next Line
+  const handleTapSyncCurrentLine = async (lineIdx: number) => {
+    if (!isCurrentPlayingTrack) {
+      playTrackById(track.id);
+    }
+    const currentT = parseFloat(currentTime.toFixed(2));
+    const updated = [...editableLyrics];
+    if (updated[lineIdx]) {
+      updated[lineIdx].time = currentT;
+      await updateTrackLyrics(track.id, updated);
+      setEditableLyrics(updated);
+      setRawLrcText(exportToLrcFormat(updated, track.name));
+      setTapSyncIndex(Math.min(updated.length - 1, lineIdx + 1));
       triggerHaptic('light');
-    } else {
-      if (!localSpeechEngine.isSupported()) {
-        setSpeechStatusMsg(
-          isAr
-            ? 'التعرف الصوتي المباشر غير مدعوم على متصفحك الحالي، يمكنك استيراد ملف .lrc'
-            : 'Spracherkennung wird auf diesem Browser nicht unterstützt'
-        );
-        return;
-      }
-
-      setSpeechStatusMsg(null);
-      localSpeechEngine.setLanguage(currentLang);
-      triggerHaptic('medium');
-
-      if (!isCurrentPlayingTrack) {
-        playTrackById(track.id);
-      } else if (!isPlaying) {
-        togglePlay();
-      }
-
-      localSpeechEngine.start(
-        currentTime,
-        async (newLine) => {
-          setEditableLyrics((prev) => {
-            const updated = [...prev, newLine].sort((a, b) => a.time - b.time);
-            updateTrackLyrics(track.id, updated);
-            setRawLrcText(exportToLrcFormat(updated, track.name));
-            return updated;
-          });
-          triggerHaptic('light');
-        },
-        (status, msg) => {
-          if (status === 'listening') {
-            setIsLiveListening(true);
-            setSpeechStatusMsg(
-              isAr
-                ? 'جاري الاستماع وتسجيل الكلمات بالتوقيت...'
-                : 'Live-Erkennung aktiv...'
-            );
-          } else if (status === 'error') {
-            setIsLiveListening(false);
-            setSpeechStatusMsg(msg || (isAr ? 'حدث خطأ بالمايكروفون' : 'Fehler'));
-          } else {
-            setIsLiveListening(false);
-          }
-        }
-      );
     }
   };
 
@@ -371,7 +403,7 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                 </h3>
                 <div className="flex items-center gap-2 mt-0.5 text-xs text-[#75877d] font-medium">
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#215641]" />
-                  <span>{isAr ? 'الكلمات المتزامنة' : 'Synchrone Lyrics'}</span>
+                  <span>{isAr ? 'نظام الكلمات الميكانيكي المحلي' : 'Lokale Audio-Lyrics'}</span>
                   {currentLyrics.length > 0 && (
                     <span className="text-[#94a39a]">({currentLyrics.length} {isAr ? 'سطر' : 'Zeilen'})</span>
                   )}
@@ -443,8 +475,8 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
           </div>
 
           {/* Clean Segmented Navigation Tabs */}
-          <div className="px-5 py-2.5 border-b border-[#eef4f0] bg-[#fafcfa] flex items-center justify-between gap-2.5 flex-shrink-0">
-            <div className="flex items-center gap-1 bg-[#edf2ee] p-1 rounded-2xl border border-[#dfe7e1] flex-1">
+          <div className="px-5 py-2.5 border-b border-[#eef4f0] bg-[#fafcfa] flex items-center justify-between gap-2 flex-shrink-0 overflow-x-auto">
+            <div className="flex items-center gap-1 bg-[#edf2ee] p-1 rounded-2xl border border-[#dfe7e1] flex-1 min-w-[340px]">
               <button
                 type="button"
                 onClick={() => {
@@ -458,6 +490,21 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                 }`}
               >
                 {isAr ? 'العرض المتزامن' : 'Karaoke'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setActiveTab('auto_align');
+                }}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-98 ${
+                  activeTab === 'auto_align'
+                    ? 'bg-[#215641] text-white shadow-2xs'
+                    : 'text-[#607267] hover:text-[#15221b]'
+                }`}
+              >
+                {isAr ? 'مطابقة النص الميكانيكية' : 'Auto-Sync'}
               </button>
 
               <button
@@ -487,7 +534,7 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                     : 'text-[#607267] hover:text-[#15221b]'
                 }`}
               >
-                {isAr ? 'صيغة LRC' : 'LRC Text'}
+                {isAr ? 'ملف LRC' : 'LRC'}
               </button>
             </div>
 
@@ -496,7 +543,7 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsOffsetOpen(!isOffsetOpen)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 active:scale-95 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 active:scale-95 flex-shrink-0 ${
                   isOffsetOpen
                     ? 'bg-[#215641] text-white border-[#215641] shadow-2xs'
                     : 'bg-white text-[#596b60] border-[#dbe4dc] hover:bg-[#f4f8f5]'
@@ -509,7 +556,7 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
             )}
           </div>
 
-          {/* Primary Quick Actions Bar (Clean & Spaced) */}
+          {/* Quick Action Tools Bar */}
           <div className="px-5 py-2.5 bg-white border-b border-[#eef4f0] flex items-center justify-between gap-3 flex-shrink-0 text-xs">
             <input
               ref={lrcFileInputRef}
@@ -520,34 +567,43 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
             />
 
             <div className="flex items-center gap-2">
+              {/* Mechanical Audio Wave Segmentation Button */}
+              <button
+                type="button"
+                onClick={handleMechanicalWaveAnalysis}
+                disabled={isProcessing}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold border transition-all active:scale-95 shadow-2xs ${
+                  isProcessing
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 animate-pulse'
+                    : 'bg-[#edf4ef] hover:bg-[#e4efe7] text-[#215641] border-[#cbe0d2]'
+                }`}
+                title={isAr ? 'تحليل الوقفات وموجات الصوت ميكانيكياً بدون إنترنت' : 'Audio-Wellenanalyse'}
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#215641]" />
+                ) : (
+                  <Activity className="w-3.5 h-3.5 stroke-[2.2] text-[#215641]" />
+                )}
+                <span>
+                  {isProcessing
+                    ? isAr
+                      ? 'جاري التحليل محلياً...'
+                      : 'Wird analysiert...'
+                    : isAr
+                    ? 'تحليل فواصل الصوت محلياً'
+                    : 'Wellen-Analyse'}
+                </span>
+              </button>
+
+              {/* Import ready .lrc file */}
               <button
                 type="button"
                 onClick={() => lrcFileInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-[#edf4ef] hover:bg-[#e4efe7] text-[#215641] border border-[#cbe0d2] transition-all active:scale-95 shadow-2xs"
+                disabled={isProcessing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white hover:bg-[#f4f8f5] text-[#596b60] border border-[#dbe4dc] transition-all active:scale-95 disabled:opacity-50"
               >
                 <Upload className="w-3.5 h-3.5 stroke-[2.2]" />
-                <span>{isAr ? 'استيراد ملف .lrc' : 'LRC importieren'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleToggleLocalListening}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold border transition-all active:scale-95 ${
-                  isLiveListening
-                    ? 'bg-rose-50 text-rose-600 border-rose-300 animate-pulse'
-                    : 'bg-white text-[#596b60] border-[#dbe4dc] hover:bg-[#f4f8f5]'
-                }`}
-              >
-                {isLiveListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-[#215641]" />}
-                <span>
-                  {isLiveListening
-                    ? isAr
-                      ? 'إيقاف المايك'
-                      : 'Stop'
-                    : isAr
-                    ? 'استماع بالمايك'
-                    : 'Live-Diktat'}
-                </span>
+                <span>{isAr ? 'استيراد .lrc' : 'LRC'}</span>
               </button>
             </div>
 
@@ -566,21 +622,20 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
             )}
           </div>
 
-          {/* Speech Banner */}
-          {speechStatusMsg && (
-            <div
-              className={`mx-5 mt-2.5 p-3 rounded-2xl flex items-center gap-2.5 text-xs font-medium ${
-                isLiveListening
-                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                  : 'bg-amber-50 border border-amber-200 text-amber-800'
-              }`}
-            >
-              {isLiveListening ? (
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping flex-shrink-0" />
-              ) : (
+          {/* Status / Error Message Banner */}
+          {statusMsg && (
+            <div className="mx-5 mt-2.5 p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-2.5 text-xs font-medium animate-fade-in">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              )}
-              <span className="flex-1 leading-normal">{speechStatusMsg}</span>
+                <span className="leading-normal truncate">{statusMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusMsg(null)}
+                className="text-amber-600 hover:text-amber-800 p-1"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
@@ -639,35 +694,37 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
               {currentLyrics.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-3.5 py-14 text-center">
                   <div className="w-16 h-16 rounded-3xl bg-[#edf4ef] border border-[#dbe4dc] text-[#215641] flex items-center justify-center shadow-2xs">
-                    <FileText className="w-7 h-7" />
+                    <Activity className="w-7 h-7 stroke-[2]" />
                   </div>
                   <div className="space-y-1 max-w-xs">
                     <h4 className="text-base font-extrabold text-[#15221b]">
-                      {isAr ? 'لا توجد كلمات محفوظة بعد' : 'Noch keine Lyrics'}
+                      {isAr ? 'لا توجد كلمات متزامنة بعد' : 'Noch keine Lyrics'}
                     </h4>
                     <p className="text-xs text-[#75877d] leading-relaxed">
                       {isAr
-                        ? 'استورد ملف .lrc جاهز للمقطع، أو الصق الكلمات لتتزامن مباشرة وبدون إنترنت.'
-                        : 'Importiere eine .lrc Datei oder füge den Text manuell ein.'}
+                        ? 'يمكنك لصق كلمات المقطع وتوزيعها ميكانيكياً على الصوت محلياً 100% بدون أي خادم أو إنترنت.'
+                        : 'Füge den Text ein und passe ihn lokal per Wellenanalyse an.'}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                     <button
                       type="button"
-                      onClick={() => lrcFileInputRef.current?.click()}
+                      onClick={() => setActiveTab('auto_align')}
                       className="px-5 py-2.5 rounded-2xl bg-[#215641] hover:bg-[#1b4635] text-white font-bold text-xs flex items-center gap-2 transition-all active:scale-95 shadow-sm"
                     >
-                      <Upload className="w-4 h-4" />
-                      <span>{isAr ? 'استيراد ملف .lrc' : 'LRC importieren'}</span>
+                      <AlignLeft className="w-4 h-4" />
+                      <span>{isAr ? 'لصق ومحاذاة الكلمات ميكانيكياً' : 'Text einfügen & anpassen'}</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setActiveTab('raw_lrc')}
-                      className="px-4 py-2.5 rounded-2xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#215641] font-bold text-xs flex items-center gap-1.5 transition-all border border-[#dbe4dc] active:scale-95"
+                      onClick={handleMechanicalWaveAnalysis}
+                      disabled={isProcessing}
+                      className="px-4 py-2.5 rounded-2xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#215641] font-bold text-xs flex items-center gap-1.5 transition-all border border-[#dbe4dc] active:scale-95 disabled:opacity-50"
                     >
-                      <span>{isAr ? 'لصق النص' : 'Text einfügen'}</span>
+                      <Activity className="w-4 h-4" />
+                      <span>{isAr ? 'توليد فواصل الصوت' : 'Wellenanalyse'}</span>
                     </button>
                   </div>
                 </div>
@@ -738,7 +795,63 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
             </div>
           )}
 
-          {/* ================= TAB 2: LINE-BY-LINE EDITOR ================= */}
+          {/* ================= TAB 2: MECHANICAL TEXT AUTO-ALIGN ================= */}
+          {activeTab === 'auto_align' && (
+            <div className="flex-1 p-5 overflow-y-auto space-y-3 min-h-[300px] max-h-[52vh]">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-[#15221b] flex items-center gap-1.5">
+                    <AlignLeft className="w-4 h-4 text-[#215641]" />
+                    {isAr ? 'محاذاة النص على موجات الصوت ميكانيكياً' : 'Text lokal zuordnen'}
+                  </span>
+                  <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
+                    {isAr ? 'محلي 100% بدون خادم' : '100% Offline'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#75877d] leading-relaxed">
+                  {isAr
+                    ? 'الصق كلمات المقطع سطراً بسطر. سيقوم المحرك الميكانيكي بالمتصفح بقياس طاقة الصوت وتوزيع الأسطر بدقة على فواصل الكلام.'
+                    : 'Füge den Text zeilenweise ein. Die Audio-Pausen werden automatisch erkannt.'}
+                </p>
+              </div>
+
+              <textarea
+                value={pasteTextInput}
+                onChange={(e) => setPasteTextInput(e.target.value)}
+                rows={8}
+                className="w-full bg-[#f8faf8] border border-[#dbe4dc] rounded-2xl p-3.5 text-xs font-medium text-[#15221b] focus:outline-none focus:border-[#215641] leading-relaxed placeholder:text-[#a0b0a6]"
+                placeholder={
+                  isAr
+                    ? 'الصق نص الكلمات هنا (سطر لكل بيت أو جملة):\nالسطر الأول هنا...\nالسطر الثاني هنا...\nالسطر الثالث هنا...'
+                    : 'Text hier zeilenweise einfügen...'
+                }
+              />
+
+              <button
+                type="button"
+                onClick={handleAutoAlignPastedText}
+                disabled={isProcessing || !pasteTextInput.trim()}
+                className="w-full py-3 rounded-2xl bg-[#215641] hover:bg-[#1b4635] text-white font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Activity className="w-4 h-4 stroke-[2.5]" />
+                )}
+                <span>
+                  {isProcessing
+                    ? isAr
+                      ? 'جاري التحليل الميكانيكي وتوزيع الأسطر...'
+                      : 'Wird zugeordnet...'
+                    : isAr
+                    ? 'توليد التوقيت ميكانيكياً من موجات الصوت'
+                    : 'Automatisch ausrichten'}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* ================= TAB 3: LINE-BY-LINE EDITOR & TAP SYNC ================= */}
           {activeTab === 'editor' && (
             <div className="flex-1 p-5 overflow-y-auto space-y-3 min-h-[300px] max-h-[52vh]">
               <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#eef4f0]">
@@ -804,7 +917,7 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                               className="px-2.5 py-1 rounded-lg bg-[#edf4ef] hover:bg-[#e4efe7] text-[11px] font-bold text-[#215641] transition-all"
                               title={isAr ? 'تعيين التوقيت الحالي للصوت' : 'Jetzt'}
                             >
-                              {isAr ? 'ضبط للتوقيت الآن' : 'Jetzt'}
+                              {isAr ? 'ضبط للآن' : 'Jetzt'}
                             </button>
 
                             <button
@@ -838,7 +951,7 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
             </div>
           )}
 
-          {/* ================= TAB 3: RAW LRC IMPORT / EXPORT ================= */}
+          {/* ================= TAB 4: RAW LRC IMPORT / EXPORT ================= */}
           {activeTab === 'raw_lrc' && (
             <div className="flex-1 p-5 overflow-y-auto space-y-3 min-h-[300px] max-h-[52vh]">
               <div className="flex items-center justify-between gap-2">
@@ -918,7 +1031,7 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
               </div>
             </div>
 
-            {/* Skip Seek +/- 5s */}
+            {/* Quick Fast Sync Button or Skip */}
             <div className="flex items-center gap-1.5" dir="ltr">
               <button
                 type="button"

@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-// Body parser for JSON with large audio base64 limit (up to 50MB)
+// Body parser for JSON with large audio base64 limit (up to 60MB)
 app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ extended: true, limit: '60mb' }));
 
@@ -40,15 +40,19 @@ function getGenAIClient(): GoogleGenAI {
 
 // Audio Transcription & Lyrics Extraction Endpoint
 app.post('/api/transcribe', async (req, res) => {
+  console.log('[API /api/transcribe] Incoming transcription request...');
   try {
     const { audioBase64, mimeType = 'audio/mp3', language = 'ar' } = req.body;
 
     if (!audioBase64) {
+      console.error('[API /api/transcribe] Missing audioBase64 in request body');
       return res.status(400).json({ error: 'audioBase64 is required in request body' });
     }
 
     const ai = getGenAIClient();
     const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+
+    console.log(`[API /api/transcribe] Audio size: ${Math.round(cleanBase64.length / 1024)} KB, mimeType: ${mimeType}, language: ${language}`);
 
     const promptText = `You are a precision audio transcriber and lyrics synchronizer.
 Transcribe this audio file into timestamped lines (synchronized lyrics / karaoke subtitles).
@@ -65,10 +69,11 @@ Rules:
 
     let resultLyrics: Array<{ time: number; text: string }> = [];
 
+    // Strategy 1: gemini-2.5-flash with structured JSON schema
     try {
-      // Use gemini-3.7-flash with multimodal audio support and structured JSON schema
+      console.log('[API /api/transcribe] Trying gemini-2.5-flash with JSON schema...');
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-2.5-flash',
         contents: [
           {
             inlineData: {
@@ -104,46 +109,59 @@ Rules:
 
       const responseText = response.text || '[]';
       resultLyrics = JSON.parse(responseText);
-    } catch (flashJsonError) {
-      console.warn('gemini-3.7-flash with schema failed, retrying without strict schema:', flashJsonError);
+      console.log(`[API /api/transcribe] gemini-2.5-flash generated ${resultLyrics.length} lines.`);
+    } catch (flashError: any) {
+      console.error('[API /api/transcribe] gemini-2.5-flash failed with error:', flashError?.message || flashError);
+      console.error('[API /api/transcribe] Full Error Details:', JSON.stringify(flashError, Object.getOwnPropertyNames(flashError)));
 
-      // Fallback: gemini-3.7-flash without schema, parse json from text
-      const fallbackResponse = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
-        contents: [
-          {
-            inlineData: {
-              mimeType: mimeType || 'audio/mp3',
-              data: cleanBase64,
+      // Strategy 2: Fallback to gemini-2.5-flash plain text prompt
+      try {
+        console.log('[API /api/transcribe] Retrying with gemini-2.5-flash fallback prompt...');
+        const fallbackResponse = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            {
+              inlineData: {
+                mimeType: mimeType || 'audio/mp3',
+                data: cleanBase64,
+              },
             },
-          },
-          {
-            text: `${promptText}\n\nRespond ONLY with a valid JSON array of objects: [{"time": 0.0, "text": "..."}] without markdown codeblocks or other commentary.`,
-          },
-        ],
-      });
+            {
+              text: `${promptText}\n\nRespond ONLY with a valid JSON array of objects: [{"time": 0.0, "text": "..."}] without markdown codeblocks or other commentary.`,
+            },
+          ],
+        });
 
-      const rawText = fallbackResponse.text || '[]';
-      const cleanJsonMatch = rawText.match(/\[\s*\{[\s\S]*\}\s*\]/);
-      if (cleanJsonMatch) {
-        resultLyrics = JSON.parse(cleanJsonMatch[0]);
-      } else {
-        resultLyrics = JSON.parse(rawText.trim());
+        const rawText = fallbackResponse.text || '[]';
+        const cleanJsonMatch = rawText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (cleanJsonMatch) {
+          resultLyrics = JSON.parse(cleanJsonMatch[0]);
+        } else {
+          resultLyrics = JSON.parse(rawText.trim());
+        }
+        console.log(`[API /api/transcribe] Fallback generated ${resultLyrics.length} lines.`);
+      } catch (fallbackError: any) {
+        console.error('[API /api/transcribe] Fallback failed with error:', fallbackError?.message || fallbackError);
+        console.error('[API /api/transcribe] Full Fallback Error Details:', JSON.stringify(fallbackError, Object.getOwnPropertyNames(fallbackError)));
+        throw fallbackError;
       }
     }
 
     // Sort lyrics by time ascending
     resultLyrics.sort((a, b) => (a.time || 0) - (b.time || 0));
 
+    console.log(`[API /api/transcribe] Successfully extracted ${resultLyrics.length} lines.`);
     res.json({
       success: true,
       lyrics: resultLyrics,
     });
   } catch (error: any) {
-    console.error('Transcription API error:', error);
+    console.error('[API /api/transcribe] Final Transcription API Error:', error?.message || error);
+    console.error('[API /api/transcribe] Full Error Object:', error);
     res.status(500).json({
       success: false,
       error: error?.message || 'Failed to transcribe audio file',
+      details: error?.status ? `Status: ${error.status}` : undefined,
     });
   }
 });

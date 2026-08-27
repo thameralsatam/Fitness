@@ -19,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
   const t = I18N[currentLang];
 
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-md border-b bg-[#f6f8f6]/95 border-[#e2ebe3] text-[#15221b]">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-md border-b bg-[#f6f8f6]/95 border-[#e2ebe3] text-[#15221b] pt-[env(safe-area-inset-top,0px)]">
       <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
         {/* Brand Logo & Title with smooth fade transition when Dynamic Island is expanded */}
         <div

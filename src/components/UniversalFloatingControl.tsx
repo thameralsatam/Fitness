@@ -159,7 +159,7 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
   };
 
   return (
-    <div className="fixed top-2.5 sm:top-3 inset-x-0 z-[9999] pointer-events-none flex justify-center px-3">
+    <div className="fixed top-0 inset-x-0 z-[9999] pointer-events-none flex justify-center px-3 pt-[calc(env(safe-area-inset-top,0px)+8px)]">
       <AnimatePresence>
         {hasActiveActivity && (
           <motion.div
@@ -227,211 +227,192 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                   className="absolute inset-0 w-full h-full px-3 flex items-center justify-between gap-2 overflow-hidden whitespace-nowrap"
                 >
-            {/* Minimal Progress Line at Bottom */}
-            <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-emerald-950/80 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-400 transition-all duration-300"
-                style={{
-                  width: `${activeMode === 'audio' ? audioProgress : timerProgress}%`,
-                }}
-              />
-            </div>
-
-            {/* Left/Right Main Content Info */}
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              {/* Mode Icon or Selector */}
-              {isAudioActive && isTimerActive ? (
-                <div className="flex items-center gap-0.5 bg-black/40 p-0.5 rounded-full border border-emerald-900/60 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('selection');
-                      setActiveMode('audio');
-                    }}
-                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                      activeMode === 'audio'
-                        ? 'bg-emerald-500 text-slate-950 shadow-xs'
-                        : 'text-emerald-300/70 hover:text-white'
-                    }`}
-                    title={isAr ? 'الصوتيات' : 'Audio'}
-                  >
-                    <Headphones className="w-3 h-3" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('selection');
-                      setActiveMode('timer');
-                    }}
-                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                      activeMode === 'timer'
-                        ? 'bg-emerald-500 text-slate-950 shadow-xs'
-                        : 'text-emerald-300/70 hover:text-white'
-                    }`}
-                    title={isAr ? 'المؤقت' : 'Timer'}
-                  >
-                    <TimerIcon className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    if (activeMode === 'audio' && currentTab !== 'audio') onNavigateTab('audio');
-                    if (activeMode === 'timer' && currentTab !== 'timer') onNavigateTab('timer');
-                  }}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-transform hover:scale-105 cursor-pointer ${
-                    activeMode === 'audio' && isAudioPlaying
-                      ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/40'
-                      : 'bg-emerald-900/60 text-emerald-300'
-                  }`}
-                >
-                  {activeMode === 'audio' ? (
-                    <Headphones className="w-3.5 h-3.5 stroke-[2.2]" />
-                  ) : (
-                    <TimerIcon className="w-3.5 h-3.5 stroke-[2.2]" />
-                  )}
-                </button>
-              )}
-
-              {/* Title / Countdown / Active Lyric Ticker */}
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  if (activeMode === 'audio' && currentTab !== 'audio') onNavigateTab('audio');
-                  if (activeMode === 'timer' && currentTab !== 'timer') onNavigateTab('timer');
-                }}
-                className="min-w-0 flex-1 text-right ltr:text-left hover:opacity-90 transition-opacity cursor-pointer truncate"
-              >
-                {activeMode === 'audio' ? (
-                  <div className="truncate">
-                    <span className="text-xs font-bold text-white truncate block">
-                      {currentTrack?.name}
-                    </span>
-                    {/* Active Live Lyric Line Preview */}
-                    {(() => {
-                      const lyrics = currentTrack?.lyrics;
-                      if (!lyrics || lyrics.length === 0) return null;
-                      let activeText: string | null = null;
-                      for (let i = 0; i < lyrics.length; i++) {
-                        if (audioCurrentTime >= lyrics[i].time) {
-                          activeText = lyrics[i].text;
-                        } else {
-                          break;
-                        }
-                      }
-                      return activeText ? (
-                        <span className="text-[10px] text-emerald-300 font-medium truncate block opacity-95 animate-fade-in font-display">
-                          {activeText}
-                        </span>
-                      ) : null;
-                    })()}
+                  {/* Minimal Progress Line at Bottom */}
+                  <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-emerald-950/80 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-400 transition-all duration-300"
+                      style={{
+                        width: `${activeMode === 'audio' ? audioProgress : timerProgress}%`,
+                      }}
+                    />
                   </div>
-                ) : (
-                  <span className="font-mono text-xs font-black text-emerald-300 block">
-                    {formattedTime}
-                  </span>
-                )}
-              </button>
-            </div>
 
-            {/* Quick Action Controls */}
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {activeMode === 'audio' ? (
-                <>
-                  {/* Play / Pause */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('medium');
-                      toggleAudioPlay();
-                    }}
-                    className="w-7 h-7 rounded-full bg-emerald-400 text-slate-950 hover:bg-emerald-300 flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-xs"
-                    title={isAudioPlaying ? (isAr ? 'إيقاف مؤقت' : 'Pause') : (isAr ? 'تشغيل' : 'Play')}
-                  >
-                    {isAudioPlaying ? (
-                      <Pause className="w-3 h-3 fill-current stroke-[2.5]" />
+                  {/* Left/Right Main Content Info */}
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {/* Mode Icon or Selector */}
+                    {isAudioActive && isTimerActive ? (
+                      <div className="flex items-center gap-0.5 bg-black/40 p-0.5 rounded-full border border-emerald-900/60 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('selection');
+                            setActiveMode('audio');
+                          }}
+                          className={`p-1.5 rounded-full transition-all ${
+                            activeMode === 'audio'
+                              ? 'bg-emerald-500 text-black shadow-xs'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                          title={isAr ? 'المشغل الصوتي' : 'Audio Player'}
+                        >
+                          <Headphones className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('selection');
+                            setActiveMode('timer');
+                          }}
+                          className={`p-1.5 rounded-full transition-all ${
+                            activeMode === 'timer'
+                              ? 'bg-emerald-500 text-black shadow-xs'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                          title={isAr ? 'المؤقت الذكي' : 'Timer'}
+                        >
+                          <TimerIcon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     ) : (
-                      <Play className="w-3 h-3 fill-current stroke-[2.5] ml-0.5" />
+                      <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                        {activeMode === 'audio' ? (
+                          <Headphones className="w-3.5 h-3.5" />
+                        ) : (
+                          <TimerIcon className="w-3.5 h-3.5" />
+                        )}
+                      </div>
                     )}
-                  </button>
 
-                  {/* Skip Next */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('light');
-                      handleAudioNext();
-                    }}
-                    className="w-6.5 h-6.5 rounded-full text-emerald-200 hover:text-white hover:bg-emerald-900/60 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-                    title={isAr ? 'التالي' : 'Weiter'}
-                  >
-                    <SkipForward className="w-3 h-3 stroke-[2]" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  {/* Pause / Resume Timer */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('medium');
-                      if (isTimerRunning) {
-                        pauseTimer();
-                      } else {
-                        resumeTimer();
-                      }
-                    }}
-                    className="w-7 h-7 rounded-full bg-emerald-400 text-slate-950 hover:bg-emerald-300 flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-xs"
-                    title={isTimerRunning ? (isAr ? 'إيقاف مؤقت' : 'Pause') : (isAr ? 'استئناف' : 'Weiter')}
-                  >
-                    {isTimerRunning ? (
-                      <Pause className="w-3 h-3 fill-current stroke-[2.5]" />
+                    {/* Text & Meta Information */}
+                    <div
+                      className="flex flex-col min-w-0 flex-1 cursor-pointer"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        if (activeMode === 'audio') {
+                          onNavigateTab('audio');
+                        } else {
+                          onNavigateTab('timer');
+                        }
+                      }}
+                    >
+                      {activeMode === 'audio' ? (
+                        <>
+                          <div className="text-xs font-bold text-zinc-100 truncate leading-tight">
+                            {currentTrack?.name || (isAr ? 'المشغل الصوتي' : 'Audio')}
+                          </div>
+                          <div className="text-[10px] text-emerald-400 font-mono tracking-tight flex items-center gap-1.5 leading-none mt-0.5">
+                            <span>
+                              {Math.floor(audioCurrentTime / 60)}:
+                              {Math.floor(audioCurrentTime % 60).toString().padStart(2, '0')}
+                            </span>
+                            <span className="text-zinc-500">/</span>
+                            <span className="text-zinc-400">
+                              {Math.floor(audioDuration / 60)}:
+                              {Math.floor(audioDuration % 60).toString().padStart(2, '0')}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-xs font-bold text-zinc-100 truncate leading-tight">
+                            {isTimerRunning ? (isAr ? 'المؤقت جارٍ' : 'Timer läuft') : (isAr ? 'المؤقت متوقف' : 'Pausiert')}
+                          </div>
+                          <div className="text-[11px] text-emerald-400 font-mono font-black tracking-wider leading-none mt-0.5">
+                            {formattedTime}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Interactive Quick Control Buttons */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {activeMode === 'audio' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('medium');
+                            toggleAudioPlay();
+                          }}
+                          className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center hover:bg-emerald-400 active:scale-95 transition-all shadow-xs"
+                          title={isAudioPlaying ? (isAr ? 'إيقاف مؤقت' : 'Pause') : (isAr ? 'تشغيل' : 'Play')}
+                        >
+                          {isAudioPlaying ? (
+                            <Pause className="w-3.5 h-3.5 fill-current" />
+                          ) : (
+                            <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('light');
+                            handleAudioNext();
+                          }}
+                          className="w-7 h-7 rounded-full bg-white/10 text-zinc-300 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
+                          title={isAr ? 'التالي' : 'Weiter'}
+                        >
+                          <SkipForward className="w-3.5 h-3.5" />
+                        </button>
+                      </>
                     ) : (
-                      <Play className="w-3 h-3 fill-current stroke-[2.5] ml-0.5" />
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('medium');
+                            if (isTimerRunning) {
+                              pauseTimer();
+                            } else {
+                              resumeTimer();
+                            }
+                          }}
+                          className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center hover:bg-emerald-400 active:scale-95 transition-all shadow-xs"
+                          title={isTimerRunning ? (isAr ? 'إيقاف مؤقت' : 'Pause') : (isAr ? 'استئناف' : 'Start')}
+                        >
+                          {isTimerRunning ? (
+                            <Pause className="w-3.5 h-3.5 fill-current" />
+                          ) : (
+                            <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('light');
+                            resetTimer();
+                          }}
+                          className="w-7 h-7 rounded-full bg-white/10 text-zinc-300 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
+                          title={isAr ? 'إعادة ضبط' : 'Reset'}
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      </>
                     )}
-                  </button>
 
-                  {/* Reset Timer */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('light');
-                      resetTimer();
-                    }}
-                    className="w-6.5 h-6.5 rounded-full text-emerald-200 hover:text-white hover:bg-emerald-900/60 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-                    title={isAr ? 'إعادة ضبط' : 'Zurücksetzen'}
-                  >
-                    <RotateCcw className="w-3 h-3 stroke-[2]" />
-                  </button>
-                </>
+                    {/* Close / Dismiss Button */}
+                    <button
+                      type="button"
+                      onClick={handleDismiss}
+                      className="w-7 h-7 rounded-full bg-white/5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/20 flex items-center justify-center active:scale-95 transition-all ml-0.5"
+                      title={isAr ? 'إغلاق الجزيرة' : 'Schließen'}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
               )}
-
-                  {/* Close / Dismiss Activity Button (X) */}
-                  <button
-                    type="button"
-                    onClick={handleDismiss}
-                    className="w-6.5 h-6.5 rounded-full text-emerald-300/70 hover:text-red-400 hover:bg-red-950/50 flex items-center justify-center active:scale-95 transition-all cursor-pointer ml-0.5"
-                    title={isAr ? 'إغلاق' : 'Beenden'}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-      )}
-    </AnimatePresence>
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
