@@ -26,6 +26,7 @@ import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
 import { MediaViewerModal } from './MediaViewerModal';
 import { getExerciseMediaList } from '../utils/mediaStorage';
+import { useTimer } from '../context/TimerContext';
 
 interface ActiveWorkoutModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ interface ActiveWorkoutModalProps {
   plan: WorkoutPlan;
   currentLang: Language;
   onFinishWorkout: (completedIds: number[]) => void;
+  onOpenLibrary?: () => void;
 }
 
 export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
@@ -41,9 +43,12 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   plan,
   currentLang,
   onFinishWorkout,
+  onOpenLibrary,
 }) => {
   const isAr = currentLang === 'ar';
-  const exercises = plan.exercises;
+  const exercises = plan.exercises || [];
+
+  const { startTimer, pauseTimer, resumeTimer, resetTimer } = useTimer();
 
   const [currentExIdx, setCurrentExIdx] = useState<number>(0);
   const [currentSet, setCurrentSet] = useState<number>(1);
@@ -186,6 +191,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       setTotalRestDuration(90);
       setIsRestPaused(false);
       setIsResting(true);
+      startTimer(90);
     } else {
       // Finished all sets for this exercise
       if (currentExercise) {
@@ -198,10 +204,12 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         setTotalRestDuration(90);
         setIsRestPaused(false);
         setIsResting(true);
+        startTimer(90);
       } else {
         // Entire workout finished!
         triggerHaptic('success');
         playBeep('complete');
+        resetTimer();
         setIsFinished(true);
       }
     }
@@ -210,6 +218,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const handleEndRest = () => {
     setIsResting(false);
     setIsRestPaused(false);
+    resetTimer();
 
     if (currentSet < totalSets) {
       setCurrentSet((prev) => prev + 1);
@@ -228,17 +237,24 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     setRestSeconds((prev) => {
       const next = Math.max(5, prev + secondsDelta);
       setTotalRestDuration((old) => Math.max(next, old + secondsDelta));
+      startTimer(next);
       return next;
     });
   };
 
   const handleTogglePauseRest = () => {
     triggerHaptic('selection');
+    if (isRestPaused) {
+      resumeTimer();
+    } else {
+      pauseTimer();
+    }
     setIsRestPaused((prev) => !prev);
   };
 
   const handleSkipToNextExercise = () => {
     triggerHaptic('light');
+    resetTimer();
     if (currentExercise) {
       setCompletedExIds((prev) => new Set([...prev, currentExercise.id]));
     }
@@ -289,17 +305,73 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (!isOpen || !currentExercise) return null;
+  if (!isOpen) return null;
+
+  // Gracefully handle empty exercises case
+  if (exercises.length === 0 || !currentExercise) {
+    return (
+      <AnimatePresence>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 10 }}
+            transition={{ duration: 0.2 }}
+            className="w-full max-w-sm bg-white rounded-3xl p-6 border border-[#dbe4dc] shadow-2xl text-center space-y-4"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-[#edf4ef] text-[#215641] flex items-center justify-center mx-auto border border-[#dbe4dc]">
+              <Dumbbell className="w-7 h-7 stroke-[2.2]" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="font-display font-extrabold text-lg text-[#15221b]">
+                {isAr ? 'الجدول فارغ حالياً' : 'Keine Übungen vorhanden'}
+              </h3>
+              <p className="text-xs text-[#6e8276] leading-relaxed">
+                {isAr
+                  ? 'لا توجد تمارين مضافة في هذا الجدول لبدء التدريب. يمكنك إضافة أجهزة من المكتبة أولاً.'
+                  : 'Füge zuerst Übungen aus der Bibliothek zu deinem Plan hinzu, um das Training zu starten.'}
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              {onOpenLibrary && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenLibrary();
+                  }}
+                  className="w-full py-3 px-4 rounded-2xl bg-[#215641] hover:bg-[#184232] text-white font-display font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>{isAr ? 'تصفح وإضافة من المكتبة' : 'Übungen hinzufügen'}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2.5 px-4 text-xs font-bold text-[#75877d] hover:text-[#15221b] transition-colors cursor-pointer"
+              >
+                {isAr ? 'إغلاق' : 'Schließen'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/45 backdrop-blur-md pt-16 pb-12 overflow-y-auto">
         <motion.div
-          initial={{ opacity: 0, scale: 0.97, y: 12 }}
+          initial={{ opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.97, y: 12 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="relative w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-lg bg-white text-[#15221b] sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-[#dbe4dc]"
+          exit={{ opacity: 0, scale: 0.96, y: 16 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-lg bg-white text-[#15221b] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-[#dbe4dc] max-h-[85vh] sm:max-h-[88vh] my-auto"
         >
           {/* Top Progress & Header Bar */}
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#e2ebe3] bg-[#fbfcfb]">

@@ -1,6 +1,12 @@
 export type Language = 'de' | 'ar';
 export type ViewTab = 'plan' | 'timer' | 'audio' | 'tools' | 'stats' | 'profile';
 
+export interface LyricLine {
+  id?: string;
+  time: number; // Start timestamp in seconds (e.g. 14.5)
+  text: string; // The lyric text
+}
+
 export interface ExerciseMediaItem {
   id: string;
   type: 'image' | 'video';
@@ -21,6 +27,16 @@ export interface ExerciseItem {
   media?: ExerciseMediaItem[];
 }
 
+export type DayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Mo, 1=Di, 2=Mi, 3=Do, 4=Fr, 5=Sa, 6=So
+
+export interface DayScheduleConfig {
+  isRestDay?: boolean;
+  focusTitleDe?: string;
+  focusTitleAr?: string;
+  exercises: ExerciseItem[];
+  linkedDay?: DayIndex | null; // e.g. Thursday (3) linked to Monday (0)
+}
+
 export interface WorkoutPlan {
   id: string;
   nameDe: string;
@@ -31,6 +47,7 @@ export interface WorkoutPlan {
   frequencyAr: string;
   trainingDays: number[]; // 0=Mo, 1=Di, 2=Mi, 3=Do, 4=Fr, 5=Sa, 6=So
   exercises: ExerciseItem[];
+  days?: Record<number, DayScheduleConfig>;
   notesDe: string[];
   notesAr: string[];
 }

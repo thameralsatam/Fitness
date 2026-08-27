@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ViewTab, Language, WorkoutPlan, ExerciseItem } from './types';
+import { ViewTab, Language, WorkoutPlan, ExerciseItem, DayIndex } from './types';
 import { DEFAULT_WORKOUT_PLAN, I18N } from './data/workoutData';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -30,6 +30,19 @@ import {
   saveActivePlan,
   hardResetApp,
 } from './utils/libraryManager';
+import {
+  getTodayDayIndex,
+  getExercisesForDay,
+  isDayRestDay,
+  addExerciseToDay,
+  updateExerciseOnDay,
+  removeExerciseFromDay,
+  clearDayExercises,
+  setTrainingDays,
+  getScheduleSubtitle,
+  DAYS_NAMES_AR,
+  DAYS_NAMES_DE,
+} from './utils/scheduleManager';
 
 interface ConfirmModalState {
   isOpen: boolean;
@@ -49,6 +62,10 @@ export default function App() {
 
   const [activePlan, setActivePlan] = useState<WorkoutPlan>(() => {
     return getStoredActivePlan();
+  });
+
+  const [selectedDayIndex, setSelectedDayIndex] = useState<DayIndex>(() => {
+    return getTodayDayIndex();
   });
 
   const [showSplash, setShowSplash] = useState<boolean>(() => {
@@ -96,6 +113,8 @@ export default function App() {
   const [isActiveWorkoutOpen, setIsActiveWorkoutOpen] = useState<boolean>(false);
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState<boolean>(false);
   const [editingExercise, setEditingExercise] = useState<ExerciseItem | null>(null);
+  const [hasActiveFloatingControl, setHasActiveFloatingControl] = useState<boolean>(false);
+  const [isFloatingExpanded, setIsFloatingExpanded] = useState<boolean>(false);
 
   const [currentTab, setCurrentTab] = useState<ViewTab>('plan');
 
@@ -248,35 +267,51 @@ export default function App() {
 
   const handleCopyPlan = () => {
     triggerHaptic('light');
-    const planTitle = currentLang === 'de' ? activePlan.nameDe : activePlan.nameAr;
-    const planSubtitle = currentLang === 'de' ? activePlan.frequencyDe : activePlan.frequencyAr;
-    let text = `${planTitle} · ${planSubtitle}\n\n`;
+    const isAr = currentLang === 'ar';
+    const planTitle = isAr ? activePlan.nameAr : activePlan.nameDe;
+    const scheduleSub = getScheduleSubtitle(activePlan, currentLang);
+    const dayName = isAr ? DAYS_NAMES_AR[selectedDayIndex] : DAYS_NAMES_DE[selectedDayIndex];
+    const isRest = isDayRestDay(activePlan, selectedDayIndex);
 
-    activePlan.exercises.forEach((item, index) => {
-      const name = currentLang === 'de' ? item.nameDe : `${item.nameDe} (${item.muscleAr})`;
-      const isDone = completedExercises.has(item.id);
-      text += `${index + 1}. [${isDone ? '✓' : ' '}] ${name}\n`;
-      text += `   ${item.sets} ${currentLang === 'de' ? 'Sätze' : 'مجموعات'} × ${item.reps}\n`;
-      if (item.alternatives.length > 0) {
-        text += `   ${currentLang === 'de' ? 'Alternativen:' : 'البدائل:'} ${item.alternatives.join(
-          ', '
-        )}\n`;
-      }
-    });
+    let text = `🏋️ ${planTitle} · ${scheduleSub}\n`;
+    text += `📅 ${isAr ? 'تمارين يوم' : 'Trainingstag'}: ${dayName}\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
 
-    const notes = currentLang === 'de' ? activePlan.notesDe : activePlan.notesAr;
-    text += `\n${currentLang === 'de' ? 'Hinweise:' : 'الملاحظات:'}\n`;
-    notes.forEach((note) => {
-      text += `• ${note}\n`;
-    });
+    if (isRest) {
+      text += isAr ? '☕ يوم راحة واستشفاء عضلي.\n' : '☕ Geplanter Ruhetag & Regeneration.\n';
+    } else if (currentDayExercises.length === 0) {
+      text += isAr ? 'لا توجد أجهزة مضافة لهذا اليوم بعد.\n' : 'Keine Übungen für diesen Tag eingetragen.\n';
+    } else {
+      currentDayExercises.forEach((item, index) => {
+        const name = isAr ? `${item.nameDe} (${item.muscleAr})` : item.nameDe;
+        const isDone = completedExercises.has(item.id);
+        text += `${index + 1}. [${isDone ? '✓' : ' '}] ${name}\n`;
+        text += `   ${item.sets} ${isAr ? 'مجموعات' : 'Sätze'} × ${item.reps}\n`;
+        if (item.alternatives.length > 0) {
+          text += `   ${isAr ? 'البدائل:' : 'Alternativen:'} ${item.alternatives.join(', ')}\n`;
+        }
+      });
+    }
+
+    const notes = isAr ? activePlan.notesAr : activePlan.notesDe;
+    if (notes && notes.length > 0) {
+      text += `\n${isAr ? 'الملاحظات الإرشادية:' : 'Hinweise:'}\n`;
+      notes.forEach((note) => {
+        text += `• ${note}\n`;
+      });
+    }
 
     try {
       navigator.clipboard.writeText(text);
       showToast(t.toastCopied);
     } catch {
-      showToast('Kopiert!');
+      showToast(isAr ? 'تم النسخ!' : 'Kopiert!');
     }
   };
+
+  // Derived current day exercises & rest status
+  const currentDayExercises = getExercisesForDay(activePlan, selectedDayIndex);
+  const isCurrentDayRest = isDayRestDay(activePlan, selectedDayIndex);
 
   // Library & Plan Modification Handlers
   const handleUpdateLibrary = (newLib: ExerciseItem[]) => {
@@ -286,10 +321,7 @@ export default function App() {
   };
 
   const handleAddExerciseToPlan = (exercise: ExerciseItem) => {
-    const updatedPlan: WorkoutPlan = {
-      ...activePlan,
-      exercises: [...activePlan.exercises, exercise],
-    };
+    const updatedPlan = addExerciseToDay(activePlan, selectedDayIndex, exercise);
     setActivePlan(updatedPlan);
     saveActivePlan(updatedPlan);
     showToast(
@@ -300,22 +332,14 @@ export default function App() {
   };
 
   const handleSaveExerciseInPlan = (updated: ExerciseItem) => {
-    const updatedExercises = activePlan.exercises.map((e) => (e.id === updated.id ? updated : e));
-    const updatedPlan: WorkoutPlan = {
-      ...activePlan,
-      exercises: updatedExercises,
-    };
+    const updatedPlan = updateExerciseOnDay(activePlan, selectedDayIndex, updated);
     setActivePlan(updatedPlan);
     saveActivePlan(updatedPlan);
     showToast(currentLang === 'ar' ? 'تم حفظ تعديل التمرين' : 'Übung aktualisiert');
   };
 
   const handleRemoveExerciseFromPlan = (id: number) => {
-    const updatedExercises = activePlan.exercises.filter((e) => e.id !== id);
-    const updatedPlan: WorkoutPlan = {
-      ...activePlan,
-      exercises: updatedExercises,
-    };
+    const updatedPlan = removeExerciseFromDay(activePlan, selectedDayIndex, id);
     setActivePlan(updatedPlan);
     saveActivePlan(updatedPlan);
     showToast(currentLang === 'ar' ? 'تم حذف الجهاز من الجدول' : 'Gerät aus dem Plan entfernt');
@@ -325,28 +349,39 @@ export default function App() {
     triggerHaptic('warning');
     setConfirmModal({
       isOpen: true,
-      title: currentLang === 'ar' ? 'تفريغ جدول التمارين' : 'Plan leeren',
+      title: currentLang === 'ar' ? 'تفريغ جدول تمارين هذا اليوم' : 'Plan leeren',
       description:
         currentLang === 'ar'
-          ? 'هل أنت تأكد من رغبتك في تفريغ الجدول الحالي وحذف جميع التمارين منه؟'
-          : 'Möchtest du wirklich alle Übungen aus dem aktuellen Plan entfernen?',
+          ? 'هل أنت متأكد من رغبتك في تفريغ جدول هذا اليوم وحذف جميع التمارين منه؟'
+          : 'Möchtest du wirklich alle Übungen von diesem Tag entfernen?',
       confirmText: currentLang === 'ar' ? 'نعم، تفريغ الجدول' : 'Ja, Plan leeren',
       cancelText: currentLang === 'ar' ? 'إلغاء' : 'Abbrechen',
       type: 'danger',
       onConfirm: () => {
         triggerHaptic('success');
-        const updatedPlan: WorkoutPlan = {
-          ...activePlan,
-          exercises: [],
-        };
+        const updatedPlan = clearDayExercises(activePlan, selectedDayIndex);
         setActivePlan(updatedPlan);
         saveActivePlan(updatedPlan);
         setCompletedExercises(new Set());
         setOpenPanels(new Set());
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-        showToast(currentLang === 'ar' ? 'تم تفريغ الجدول من جميع التمارين بنجاح' : 'Plan wurde geleert');
+        showToast(currentLang === 'ar' ? 'تم تفريغ تمارين هذا اليوم بنجاح' : 'Plan wurde geleert');
       },
     });
+  };
+
+  const handleStartActiveWorkout = () => {
+    if (isCurrentDayRest || currentDayExercises.length === 0) {
+      triggerHaptic('warning');
+      showToast(
+        currentLang === 'ar'
+          ? 'هذا اليوم فارغ أو يوم راحة! أضف أجهزة أولاً لبدء التدريب'
+          : 'Dieser Tag ist leer oder ein Ruhetag! Füge zuerst Übungen hinzu.'
+      );
+      setIsLibraryModalOpen(true);
+      return;
+    }
+    setIsActiveWorkoutOpen(true);
   };
 
   const handleFactoryReset = () => {
@@ -368,7 +403,7 @@ export default function App() {
   };
 
   const handleSwapExerciseInPlan = (oldId: number, replacement: ExerciseItem) => {
-    const updatedExercises = activePlan.exercises.map((e) => (e.id === oldId ? replacement : e));
+    const updatedExercises = currentDayExercises.map((e) => (e.id === oldId ? replacement : e));
     const updatedPlan: WorkoutPlan = {
       ...activePlan,
       exercises: updatedExercises,
@@ -443,7 +478,8 @@ export default function App() {
         <Header
           currentLang={currentLang}
           planTitle={currentLang === 'de' ? activePlan.nameDe : activePlan.nameAr}
-          planSubtitle={currentLang === 'de' ? activePlan.frequencyDe : activePlan.frequencyAr}
+          hasActiveFloatingControl={hasActiveFloatingControl}
+          isExpanded={isFloatingExpanded}
         />
 
         {/* Main View Container */}
@@ -458,21 +494,28 @@ export default function App() {
                 transition={{ duration: 0.2 }}
               >
                 <PlanView
-                  exercises={activePlan.exercises}
+                  exercises={currentDayExercises}
                   completedExercises={completedExercises}
                   openPanels={openPanels}
                   currentLang={currentLang}
+                  selectedDayIndex={selectedDayIndex}
+                  onSelectDayIndex={setSelectedDayIndex}
                   onToggleExercise={handleToggleExercise}
                   onTogglePanel={handleTogglePanel}
                   onResetToday={handleRequestResetProgress}
                   onNavigateTab={handleTabChange}
                   totalSessions={totalSessions}
                   plan={activePlan}
-                  onStartActiveWorkout={() => setIsActiveWorkoutOpen(true)}
+                  onUpdatePlan={(updated) => {
+                    setActivePlan(updated);
+                    saveActivePlan(updated);
+                  }}
+                  onStartActiveWorkout={handleStartActiveWorkout}
                   onOpenLibrary={() => setIsLibraryModalOpen(true)}
                   onOpenEditExercise={(exercise) => setEditingExercise(exercise)}
                   onRemoveExercise={handleRemoveExerciseFromPlan}
                   onClearPlan={handleClearAllExercisesFromPlan}
+                  showToast={showToast}
                 />
               </motion.div>
             )}
@@ -527,7 +570,7 @@ export default function App() {
                   totalSessions={totalSessions}
                   plan={activePlan}
                   onUpdateTrainingDays={(newDays) => {
-                    const updated = { ...activePlan, trainingDays: newDays };
+                    const updated = setTrainingDays(activePlan, newDays);
                     setActivePlan(updated);
                     saveActivePlan(updated);
                   }}
@@ -560,11 +603,13 @@ export default function App() {
           </AnimatePresence>
         </main>
 
-        {/* Persistent Floating Mini Audio Player when browsing other tabs */}
+        {/* Universal Floating Control (Audio & Rest Timer) */}
         <FloatingMiniPlayer
           currentTab={currentTab}
           onNavigateTab={handleTabChange}
           lang={currentLang}
+          onActiveStatusChange={setHasActiveFloatingControl}
+          onExpandStatusChange={setIsFloatingExpanded}
         />
 
         {/* Liquid Glass Bottom Navigation Dock */}
@@ -578,9 +623,13 @@ export default function App() {
         <ActiveWorkoutModal
           isOpen={isActiveWorkoutOpen}
           onClose={() => setIsActiveWorkoutOpen(false)}
-          plan={activePlan}
+          plan={{
+            ...activePlan,
+            exercises: currentDayExercises,
+          }}
           currentLang={currentLang}
           onFinishWorkout={handleFinishActiveWorkout}
+          onOpenLibrary={() => setIsLibraryModalOpen(true)}
         />
 
         {/* Full Exercise & Machine Library Modal */}
@@ -590,7 +639,10 @@ export default function App() {
           currentLang={currentLang}
           libraryExercises={libraryExercises}
           onUpdateLibrary={handleUpdateLibrary}
-          activePlan={activePlan}
+          activePlan={{
+            ...activePlan,
+            exercises: currentDayExercises,
+          }}
           onAddExerciseToPlan={handleAddExerciseToPlan}
         />
 

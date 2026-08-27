@@ -34,6 +34,7 @@ import {
   Info,
   Clock,
   FileAudio,
+  Sparkles,
 } from 'lucide-react';
 import {
   AudioTrack,
@@ -59,6 +60,7 @@ import {
 import { Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { NativeFilePickerModal } from './NativeFilePickerModal';
+import { LyricsModal } from './LyricsModal';
 import { notifyModalChange } from '../utils/modalManager';
 import { useAudio } from '../context/AudioContext';
 
@@ -129,6 +131,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
 
   // Modals state
   const [detailsModalTrack, setDetailsModalTrack] = useState<AudioTrack | null>(null);
+  const [lyricsModalTrack, setLyricsModalTrack] = useState<AudioTrack | null>(null);
   const [pendingUploads, setPendingUploads] = useState<PendingUploadItem[] | null>(null);
   const [isNativePickerOpen, setIsNativePickerOpen] = useState<boolean>(false);
   const [editingTrack, setEditingTrack] = useState<EditTrackModalData | null>(null);
@@ -159,6 +162,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   // Sync active modals state to notify bottom nav hiding
   const isAnyAudioModalOpen = Boolean(
     detailsModalTrack ||
+      lyricsModalTrack ||
       pendingUploads ||
       editingTrack ||
       deletingTrack ||
@@ -516,8 +520,25 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
             </div>
           </div>
 
-          {/* Action Bar (Speed, Mute, Smart Playback Mode) */}
+          {/* Action Bar (Lyrics, Speed, Mute, Smart Playback Mode) */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Lyrics Button */}
+            {currentTrack && (
+              <button
+                type="button"
+                onClick={() => setLyricsModalTrack(currentTrack)}
+                className={`h-7.5 px-3 rounded-2xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-[11px] font-bold ${
+                  currentTrack.lyrics && currentTrack.lyrics.length > 0
+                    ? 'bg-[#215641] border-[#7be3af]/40 text-[#7be3af]'
+                    : 'bg-white/5 border-white/10 text-white/70 hover:text-white'
+                }`}
+                title={currentLang === 'ar' ? 'كلمات المقطع والترجمة المتزامنة' : 'Synchrone Lyrics'}
+              >
+                <Sparkles className="w-3 h-3 text-[#7be3af]" />
+                <span className="hidden sm:inline">{currentLang === 'ar' ? 'الكلمات' : 'Lyrics'}</span>
+              </button>
+            )}
+
             {/* Speed Pill Toggle */}
             <button
               type="button"
@@ -1047,7 +1068,20 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                             } w-48 bg-white rounded-2xl shadow-xl border border-[#dbe4dc] p-1.5 space-y-0.5`}
                             dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
                           >
-                            {/* 1. Details Button */}
+                            {/* 1. Lyrics Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMenuTrackId(null);
+                                setLyricsModalTrack(track);
+                              }}
+                              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-[#215641] hover:bg-[#eef4f0] rounded-xl transition-colors text-right"
+                            >
+                              <FileAudio className="w-3.5 h-3.5 text-[#215641]" />
+                              <span>{currentLang === 'ar' ? 'كلمات المقطع المتزامنة' : 'Synchrone Lyrics'}</span>
+                            </button>
+
+                            {/* 2. Details Button */}
                             <button
                               type="button"
                               onClick={() => {
@@ -2183,6 +2217,16 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
         currentLang={currentLang}
         isProcessing={isProcessingFiles}
       />
+
+      {/* Synced Lyrics & AI Transcription Modal */}
+      {lyricsModalTrack && (
+        <LyricsModal
+          track={lyricsModalTrack}
+          isOpen={Boolean(lyricsModalTrack)}
+          onClose={() => setLyricsModalTrack(null)}
+          currentLang={currentLang}
+        />
+      )}
     </div>
   );
 };

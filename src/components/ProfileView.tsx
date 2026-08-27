@@ -26,6 +26,7 @@ import {
 import { Language, WorkoutPlan } from '../types';
 import { I18N } from '../data/workoutData';
 import { triggerHaptic } from '../utils/haptics';
+import { getActiveTrainingDays } from '../utils/scheduleManager';
 import {
   UserProfile,
   PRESET_AVATARS,
@@ -107,6 +108,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   const activePreset: PresetAvatar =
     PRESET_AVATARS.find((p) => p.id === profile.presetId) || PRESET_AVATARS[0];
+
+  const scheduledTrainingDaysCount = plan ? getActiveTrainingDays(plan).length : profile.weeklyTarget;
 
   // Calculate BMI
   const heightInMeters = profile.heightCm / 100;
@@ -217,7 +220,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               {isAr ? 'الهدف الأسبوعي' : 'Wochenziel'}
             </span>
             <span className="font-display font-black text-lg sm:text-xl text-[#215641] block">
-              {profile.weeklyTarget}x / {isAr ? 'أسبوع' : 'W'}
+              {scheduledTrainingDaysCount}x / {isAr ? 'أسبوع' : 'W'}
             </span>
           </div>
         </div>

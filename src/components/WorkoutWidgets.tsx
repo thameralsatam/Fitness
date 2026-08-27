@@ -63,14 +63,14 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
   const strokeDashoffset = 264 * (1 - progressFraction);
 
   return (
-    <div className="space-y-3 mb-4">
+    <div className="space-y-4">
       {/* Calm, Refined Daily Progress Card */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#dbe4dc] text-[#15221b] shadow-xs">
-        <div className="flex flex-col gap-3">
+      <div className="p-5 sm:p-6 rounded-3xl bg-white border border-[#e4ede7] text-[#15221b] shadow-[0_2px_12px_rgba(20,40,30,0.03)]">
+        <div className="flex flex-col gap-4">
           {/* Header Row */}
           <div className="flex items-center justify-between">
             {/* Streak Indicator */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#edf4ef] text-[#215641] text-xs font-bold border border-[#dbe4dc]/60 shadow-2xs">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#edf5f0] text-[#215641] text-xs font-bold border border-[#bad5c2]/60 shadow-2xs">
               <Zap className="w-3.5 h-3.5 text-[#215641] fill-[#215641]/20 stroke-[2.3]" />
               <span>
                 {isAr
@@ -79,8 +79,8 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
               </span>
             </div>
 
-            {/* Actions: Inline Rest Timer Toggle & SVG-Only Library Button */}
-            <div className="flex items-center gap-1.5">
+            {/* Actions: Inline Rest Timer Toggle & Library Button */}
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -89,10 +89,10 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
                 }}
                 title={isAr ? 'مؤقت الراحة' : 'Pausen-Timer'}
                 aria-label={isAr ? 'مؤقت الراحة' : 'Pausen-Timer'}
-                className={`p-2 rounded-xl border transition-all active:scale-95 flex items-center justify-center ${
+                className={`p-2.5 rounded-2xl border transition-all active:scale-95 flex items-center justify-center cursor-pointer ${
                   showRestTimer || isRunning
-                    ? 'bg-[#215641] text-white border-[#215641]'
-                    : 'bg-[#edf4ef] text-[#215641] hover:bg-[#e2ede5] border-[#dbe4dc]/70'
+                    ? 'bg-[#215641] text-white border-[#215641] shadow-xs'
+                    : 'bg-[#edf5f0] text-[#215641] hover:bg-[#e2ede5] border-[#bad5c2]/70'
                 }`}
               >
                 <TimerIcon className="w-4 h-4 stroke-[2.2]" />
@@ -107,7 +107,7 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
                   }}
                   title={isAr ? 'مكتبة الأجهزة والتمارين' : 'Geräte-Bibliothek'}
                   aria-label={isAr ? 'مكتبة الأجهزة والتمارين' : 'Geräte-Bibliothek'}
-                  className="p-2 rounded-xl bg-[#edf4ef] text-[#215641] hover:bg-[#e2ede5] border border-[#dbe4dc]/70 transition-all active:scale-95 flex items-center justify-center"
+                  className="p-2.5 rounded-2xl bg-[#edf5f0] text-[#215641] hover:bg-[#e2ede5] border border-[#bad5c2]/70 transition-all active:scale-95 flex items-center justify-center cursor-pointer"
                 >
                   <BookOpen className="w-4 h-4 stroke-[2.2]" />
                 </button>
@@ -116,8 +116,8 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
           </div>
 
           {/* Progress Numbers & Bar */}
-          <div>
-            <div className="flex items-baseline justify-between mb-1.5">
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between">
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl sm:text-3xl font-black font-display text-[#15221b] tracking-tight">
                   {completedCount} <span className="text-xs sm:text-sm font-semibold text-[#75877d]">/ {totalExercises}</span>
@@ -132,7 +132,7 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
             </div>
 
             {/* Minimalist Progress Bar */}
-            <div className="w-full h-2 bg-[#edf4ef] rounded-full overflow-hidden">
+            <div className="w-full h-2.5 bg-[#edf5f0] rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${percent}%` }}
@@ -144,14 +144,14 @@ export const WorkoutWidgets: React.FC<WorkoutWidgetsProps> = ({
 
           {/* Start Workout Action */}
           {onStartActiveWorkout && (
-            <div className="pt-1">
+            <div className="pt-0.5">
               <button
                 type="button"
                 onClick={() => {
                   triggerHaptic('success');
                   onStartActiveWorkout();
                 }}
-                className="w-full py-3 px-4 rounded-xl bg-[#215641] hover:bg-[#194332] active:scale-[0.99] text-white font-display font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-xs"
+                className="w-full py-3.5 px-4 rounded-2xl bg-[#215641] hover:bg-[#184232] active:scale-[0.99] text-white font-display font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-white" />
                 <span>

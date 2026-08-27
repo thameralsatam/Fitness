@@ -32,6 +32,7 @@ import {
   getPlanMuscleDistribution,
   getPlanRepRangeSummary
 } from '../data/workoutData';
+import { getActiveTrainingDays } from '../utils/scheduleManager';
 
 export interface SessionLog {
   id: string;
@@ -67,7 +68,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
   const exercises = plan ? plan.exercises : EXERCISES_DATA;
   const totalExercisesCount = exercises.length;
   const allExerciseIds = exercises.map((e) => e.id);
-  const trainingDays = plan?.trainingDays ?? [0, 2, 4];
+  const trainingDays = plan ? getActiveTrainingDays(plan) : (plan?.trainingDays ?? [0, 2, 4]);
   const muscleDistData = getPlanMuscleDistribution(exercises);
   const planNotes = plan ? (currentLang === 'de' ? plan.notesDe : plan.notesAr) : t.notes;
 
