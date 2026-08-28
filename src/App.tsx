@@ -23,6 +23,7 @@ import { ExerciseEditModal } from './components/ExerciseEditModal';
 import { ProfileView } from './components/ProfileView';
 import { triggerHaptic } from './utils/haptics';
 import { initializeCustomFonts } from './utils/customFonts';
+import { StatusBar } from '@capacitor/status-bar';
 import {
   getStoredLibraryExercises,
   saveLibraryExercises,
@@ -156,9 +157,18 @@ export default function App() {
 
   const t = I18N[currentLang];
 
-  // Restore custom fonts on app boot
+  // Restore custom fonts & hide mobile native status bar for full screen mode on app boot
   useEffect(() => {
     initializeCustomFonts();
+    const enableFullScreenMode = async () => {
+      try {
+        await StatusBar.hide();
+        await StatusBar.setOverlaysWebView({ overlay: true });
+      } catch {
+        // Fallback for standard web browser environment
+      }
+    };
+    enableFullScreenMode();
   }, []);
 
   // Sync language attribute to html document
@@ -471,12 +481,13 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Top Header */}
+        {/* Top Header & Integrated Dynamic Island */}
         <Header
+          currentTab={currentTab}
+          onNavigateTab={handleTabChange}
           currentLang={currentLang}
-          planTitle={currentLang === 'de' ? activePlan.nameDe : activePlan.nameAr}
-          hasActiveFloatingControl={hasActiveFloatingControl}
-          isExpanded={isFloatingExpanded}
+          onActiveStatusChange={setHasActiveFloatingControl}
+          onExpandStatusChange={setIsFloatingExpanded}
         />
 
         {/* Main View Container */}
@@ -599,15 +610,6 @@ export default function App() {
             )}
           </AnimatePresence>
         </main>
-
-        {/* Universal Floating Control (Audio & Rest Timer) */}
-        <FloatingMiniPlayer
-          currentTab={currentTab}
-          onNavigateTab={handleTabChange}
-          lang={currentLang}
-          onActiveStatusChange={setHasActiveFloatingControl}
-          onExpandStatusChange={setIsFloatingExpanded}
-        />
 
         {/* Liquid Glass Bottom Navigation Dock */}
         <MobileBottomNav
