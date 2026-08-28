@@ -28,7 +28,6 @@ import { AudioTrack } from '../utils/audioDb';
 import { LyricLine, Language } from '../types';
 import { useAudio } from '../context/AudioContext';
 import {
-  transcribeAudioTrack,
   parseLrcFormat,
   exportToLrcFormat,
 } from '../utils/transcribeService';
@@ -80,8 +79,6 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isOffsetOpen, setIsOffsetOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processStatus, setProcessStatus] = useState<string>('');
   const [copySuccess, setCopySuccess] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
@@ -207,49 +204,6 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
       await updateTrackLyrics(activeTrack.id, lines);
       setViewMode('karaoke');
       triggerHaptic('success');
-    }
-  };
-
-  // AI Transcription with Gemini
-  const handleTranscribe = async () => {
-    if (isProcessing) return;
-    triggerHaptic('medium');
-    setIsProcessing(true);
-    setProcessStatus(isAr ? 'جاري الاستماع وتفريغ الكلمات...' : 'KI transkribiert Audio...');
-
-    try {
-      let audioBlob: Blob | null = activeTrack.blob || null;
-      if (!audioBlob && activeTrack.url) {
-        setProcessStatus(isAr ? 'قراءة ملف الصوت...' : 'Lade Datei...');
-        const res = await fetch(activeTrack.url);
-        audioBlob = await res.blob();
-      }
-
-      if (!audioBlob) {
-        throw new Error(isAr ? 'تعذر قراءة ملف الصوت' : 'Audiodatei nicht gefunden');
-      }
-
-      const extracted = await transcribeAudioTrack(
-        audioBlob,
-        activeTrack.mimeType || 'audio/mp3',
-        currentLang,
-        activeTrack.name
-      );
-
-      if (!extracted || extracted.length === 0) {
-        throw new Error(isAr ? 'لم يتم استخراج كلمات من المقطع' : 'Keine Lyrics erkannt');
-      }
-
-      setLines(extracted);
-      await updateTrackLyrics(activeTrack.id, extracted);
-      triggerHaptic('success');
-      setViewMode('karaoke');
-    } catch (err: any) {
-      console.error('Transcription error:', err);
-      alert(err.message || (isAr ? 'حدث خطأ أثناء التفريغ' : 'Fehler bei der Transkription'));
-    } finally {
-      setIsProcessing(false);
-      setProcessStatus('');
     }
   };
 
@@ -531,13 +485,12 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                         type="button"
                         onClick={() => {
                           setIsMenuOpen(false);
-                          handleTranscribe();
+                          fileInputRef.current?.click();
                         }}
-                        disabled={isProcessing}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[#215641] hover:bg-[#edf4ef] rounded-xl transition-colors text-right"
                       >
-                        <Sparkles className="w-4 h-4 text-[#215641]" />
-                        <span>{isAr ? 'توليد الكلمات بالذكاء الاصطناعي' : 'KI-Transkription'}</span>
+                        <Upload className="w-4 h-4 text-[#215641]" />
+                        <span>{isAr ? 'استيراد ملف .lrc' : 'LRC importieren'}</span>
                       </button>
 
                       {lines.length > 0 && (
@@ -684,12 +637,12 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         setSheetHeight('standard');
-                        handleTranscribe();
+                        fileInputRef.current?.click();
                       }}
                       className="text-xs sm:text-sm font-bold text-[#215641] hover:underline flex items-center gap-1.5 mx-auto bg-[#edf4ef] px-3.5 py-1.5 rounded-xl border border-[#cbe0d2]"
                     >
-                      <Sparkles className="w-4 h-4 text-[#215641]" />
-                      <span>{isAr ? 'توليد الكلمات الآن بالذكاء الاصطناعي' : 'Jetzt transkribieren'}</span>
+                      <Upload className="w-4 h-4 text-[#215641]" />
+                      <span>{isAr ? 'استيراد ملف .lrc' : 'LRC importieren'}</span>
                     </button>
                   </div>
                 ) : (
@@ -720,26 +673,11 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                 ref={lyricsScrollRef}
                 className="flex-1 px-4 sm:px-8 py-6 overflow-y-auto space-y-4 scroll-smooth relative"
               >
-                {/* Processing State */}
-                {isProcessing && (
-                  <div className="my-8 flex flex-col items-center justify-center gap-3.5 text-center p-6 bg-white rounded-3xl border border-[#cbe0d2] shadow-sm">
-                    <div className="w-12 h-12 rounded-2xl bg-[#edf4ef] text-[#215641] flex items-center justify-center border border-[#dbe4dc] shadow-xs">
-                      <Sparkles className="w-6 h-6 animate-spin text-[#215641]" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-base font-bold text-[#15221b] font-display">
-                        {isAr ? 'جاري الاستماع وتفريغ الكلمات...' : 'KI transkribiert Audio...'}
-                      </h4>
-                      <p className="text-xs text-[#6b7c72]">{processStatus}</p>
-                    </div>
-                  </div>
-                )}
-
                 {/* Empty State */}
-                {!isProcessing && lines.length === 0 && (
+                {lines.length === 0 && (
                   <div className="flex flex-col items-center justify-center gap-3.5 py-10 text-center my-auto">
-                    <div className="w-14 h-14 rounded-2xl bg-white border border-[#dbe4dc] text-[#215641] flex items-center justify-center shadow-xs">
-                      <Sparkles className="w-6 h-6 stroke-[2]" />
+                    <div className="w-14 h-14 rounded-2xl bg-[#edf4ef] border border-[#dbe4dc] text-[#215641] flex items-center justify-center shadow-xs">
+                      <Music className="w-6 h-6 stroke-[2]" />
                     </div>
                     <div className="space-y-1 max-w-sm">
                       <h4 className="text-base font-bold text-[#15221b] font-display">
@@ -747,19 +685,19 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                       </h4>
                       <p className="text-xs text-[#6b7c72] leading-relaxed">
                         {isAr
-                          ? 'تفريغ وتوقيت الكلمات يتم لمرة واحدة بالذكاء الاصطناعي ويُحفظ دائماً على جهازك.'
-                          : 'Wird einmalig per KI transkribiert und dauerhaft gespeichert.'}
+                          ? 'يمكنك استيراد ملف كلمات جاهز بصيغة .lrc أو كتابة وتعديل الكلمات والتوقيتات يدوياً.'
+                          : 'Lade eine .lrc Datei hoch oder trage Songtexte manuell ein.'}
                       </p>
                     </div>
 
                     <div className="flex flex-col w-full max-w-xs gap-2 pt-2">
                       <button
                         type="button"
-                        onClick={handleTranscribe}
+                        onClick={() => fileInputRef.current?.click()}
                         className="w-full h-11 rounded-2xl bg-[#215641] hover:bg-[#1a4735] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm"
                       >
-                        <Sparkles className="w-4 h-4 text-amber-300" />
-                        <span>{isAr ? 'توليد الكلمات بالذكاء الاصطناعي' : 'Mit KI transkribieren'}</span>
+                        <Upload className="w-4 h-4" />
+                        <span>{isAr ? 'استيراد ملف .lrc' : 'LRC-Datei importieren'}</span>
                       </button>
 
                       <button
@@ -775,8 +713,7 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                 )}
 
                 {/* Lyrics Presentation - Larger text, clear line-heights */}
-                {!isProcessing &&
-                  lines.length > 0 &&
+                {lines.length > 0 &&
                   lines.map((line, idx) => {
                     const isActive = idx === activeIndex;
                     const isPast = idx < activeIndex;
