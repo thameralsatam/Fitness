@@ -1,40 +1,39 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
+  Sparkles,
   Play,
   Pause,
-  RotateCcw,
-  RotateCw,
-  Clock,
-  Check,
-  Plus,
-  Trash2,
+  SkipBack,
+  SkipForward,
+  MoreVertical,
+  Edit3,
+  Sliders,
+  Copy,
   Download,
   Upload,
-  Copy,
-  AlertCircle,
-  FileText,
-  Sliders,
-  Sparkles,
-  Loader2,
-  MoreVertical,
+  Trash2,
+  Check,
+  Plus,
+  Clock,
+  Music,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  ChevronUp,
   Volume2,
-  Activity,
-  AlignLeft,
-  FastForward,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { AudioTrack } from '../utils/audioDb';
 import { LyricLine, Language } from '../types';
-import { exportToLrcFormat, parseLrcFormat } from '../utils/transcribeService';
-import {
-  detectAcousticPhrases,
-  mechanicallyAlignTextToAudio,
-  generateMechanicalPhrases,
-} from '../utils/localAudioSegmenter';
-import { triggerHaptic } from '../utils/haptics';
-import { notifyModalChange } from '../utils/modalManager';
 import { useAudio } from '../context/AudioContext';
+import {
+  transcribeAudioTrack,
+  parseLrcFormat,
+  exportToLrcFormat,
+} from '../utils/transcribeService';
+import { triggerHaptic } from '../utils/haptics';
+import { ConfirmModal } from './ConfirmModal';
 
 interface LyricsModalProps {
   track: AudioTrack;
@@ -43,12 +42,15 @@ interface LyricsModalProps {
   currentLang: Language;
 }
 
+type SheetHeightMode = 'peek' | 'standard' | 'full';
+
 export const LyricsModal: React.FC<LyricsModalProps> = ({
-  track,
+  track: initialTrack,
   isOpen,
   onClose,
   currentLang,
 }) => {
+  const isAr = currentLang === 'ar';
   const {
     currentTrack,
     isPlaying,
@@ -56,305 +58,125 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
     duration,
     togglePlay,
     handleSeek,
-    handleSkip,
-    playTrackById,
+    handleNext,
+    handlePrev,
     updateTrackLyrics,
+    playTrackById,
   } = useAudio();
 
-  const isAr = currentLang === 'ar';
-  const [activeTab, setActiveTab] = useState<'karaoke' | 'editor' | 'auto_align' | 'raw_lrc'>('karaoke');
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [autoScroll, setAutoScroll] = useState<boolean>(true);
-  const [copySuccess, setCopySuccess] = useState<boolean>(false);
-  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
-  const [isOffsetOpen, setIsOffsetOpen] = useState<boolean>(false);
-
-  // Auto align text input state
-  const [pasteTextInput, setPasteTextInput] = useState<string>('');
-
-  // Live Tap-to-sync state
-  const [tapSyncIndex, setTapSyncIndex] = useState<number>(0);
-
-  // Local editable lines state
-  const [editableLyrics, setEditableLyrics] = useState<LyricLine[]>(track.lyrics || []);
-  const [rawLrcText, setRawLrcText] = useState<string>('');
-
-  const activeLineRef = useRef<HTMLDivElement | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const lrcFileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const isCurrentPlayingTrack = currentTrack?.id === track.id;
-
-  // Track modal open/close in global modal manager
-  useEffect(() => {
-    if (isOpen) {
-      notifyModalChange(true);
-      document.body.style.overflow = 'hidden';
-      return () => {
-        notifyModalChange(false);
-        document.body.style.overflow = 'unset';
-      };
+  // Active track is dynamically synced with current playing track if available
+  const activeTrack = useMemo(() => {
+    if (currentTrack && currentTrack.id === initialTrack.id) {
+      return currentTrack;
     }
-  }, [isOpen]);
+    return currentTrack || initialTrack;
+  }, [currentTrack, initialTrack]);
 
-  // Sync state when track or track.lyrics changes
-  useEffect(() => {
-    if (track) {
-      setEditableLyrics(track.lyrics || []);
-      setRawLrcText(exportToLrcFormat(track.lyrics || [], track.name));
-    }
-  }, [track, track.lyrics]);
+  // View mode: 'karaoke' | 'editor'
+  const [viewMode, setViewMode] = useState<'karaoke' | 'editor'>('karaoke');
 
-  // Keyboard shortcuts (Escape, Space for Tap Sync)
+  // Sheet height: 'peek' (mini bottom view) | 'standard' (75vh) | 'full' (95vh)
+  const [sheetHeight, setSheetHeight] = useState<SheetHeightMode>('standard');
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isOffsetOpen, setIsOffsetOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processStatus, setProcessStatus] = useState<string>('');
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // Local lines synced with active track
+  const [lines, setLines] = useState<LyricLine[]>(activeTrack.lyrics || []);
+
+  const lyricsScrollRef = useRef<HTMLDivElement>(null);
+  const activeLineRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const isInitialMount = useRef(true);
+
+  // Close 3-dot dropdown menu on any outside click / touch interaction
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-      if (e.key === 'Escape') {
-        onClose();
+    if (!isMenuOpen) return;
+    const handleOutsideClick = (e: MouseEvent | TouchEvent | PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        setIsMenuOpen(false);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+    window.addEventListener('pointerdown', handleOutsideClick, true);
+    window.addEventListener('touchstart', handleOutsideClick, true);
+    window.addEventListener('click', handleOutsideClick, true);
+    return () => {
+      window.removeEventListener('pointerdown', handleOutsideClick, true);
+      window.removeEventListener('touchstart', handleOutsideClick, true);
+      window.removeEventListener('click', handleOutsideClick, true);
+    };
+  }, [isMenuOpen]);
 
-  // Find active lyric line index based on current time
-  const currentLyrics = track.lyrics || [];
-  const activeLineIndex = (() => {
-    if (!isCurrentPlayingTrack || currentLyrics.length === 0) return -1;
-    let index = -1;
-    for (let i = 0; i < currentLyrics.length; i++) {
-      if (currentTime >= currentLyrics[i].time) {
-        index = i;
+  // Keep lines synced whenever activeTrack or its lyrics change
+  useEffect(() => {
+    setLines(activeTrack.lyrics || []);
+  }, [activeTrack.id, activeTrack.lyrics]);
+
+  const isCurrentPlaying = currentTrack?.id === activeTrack.id;
+  const activePlayTime = isCurrentPlaying ? currentTime : 0;
+  const activeDuration = isCurrentPlaying ? duration || activeTrack.duration || 0 : activeTrack.duration || 0;
+
+  // Calculate current active line index based on playback time
+  const activeIndex = useMemo(() => {
+    if (!lines || lines.length === 0) return -1;
+    let idx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (activePlayTime >= lines[i].time) {
+        idx = i;
       } else {
         break;
       }
     }
-    return index;
-  })();
+    return idx;
+  }, [lines, activePlayTime]);
 
-  // Smooth auto-scroll to keep active line centered
+  // Smooth scroll to active line
   useEffect(() => {
-    if (autoScroll && activeTab === 'karaoke' && activeLineRef.current && scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      const element = activeLineRef.current;
-      const targetScroll =
-        element.offsetTop - container.offsetTop - container.clientHeight / 2 + element.clientHeight / 2;
+    if (!isOpen || viewMode !== 'karaoke' || activeIndex === -1) return;
 
-      container.scrollTo({
-        top: Math.max(0, targetScroll),
+    if (isInitialMount.current) {
+      const timer = setTimeout(() => {
+        isInitialMount.current = false;
+        if (activeLineRef.current && lyricsScrollRef.current) {
+          activeLineRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+
+    if (activeLineRef.current && lyricsScrollRef.current) {
+      activeLineRef.current.scrollIntoView({
         behavior: 'smooth',
+        block: 'center',
       });
     }
-  }, [activeLineIndex, autoScroll, activeTab]);
+  }, [activeIndex, viewMode, isOpen]);
 
-  // Mechanical Waveform Analysis (100% Client-Side Web Audio API)
-  const handleMechanicalWaveAnalysis = async () => {
-    if (!track.blob) {
-      setStatusMsg(isAr ? 'ملف الصوت غير متوفر في الذاكرة' : 'Audiodatei nicht gefunden');
-      return;
+  // Reset initial mount on open
+  useEffect(() => {
+    if (isOpen) {
+      isInitialMount.current = true;
     }
+  }, [isOpen]);
 
-    setIsProcessing(true);
-    setStatusMsg(null);
-    triggerHaptic('medium');
-
-    try {
-      console.log('[MechanicalEngine] Analyzing acoustic phrases locally via Web Audio API...');
-      const phrases = await generateMechanicalPhrases(track.blob, currentLang);
-      if (phrases.length > 0) {
-        await updateTrackLyrics(track.id, phrases);
-        setEditableLyrics(phrases);
-        setRawLrcText(exportToLrcFormat(phrases, track.name));
-        setActiveTab('karaoke');
-        triggerHaptic('success');
-      } else {
-        setStatusMsg(isAr ? 'لم يتم العثور على فواصل صوتية واضحة' : 'Keine Audioabschnitte erkannt');
-      }
-    } catch (err: any) {
-      console.error('[MechanicalEngine] Local analysis error:', err);
-      setStatusMsg(err?.message || (isAr ? 'حدث خطأ أثناء تحليل الصوت محلياً' : 'Fehler bei der Audioanalyse'));
-    } finally {
-      setIsProcessing(false);
+  // Seek to specific timestamp
+  const handleSeekLine = (time: number) => {
+    triggerHaptic('selection');
+    if (!isCurrentPlaying) {
+      playTrackById(activeTrack.id);
+      setTimeout(() => handleSeek(time), 100);
+    } else {
+      handleSeek(time);
     }
-  };
-
-  // Mechanical Text-to-Audio Waveform Alignment (100% Client-Side)
-  const handleAutoAlignPastedText = async () => {
-    if (!pasteTextInput.trim()) {
-      setStatusMsg(isAr ? 'الرجاء لصق الكلمات أولاً' : 'Bitte zuerst Text einfügen');
-      return;
-    }
-
-    if (!track.blob) {
-      setStatusMsg(isAr ? 'ملف الصوت غير متوفر في الذاكرة' : 'Audiodatei nicht gefunden');
-      return;
-    }
-
-    setIsProcessing(true);
-    setStatusMsg(null);
-    triggerHaptic('medium');
-
-    try {
-      console.log('[MechanicalEngine] Aligning text lines to audio waveform locally...');
-      const alignedLines = await mechanicallyAlignTextToAudio(pasteTextInput, track.blob);
-      if (alignedLines.length > 0) {
-        await updateTrackLyrics(track.id, alignedLines);
-        setEditableLyrics(alignedLines);
-        setRawLrcText(exportToLrcFormat(alignedLines, track.name));
-        setPasteTextInput('');
-        setActiveTab('karaoke');
-        triggerHaptic('success');
-      } else {
-        setStatusMsg(isAr ? 'لم يتم العثور على أسطر صالحة' : 'Keine Zeilen gefunden');
-      }
-    } catch (err: any) {
-      console.error('[MechanicalEngine] Auto-align error:', err);
-      setStatusMsg(err?.message || (isAr ? 'حدث خطأ أثناء المحاذاة الميكانيكية' : 'Fehler bei der Zuordnung'));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Live Tap-To-Sync Next Line
-  const handleTapSyncCurrentLine = async (lineIdx: number) => {
-    if (!isCurrentPlayingTrack) {
-      playTrackById(track.id);
-    }
-    const currentT = parseFloat(currentTime.toFixed(2));
-    const updated = [...editableLyrics];
-    if (updated[lineIdx]) {
-      updated[lineIdx].time = currentT;
-      await updateTrackLyrics(track.id, updated);
-      setEditableLyrics(updated);
-      setRawLrcText(exportToLrcFormat(updated, track.name));
-      setTapSyncIndex(Math.min(updated.length - 1, lineIdx + 1));
-      triggerHaptic('light');
-    }
-  };
-
-  // Adjust all timestamps with offset (+/- seconds)
-  const handleApplyOffset = async (offsetSeconds: number) => {
-    const adjusted = currentLyrics.map((l) => ({
-      ...l,
-      time: Math.max(0, parseFloat((l.time + offsetSeconds).toFixed(2))),
-    }));
-    await updateTrackLyrics(track.id, adjusted);
-    setEditableLyrics(adjusted);
-    setRawLrcText(exportToLrcFormat(adjusted, track.name));
-    triggerHaptic('light');
-  };
-
-  // Save manual line changes
-  const handleSaveLine = async (index: number, newText: string, newTime: number) => {
-    const updated = [...editableLyrics];
-    updated[index] = {
-      ...updated[index],
-      text: newText.trim(),
-      time: Math.max(0, newTime),
-    };
-    updated.sort((a, b) => a.time - b.time);
-    await updateTrackLyrics(track.id, updated);
-    setEditableLyrics(updated);
-    setRawLrcText(exportToLrcFormat(updated, track.name));
-    triggerHaptic('light');
-  };
-
-  // Add line at current playback time
-  const handleAddLineAtCurrentTime = async () => {
-    const newLineTime = isCurrentPlayingTrack ? parseFloat(currentTime.toFixed(2)) : 0;
-    const newLine: LyricLine = {
-      id: `line_${Date.now()}`,
-      time: newLineTime,
-      text: isAr ? 'سطر جديد...' : 'Neue Zeile...',
-    };
-    const updated = [...editableLyrics, newLine].sort((a, b) => a.time - b.time);
-    await updateTrackLyrics(track.id, updated);
-    setEditableLyrics(updated);
-    setRawLrcText(exportToLrcFormat(updated, track.name));
-    triggerHaptic('medium');
-  };
-
-  // Delete single line
-  const handleDeleteLine = async (index: number) => {
-    const updated = editableLyrics.filter((_, i) => i !== index);
-    await updateTrackLyrics(track.id, updated);
-    setEditableLyrics(updated);
-    setRawLrcText(exportToLrcFormat(updated, track.name));
-    triggerHaptic('medium');
-  };
-
-  // Clear all lyrics
-  const handleClearAllLyrics = async () => {
-    if (window.confirm(isAr ? 'هل أنت متأكد من مسح جميع كلمات هذا المقطع؟' : 'Alle Zeilen löschen?')) {
-      await updateTrackLyrics(track.id, []);
-      setEditableLyrics([]);
-      setRawLrcText('');
-      setIsMenuOpen(false);
-      triggerHaptic('medium');
-    }
-  };
-
-  // Save LRC text from raw editor
-  const handleSaveRawLrc = async () => {
-    try {
-      const parsed = parseLrcFormat(rawLrcText);
-      await updateTrackLyrics(track.id, parsed);
-      setEditableLyrics(parsed);
-      setActiveTab('karaoke');
-      triggerHaptic('heavy');
-    } catch (e) {
-      console.error('Failed to parse LRC:', e);
-    }
-  };
-
-  // Import LRC file
-  const handleImportLrcFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        setRawLrcText(content);
-        const parsed = parseLrcFormat(content);
-        if (parsed.length > 0) {
-          await updateTrackLyrics(track.id, parsed);
-          setEditableLyrics(parsed);
-          setActiveTab('karaoke');
-          triggerHaptic('heavy');
-        }
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // Export LRC file download
-  const handleExportLrcDownload = () => {
-    const content = exportToLrcFormat(currentLyrics, track.name);
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${track.name}.lrc`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setIsMenuOpen(false);
-    triggerHaptic('light');
-  };
-
-  // Copy lyrics to clipboard
-  const handleCopyLyrics = () => {
-    const plainText = currentLyrics.map((l) => l.text).join('\n');
-    navigator.clipboard.writeText(plainText).then(() => {
-      setCopySuccess(true);
-      triggerHaptic('light');
-      setTimeout(() => {
-        setCopySuccess(false);
-        setIsMenuOpen(false);
-      }, 1500);
-    });
   };
 
   const formatTime = (secs: number) => {
@@ -364,558 +186,706 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  // Toggle Sheet Height
+  const cycleHeight = () => {
+    triggerHaptic('light');
+    setSheetHeight((prev) => {
+      if (prev === 'peek') return 'standard';
+      if (prev === 'standard') return 'full';
+      return 'peek';
+    });
+  };
+
+  // Single-button toggle for Editing & Saving
+  const toggleEditMode = async () => {
+    triggerHaptic('selection');
+    if (viewMode === 'karaoke') {
+      setViewMode('editor');
+      if (sheetHeight === 'peek') setSheetHeight('standard');
+    } else {
+      // Save & Exit to Karaoke View
+      await updateTrackLyrics(activeTrack.id, lines);
+      setViewMode('karaoke');
+      triggerHaptic('success');
+    }
+  };
+
+  // AI Transcription with Gemini
+  const handleTranscribe = async () => {
+    if (isProcessing) return;
+    triggerHaptic('medium');
+    setIsProcessing(true);
+    setProcessStatus(isAr ? 'جاري الاستماع وتفريغ الكلمات...' : 'KI transkribiert Audio...');
+
+    try {
+      let audioBlob: Blob | null = activeTrack.blob || null;
+      if (!audioBlob && activeTrack.url) {
+        setProcessStatus(isAr ? 'قراءة ملف الصوت...' : 'Lade Datei...');
+        const res = await fetch(activeTrack.url);
+        audioBlob = await res.blob();
+      }
+
+      if (!audioBlob) {
+        throw new Error(isAr ? 'تعذر قراءة ملف الصوت' : 'Audiodatei nicht gefunden');
+      }
+
+      const extracted = await transcribeAudioTrack(
+        audioBlob,
+        activeTrack.mimeType || 'audio/mp3',
+        currentLang,
+        activeTrack.name
+      );
+
+      if (!extracted || extracted.length === 0) {
+        throw new Error(isAr ? 'لم يتم استخراج كلمات من المقطع' : 'Keine Lyrics erkannt');
+      }
+
+      setLines(extracted);
+      await updateTrackLyrics(activeTrack.id, extracted);
+      triggerHaptic('success');
+      setViewMode('karaoke');
+    } catch (err: any) {
+      console.error('Transcription error:', err);
+      alert(err.message || (isAr ? 'حدث خطأ أثناء التفريغ' : 'Fehler bei der Transkription'));
+    } finally {
+      setIsProcessing(false);
+      setProcessStatus('');
+    }
+  };
+
+  // Timing Offset
+  const handleApplyOffset = async (offsetSec: number) => {
+    if (!lines || lines.length === 0) return;
+    triggerHaptic('light');
+
+    const updated = lines.map((line) => ({
+      ...line,
+      time: Math.max(0, parseFloat((line.time + offsetSec).toFixed(2))),
+    }));
+
+    setLines(updated);
+    await updateTrackLyrics(activeTrack.id, updated);
+  };
+
+  // Editor line updates
+  const handleSaveLine = async (index: number, newText: string, newTime: number) => {
+    const updated = [...lines];
+    updated[index] = {
+      ...updated[index],
+      text: newText.trim(),
+      time: Math.max(0, parseFloat(newTime.toFixed(2))),
+    };
+    updated.sort((a, b) => a.time - b.time);
+    setLines(updated);
+    await updateTrackLyrics(activeTrack.id, updated);
+  };
+
+  const handleDeleteLine = async (index: number) => {
+    triggerHaptic('light');
+    const updated = lines.filter((_, i) => i !== index);
+    setLines(updated);
+    await updateTrackLyrics(activeTrack.id, updated);
+  };
+
+  const handleAddLineNow = async () => {
+    triggerHaptic('light');
+    const targetTime = Math.max(0, parseFloat(activePlayTime.toFixed(2)));
+    const newLine: LyricLine = {
+      id: `line_${Date.now()}`,
+      time: targetTime,
+      text: isAr ? 'سطر جديد' : 'Neue Zeile',
+    };
+    const updated = [...lines, newLine].sort((a, b) => a.time - b.time);
+    setLines(updated);
+    await updateTrackLyrics(activeTrack.id, updated);
+  };
+
+  const handleClearAll = () => {
+    setIsMenuOpen(false);
+    setShowClearConfirm(true);
+  };
+
+  const handleConfirmClearAllLyrics = async () => {
+    triggerHaptic('medium');
+    setLines([]);
+    await updateTrackLyrics(activeTrack.id, []);
+    setShowClearConfirm(false);
+  };
+
+  const handleCopyText = async () => {
+    if (!lines || lines.length === 0) return;
+    const fullText = lines.map((l) => l.text).join('\n');
+    await navigator.clipboard.writeText(fullText);
+    setCopySuccess(true);
+    triggerHaptic('success');
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  const handleExportLrc = () => {
+    if (!lines || lines.length === 0) return;
+    const lrcContent = exportToLrcFormat(lines, activeTrack.name);
+    const blob = new Blob([lrcContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeTrack.name.replace(/\.[^/.]+$/, '')}.lrc`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setIsMenuOpen(false);
+  };
+
+  const handleImportLrcFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        const parsed = parseLrcFormat(content);
+        if (parsed.length > 0) {
+          setLines(parsed);
+          await updateTrackLyrics(activeTrack.id, parsed);
+          triggerHaptic('success');
+          setViewMode('karaoke');
+        }
+      }
+    };
+    reader.readAsText(file);
+    setIsMenuOpen(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   if (!isOpen) return null;
+
+  // Compute container height classes based on sheetHeight
+  const heightClasses = useMemo(() => {
+    switch (sheetHeight) {
+      case 'peek':
+        return 'h-[280px] max-h-[300px]';
+      case 'full':
+        return 'h-[95vh]';
+      case 'standard':
+      default:
+        return 'h-[75vh] max-h-[700px]';
+    }
+  }, [sheetHeight]);
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 bg-black/40 backdrop-blur-xs"
-          onClick={() => {
+      <div
+        id="lyrics-bottom-sheet-backdrop"
+        className="fixed inset-0 z-50 flex flex-col justify-end bg-black/35 animate-fade-in"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
             triggerHaptic('light');
             onClose();
-          }}
-        />
-
-        {/* Dialog Modal Container */}
+          }
+        }}
+      >
         <motion.div
-          initial={{ y: '100%', opacity: 0.5 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: '100%', opacity: 0 }}
-          transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-          className="relative w-full max-w-lg bg-white rounded-t-[32px] sm:rounded-3xl shadow-2xl border border-[#e2ebe3] z-10 overflow-hidden max-h-[90vh] flex flex-col text-[#15221b]"
-          dir={isAr ? 'rtl' : 'ltr'}
+          id="lyrics-bottom-sheet"
+          initial={{ y: '100%' }}
+          animate={{ y: 0 }}
+          exit={{ y: '100%' }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          className={`w-full bg-white text-[#15221b] rounded-t-[32px] sm:rounded-t-[36px] shadow-2xl border-t border-x border-[#e2ebe3] flex flex-col overflow-hidden max-w-3xl mx-auto transition-[height] duration-200 ease-out will-change-transform ${heightClasses}`}
         >
-          {/* Header Bar */}
-          <div className="flex items-center justify-between px-5 pt-5 pb-3.5 border-b border-[#eef4f0] flex-shrink-0 bg-white">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="w-11 h-11 rounded-2xl bg-[#edf4ef] text-[#215641] flex items-center justify-center border border-[#dbe4dc] shadow-2xs flex-shrink-0">
-                <FileText className="w-5 h-5 stroke-[2.2]" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="font-display font-extrabold text-base sm:text-lg text-[#15221b] truncate leading-tight">
-                  {track.name}
-                </h3>
-                <div className="flex items-center gap-2 mt-0.5 text-xs text-[#75877d] font-medium">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#215641]" />
-                  <span>{isAr ? 'نظام الكلمات الميكانيكي المحلي' : 'Lokale Audio-Lyrics'}</span>
-                  {currentLyrics.length > 0 && (
-                    <span className="text-[#94a39a]">({currentLyrics.length} {isAr ? 'سطر' : 'Zeilen'})</span>
-                  )}
+          {/* ================= 1. PULL HANDLE & CLEAN TOP HEADER ================= */}
+          <div className="pt-2 pb-2.5 px-4 sm:px-5 bg-white border-b border-[#eef4f0] flex-shrink-0 flex flex-col gap-1.5">
+            {/* Centered Clickable Pull Bar */}
+            <button
+              type="button"
+              onClick={cycleHeight}
+              className="w-full py-1 flex items-center justify-center cursor-pointer group"
+              title={
+                isAr
+                  ? sheetHeight === 'peek'
+                    ? 'توسيع'
+                    : sheetHeight === 'standard'
+                    ? 'تكبير كامل'
+                    : 'تصغير للأسفل'
+                  : 'Größe anpassen'
+              }
+            >
+              <div className="w-12 h-1.5 bg-[#d8e3d9] group-hover:bg-[#215641]/50 rounded-full transition-colors" />
+            </button>
+
+            <div className="flex items-center justify-between gap-3 pt-0.5">
+              {/* Track Info (Left) */}
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="w-8 h-8 rounded-xl bg-[#edf4ef] text-[#215641] flex items-center justify-center flex-shrink-0 border border-[#dbe4dc] shadow-2xs">
+                  <Music className="w-4 h-4 stroke-[2.2]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-[#15221b] truncate font-display">
+                    {activeTrack.name}
+                  </h3>
+                  <div className="text-xs text-[#6b7c72] flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#215641]" />
+                    <span className="truncate">
+                      {lines.length > 0
+                        ? isAr
+                          ? `${lines.length} سطر متزامن`
+                          : `${lines.length} Zeilen`
+                        : isAr
+                        ? 'الكلمات المتزامنة'
+                        : 'Lyrics'}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Top Right Controls */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {currentLyrics.length > 0 && (
-                <div className="relative">
+              {/* Action Buttons (Right) - Unified single edit button & clean controls */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Single Toggle Button: [ ✍️ تعديل ] OR [ ✔️ حفظ والانتهاء ] (Icon only, matches adjacent buttons) */}
+                {sheetHeight !== 'peek' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isPlaying && isCurrentPlaying && viewMode === 'karaoke') return;
+                      toggleEditMode();
+                    }}
+                    disabled={isPlaying && isCurrentPlaying && viewMode === 'karaoke'}
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-2xs border ${
+                      viewMode === 'editor'
+                        ? 'bg-[#215641] text-white border-[#215641] shadow-xs'
+                        : isPlaying && isCurrentPlaying
+                        ? 'bg-[#f4f8f5] text-[#a0b0a6] border-[#dbe4dc] opacity-50 cursor-not-allowed'
+                        : 'bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#42544a] border-[#dbe4dc]'
+                    }`}
+                    title={
+                      viewMode === 'editor'
+                        ? isAr
+                          ? 'حفظ التعديلات والانتهاء'
+                          : 'Speichern & Fertig'
+                        : isPlaying && isCurrentPlaying
+                        ? isAr
+                          ? 'أوقف التشغيل لتعديل الكلمات'
+                          : 'Pausiere Wiedergabe zum Bearbeiten'
+                        : isAr
+                        ? 'تعديل الكلمات والتوقيت'
+                        : 'Lyrics bearbeiten'
+                    }
+                  >
+                    {viewMode === 'editor' ? (
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                    ) : (
+                      <Edit3 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                )}
+
+                {/* Sheet Size / Peek / Expand Toggle Button */}
+                <button
+                  type="button"
+                  onClick={cycleHeight}
+                  className="w-8 h-8 rounded-xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#42544a] flex items-center justify-center transition-all border border-[#dbe4dc] active:scale-95 shadow-2xs"
+                  title={
+                    isAr
+                      ? sheetHeight === 'peek'
+                        ? 'توسيع للأعلى'
+                        : sheetHeight === 'standard'
+                        ? 'شاشة كاملة'
+                        : 'تصغير شريط سفلي'
+                      : 'Größe'
+                  }
+                >
+                  {sheetHeight === 'peek' ? (
+                    <ChevronUp className="w-4 h-4 stroke-[2.5]" />
+                  ) : sheetHeight === 'standard' ? (
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 stroke-[2.5]" />
+                  )}
+                </button>
+
+                {/* Combined Menu (...) for All Tools & Options */}
+                <div ref={menuRef} data-lyrics-menu className="relative">
                   <button
                     type="button"
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="w-9 h-9 rounded-2xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#596b60] hover:text-[#15221b] flex items-center justify-center transition-all border border-[#e2ebe3] active:scale-95"
-                    title={isAr ? 'خيارات إضافية' : 'Optionen'}
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all border active:scale-95 shadow-2xs ${
+                      isMenuOpen
+                        ? 'bg-[#215641] text-white border-[#215641]'
+                        : 'bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#42544a] border-[#dbe4dc]'
+                    }`}
+                    title={isAr ? 'الخيارات والأدوات' : 'Optionen'}
                   >
                     <MoreVertical className="w-4 h-4" />
                   </button>
 
-                  {/* Dropdown Menu */}
                   {isMenuOpen && (
-                    <div className="absolute top-11 ltr:right-0 rtl:left-0 z-30 w-48 bg-white rounded-2xl shadow-xl border border-[#e2ebe3] p-1.5 space-y-1 animate-fade-in text-xs font-bold">
+                    <>
+                      <div
+                        className="fixed inset-0 z-30"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsMenuOpen(false);
+                        }}
+                      />
+                      <div
+                        className="absolute top-10 ltr:right-0 rtl:left-0 z-40 w-56 bg-white rounded-2xl shadow-xl border border-[#dbe4dc] p-1.5 space-y-1 text-xs font-bold animate-fade-in"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                       <button
                         type="button"
-                        onClick={handleCopyLyrics}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[#15221b] hover:bg-[#f4f8f5] rounded-xl transition-colors text-right"
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          handleTranscribe();
+                        }}
+                        disabled={isProcessing}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[#215641] hover:bg-[#edf4ef] rounded-xl transition-colors text-right"
                       >
-                        {copySuccess ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#596b60]" />}
-                        <span>{copySuccess ? (isAr ? 'تم النسخ!' : 'Kopiert!') : (isAr ? 'نسخ النص بالكامل' : 'Text kopieren')}</span>
+                        <Sparkles className="w-4 h-4 text-[#215641]" />
+                        <span>{isAr ? 'توليد الكلمات بالذكاء الاصطناعي' : 'KI-Transkription'}</span>
                       </button>
+
+                      {lines.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOffsetOpen(!isOffsetOpen);
+                            setIsMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[#15221b] hover:bg-[#f4f8f5] rounded-xl transition-colors text-right"
+                        >
+                          <Sliders className="w-4 h-4 text-[#6b7c72]" />
+                          <span>{isAr ? 'وزن وتعديل التوقيت (Offset)' : 'Timing anpassen'}</span>
+                        </button>
+                      )}
+
+                      {lines.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleCopyText();
+                            setIsMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[#15221b] hover:bg-[#f4f8f5] rounded-xl transition-colors text-right"
+                        >
+                          {copySuccess ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6b7c72]" />}
+                          <span>{copySuccess ? (isAr ? 'تم النسخ!' : 'Kopiert!') : (isAr ? 'نسخ النص كاملاً' : 'Text kopieren')}</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
-                        onClick={handleExportLrcDownload}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[#15221b] hover:bg-[#f4f8f5] rounded-xl transition-colors text-right"
+                        onClick={handleExportLrc}
+                        disabled={lines.length === 0}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[#15221b] hover:bg-[#f4f8f5] rounded-xl transition-colors text-right disabled:opacity-40"
                       >
-                        <Download className="w-4 h-4 text-[#596b60]" />
+                        <Download className="w-4 h-4 text-[#6b7c72]" />
                         <span>{isAr ? 'تصدير ملف .lrc' : 'LRC exportieren'}</span>
                       </button>
 
-                      <div className="my-1 border-t border-[#eef4f0]" />
-
                       <button
                         type="button"
-                        onClick={handleClearAllLyrics}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors text-right"
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[#15221b] hover:bg-[#f4f8f5] rounded-xl transition-colors text-right"
                       >
-                        <Trash2 className="w-4 h-4 text-rose-500" />
-                        <span>{isAr ? 'حذف جميع الكلمات' : 'Lyrics löschen'}</span>
+                        <Upload className="w-4 h-4 text-[#6b7c72]" />
+                        <span>{isAr ? 'استيراد ملف .lrc' : 'LRC importieren'}</span>
                       </button>
+
+                      {lines.length > 0 && (
+                        <div className="pt-1 border-t border-[#eef4f0]">
+                          <button
+                            type="button"
+                            onClick={handleClearAll}
+                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors text-right"
+                          >
+                            <Trash2 className="w-4 h-4 text-rose-500" />
+                            <span>{isAr ? 'حذف جميع الكلمات' : 'Lyrics löschen'}</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
+                  </>
                   )}
                 </div>
-              )}
 
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('light');
-                  onClose();
-                }}
-                className="w-9 h-9 rounded-2xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#596b60] hover:text-[#15221b] flex items-center justify-center transition-all border border-[#e2ebe3] active:scale-95"
-              >
-                <X className="w-5 h-5 stroke-[2.2]" />
-              </button>
-            </div>
-          </div>
-
-          {/* Clean Segmented Navigation Tabs */}
-          <div className="px-5 py-2.5 border-b border-[#eef4f0] bg-[#fafcfa] flex items-center justify-between gap-2 flex-shrink-0 overflow-x-auto">
-            <div className="flex items-center gap-1 bg-[#edf2ee] p-1 rounded-2xl border border-[#dfe7e1] flex-1 min-w-[340px]">
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setActiveTab('karaoke');
-                }}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-98 ${
-                  activeTab === 'karaoke'
-                    ? 'bg-[#215641] text-white shadow-2xs'
-                    : 'text-[#607267] hover:text-[#15221b]'
-                }`}
-              >
-                {isAr ? 'العرض المتزامن' : 'Karaoke'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setActiveTab('auto_align');
-                }}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-98 ${
-                  activeTab === 'auto_align'
-                    ? 'bg-[#215641] text-white shadow-2xs'
-                    : 'text-[#607267] hover:text-[#15221b]'
-                }`}
-              >
-                {isAr ? 'مطابقة النص الميكانيكية' : 'Auto-Sync'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setActiveTab('editor');
-                }}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-98 ${
-                  activeTab === 'editor'
-                    ? 'bg-[#215641] text-white shadow-2xs'
-                    : 'text-[#607267] hover:text-[#15221b]'
-                }`}
-              >
-                {isAr ? 'محرر الأسطر' : 'Editor'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setActiveTab('raw_lrc');
-                }}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-98 ${
-                  activeTab === 'raw_lrc'
-                    ? 'bg-[#215641] text-white shadow-2xs'
-                    : 'text-[#607267] hover:text-[#15221b]'
-                }`}
-              >
-                {isAr ? 'ملف LRC' : 'LRC'}
-              </button>
-            </div>
-
-            {/* Quick Offset Toggle */}
-            {currentLyrics.length > 0 && activeTab === 'karaoke' && (
-              <button
-                type="button"
-                onClick={() => setIsOffsetOpen(!isOffsetOpen)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 active:scale-95 flex-shrink-0 ${
-                  isOffsetOpen
-                    ? 'bg-[#215641] text-white border-[#215641] shadow-2xs'
-                    : 'bg-white text-[#596b60] border-[#dbe4dc] hover:bg-[#f4f8f5]'
-                }`}
-                title={isAr ? 'وزن التوقيت' : 'Offset'}
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{isAr ? 'وزن التوقيت' : 'Offset'}</span>
-              </button>
-            )}
-          </div>
-
-          {/* Quick Action Tools Bar */}
-          <div className="px-5 py-2.5 bg-white border-b border-[#eef4f0] flex items-center justify-between gap-3 flex-shrink-0 text-xs">
-            <input
-              ref={lrcFileInputRef}
-              type="file"
-              accept=".lrc,.txt"
-              onChange={handleImportLrcFile}
-              className="hidden"
-            />
-
-            <div className="flex items-center gap-2">
-              {/* Mechanical Audio Wave Segmentation Button */}
-              <button
-                type="button"
-                onClick={handleMechanicalWaveAnalysis}
-                disabled={isProcessing}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold border transition-all active:scale-95 shadow-2xs ${
-                  isProcessing
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 animate-pulse'
-                    : 'bg-[#edf4ef] hover:bg-[#e4efe7] text-[#215641] border-[#cbe0d2]'
-                }`}
-                title={isAr ? 'تحليل الوقفات وموجات الصوت ميكانيكياً بدون إنترنت' : 'Audio-Wellenanalyse'}
-              >
-                {isProcessing ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#215641]" />
-                ) : (
-                  <Activity className="w-3.5 h-3.5 stroke-[2.2] text-[#215641]" />
-                )}
-                <span>
-                  {isProcessing
-                    ? isAr
-                      ? 'جاري التحليل محلياً...'
-                      : 'Wird analysiert...'
-                    : isAr
-                    ? 'تحليل فواصل الصوت محلياً'
-                    : 'Wellen-Analyse'}
-                </span>
-              </button>
-
-              {/* Import ready .lrc file */}
-              <button
-                type="button"
-                onClick={() => lrcFileInputRef.current?.click()}
-                disabled={isProcessing}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white hover:bg-[#f4f8f5] text-[#596b60] border border-[#dbe4dc] transition-all active:scale-95 disabled:opacity-50"
-              >
-                <Upload className="w-3.5 h-3.5 stroke-[2.2]" />
-                <span>{isAr ? 'استيراد .lrc' : 'LRC'}</span>
-              </button>
-            </div>
-
-            {currentLyrics.length > 0 && activeTab === 'karaoke' && (
-              <button
-                type="button"
-                onClick={() => setAutoScroll(!autoScroll)}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition-all active:scale-95 ${
-                  autoScroll
-                    ? 'bg-[#edf4ef] text-[#215641] border-[#cbe0d2]'
-                    : 'bg-white text-[#94a39a] border-[#e2ebe3]'
-                }`}
-              >
-                {isAr ? 'متابعة تلقائية' : 'Auto-Scroll'}
-              </button>
-            )}
-          </div>
-
-          {/* Status / Error Message Banner */}
-          {statusMsg && (
-            <div className="mx-5 mt-2.5 p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-2.5 text-xs font-medium animate-fade-in">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span className="leading-normal truncate">{statusMsg}</span>
+                {/* Close Button (X) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    onClose();
+                  }}
+                  className="w-8 h-8 rounded-xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#596b60] hover:text-[#15221b] flex items-center justify-center transition-all border border-[#dbe4dc] active:scale-95 shadow-2xs"
+                  title={isAr ? 'إغلاق' : 'Schließen'}
+                >
+                  <X className="w-4 h-4 stroke-[2.2]" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setStatusMsg(null)}
-                className="text-amber-600 hover:text-amber-800 p-1"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
             </div>
-          )}
+          </div>
 
-          {/* Sync Offset Quick Panel */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".lrc,.txt"
+            onChange={handleImportLrcFile}
+            className="hidden"
+          />
+
+          {/* ================= 2. COLLAPSIBLE OFFSET ADJUSTMENT ================= */}
           <AnimatePresence>
             {isOffsetOpen && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="bg-[#f4f8f5] px-5 py-2.5 border-b border-[#e2ebe3] flex items-center justify-between gap-3 text-xs overflow-hidden"
+                className="bg-[#f4f8f5] px-4 sm:px-5 py-2.5 border-b border-[#e2ebe3] flex flex-wrap items-center justify-between gap-2 text-xs overflow-hidden flex-shrink-0"
               >
-                <span className="text-[#596b60] font-bold">
-                  {isAr ? 'وزن توقيت الكلمات بالكامل:' : 'Timing verschieben:'}
-                </span>
-                <div className="flex items-center gap-1.5" dir="ltr">
+                <div className="flex items-center gap-1.5 text-[#215641] font-bold">
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'وزن التوقيت لجميع الأسطر:' : 'Timing anpassen:'}</span>
+                </div>
+                <div className="flex items-center gap-1" dir="ltr">
+                  {[-1.0, -0.5, -0.2, 0.2, 0.5, 1.0].map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => handleApplyOffset(sec)}
+                      className="h-6.5 px-2 rounded-lg bg-white border border-[#dbe4dc] text-[#15221b] font-mono font-bold hover:bg-[#edf4ef] active:scale-95 shadow-2xs transition-all text-xs"
+                    >
+                      {sec > 0 ? `+${sec}s` : `${sec}s`}
+                    </button>
+                  ))}
                   <button
                     type="button"
-                    onClick={() => handleApplyOffset(-0.5)}
-                    className="px-2.5 py-1 rounded-xl bg-white border border-[#dbe4dc] text-[#15221b] font-mono font-bold hover:bg-[#edf4ef] active:scale-95 transition-all shadow-2xs"
+                    onClick={() => setIsOffsetOpen(false)}
+                    className="h-6.5 px-2 rounded-lg text-[#6b7c72] hover:text-[#15221b] font-bold text-xs"
                   >
-                    -0.5s
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyOffset(-0.2)}
-                    className="px-2 py-1 rounded-xl bg-white border border-[#dbe4dc] text-[#15221b] font-mono font-bold hover:bg-[#edf4ef] active:scale-95 transition-all shadow-2xs"
-                  >
-                    -0.2s
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyOffset(0.2)}
-                    className="px-2 py-1 rounded-xl bg-white border border-[#dbe4dc] text-[#15221b] font-mono font-bold hover:bg-[#edf4ef] active:scale-95 transition-all shadow-2xs"
-                  >
-                    +0.2s
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyOffset(0.5)}
-                    className="px-2.5 py-1 rounded-xl bg-white border border-[#dbe4dc] text-[#15221b] font-mono font-bold hover:bg-[#edf4ef] active:scale-95 transition-all shadow-2xs"
-                  >
-                    +0.5s
+                    {isAr ? 'إغلاق' : 'OK'}
                   </button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* ================= TAB 1: LUXURY CARD-LESS LYRICS STREAM ================= */}
-          {activeTab === 'karaoke' && (
-            <div
-              ref={scrollContainerRef}
-              className="flex-1 px-5 py-6 overflow-y-auto min-h-[300px] max-h-[52vh] scroll-smooth"
-            >
-              {currentLyrics.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-3.5 py-14 text-center">
-                  <div className="w-16 h-16 rounded-3xl bg-[#edf4ef] border border-[#dbe4dc] text-[#215641] flex items-center justify-center shadow-2xs">
-                    <Activity className="w-7 h-7 stroke-[2]" />
-                  </div>
-                  <div className="space-y-1 max-w-xs">
-                    <h4 className="text-base font-extrabold text-[#15221b]">
-                      {isAr ? 'لا توجد كلمات متزامنة بعد' : 'Noch keine Lyrics'}
-                    </h4>
-                    <p className="text-xs text-[#75877d] leading-relaxed">
-                      {isAr
-                        ? 'يمكنك لصق كلمات المقطع وتوزيعها ميكانيكياً على الصوت محلياً 100% بدون أي خادم أو إنترنت.'
-                        : 'Füge den Text ein und passe ihn lokal per Wellenanalyse an.'}
+          {/* ================= 3. CONTENT (PEEK / KARAOKE / EDITOR) ================= */}
+          <div className="flex-1 relative overflow-hidden flex flex-col bg-[#fafcfa]">
+            {/* A. PEEK MODE: MINI CONCISE VIEW (With larger, clearer typography) */}
+            {sheetHeight === 'peek' && (
+              <div
+                className="flex-1 px-5 py-4 flex flex-col justify-center items-center text-center cursor-pointer select-none bg-gradient-to-b from-white to-[#f7faf8] group"
+                onClick={() => setSheetHeight('standard')}
+              >
+                {lines.length === 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold text-[#6b7c72]">
+                      {isAr ? 'لا توجد كلمات محفوظة' : 'Keine Lyrics vorhanden'}
                     </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                     <button
                       type="button"
-                      onClick={() => setActiveTab('auto_align')}
-                      className="px-5 py-2.5 rounded-2xl bg-[#215641] hover:bg-[#1b4635] text-white font-bold text-xs flex items-center gap-2 transition-all active:scale-95 shadow-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSheetHeight('standard');
+                        handleTranscribe();
+                      }}
+                      className="text-xs sm:text-sm font-bold text-[#215641] hover:underline flex items-center gap-1.5 mx-auto bg-[#edf4ef] px-3.5 py-1.5 rounded-xl border border-[#cbe0d2]"
                     >
-                      <AlignLeft className="w-4 h-4" />
-                      <span>{isAr ? 'لصق ومحاذاة الكلمات ميكانيكياً' : 'Text einfügen & anpassen'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleMechanicalWaveAnalysis}
-                      disabled={isProcessing}
-                      className="px-4 py-2.5 rounded-2xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#215641] font-bold text-xs flex items-center gap-1.5 transition-all border border-[#dbe4dc] active:scale-95 disabled:opacity-50"
-                    >
-                      <Activity className="w-4 h-4" />
-                      <span>{isAr ? 'توليد فواصل الصوت' : 'Wellenanalyse'}</span>
+                      <Sparkles className="w-4 h-4 text-[#215641]" />
+                      <span>{isAr ? 'توليد الكلمات الآن بالذكاء الاصطناعي' : 'Jetzt transkribieren'}</span>
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-4 py-4 max-w-lg mx-auto">
-                  {currentLyrics.map((line, idx) => {
-                    const isActive = idx === activeLineIndex;
-                    const isPast = idx < activeLineIndex;
+                ) : (
+                  <div className="space-y-2 max-w-xl w-full">
+                    {/* Active highlighted line in large readable font */}
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-[#15221b] font-display line-clamp-2 px-3 transition-all leading-snug">
+                      {activeIndex >= 0 && lines[activeIndex]
+                        ? lines[activeIndex].text
+                        : isAr
+                        ? '🎵 جاري الاستماع للمقطع...'
+                        : '🎵 Wiedergabe...'}
+                    </div>
+
+                    {/* Next line preview */}
+                    {activeIndex + 1 < lines.length && (
+                      <div className="text-xs sm:text-sm font-medium text-[#7a8f82] line-clamp-1 opacity-85">
+                        {lines[activeIndex + 1].text}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* B. STANDARD / FULL MODE: FULL KARAOKE VIEW (With prominent font size) */}
+            {sheetHeight !== 'peek' && viewMode === 'karaoke' && (
+              <div
+                ref={lyricsScrollRef}
+                className="flex-1 px-4 sm:px-8 py-6 overflow-y-auto space-y-4 scroll-smooth relative"
+              >
+                {/* Processing State */}
+                {isProcessing && (
+                  <div className="my-8 flex flex-col items-center justify-center gap-3.5 text-center p-6 bg-white rounded-3xl border border-[#cbe0d2] shadow-sm">
+                    <div className="w-12 h-12 rounded-2xl bg-[#edf4ef] text-[#215641] flex items-center justify-center border border-[#dbe4dc] shadow-xs">
+                      <Sparkles className="w-6 h-6 animate-spin text-[#215641]" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-base font-bold text-[#15221b] font-display">
+                        {isAr ? 'جاري الاستماع وتفريغ الكلمات...' : 'KI transkribiert Audio...'}
+                      </h4>
+                      <p className="text-xs text-[#6b7c72]">{processStatus}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {!isProcessing && lines.length === 0 && (
+                  <div className="flex flex-col items-center justify-center gap-3.5 py-10 text-center my-auto">
+                    <div className="w-14 h-14 rounded-2xl bg-white border border-[#dbe4dc] text-[#215641] flex items-center justify-center shadow-xs">
+                      <Sparkles className="w-6 h-6 stroke-[2]" />
+                    </div>
+                    <div className="space-y-1 max-w-sm">
+                      <h4 className="text-base font-bold text-[#15221b] font-display">
+                        {isAr ? 'لا توجد كلمات لهذا المقطع بعد' : 'Keine Lyrics vorhanden'}
+                      </h4>
+                      <p className="text-xs text-[#6b7c72] leading-relaxed">
+                        {isAr
+                          ? 'تفريغ وتوقيت الكلمات يتم لمرة واحدة بالذكاء الاصطناعي ويُحفظ دائماً على جهازك.'
+                          : 'Wird einmalig per KI transkribiert und dauerhaft gespeichert.'}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col w-full max-w-xs gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleTranscribe}
+                        className="w-full h-11 rounded-2xl bg-[#215641] hover:bg-[#1a4735] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>{isAr ? 'توليد الكلمات بالذكاء الاصطناعي' : 'Mit KI transkribieren'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('editor')}
+                        className="w-full h-10 rounded-2xl bg-white hover:bg-[#f4f8f5] text-[#215641] font-bold text-xs flex items-center justify-center gap-2 transition-all border border-[#dbe4dc] active:scale-98 shadow-2xs"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'إدخال أو تعديل يدوي' : 'Manuell eingeben'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Lyrics Presentation - Larger text, clear line-heights */}
+                {!isProcessing &&
+                  lines.length > 0 &&
+                  lines.map((line, idx) => {
+                    const isActive = idx === activeIndex;
+                    const isPast = idx < activeIndex;
 
                     return (
                       <div
                         key={line.id || idx}
                         ref={isActive ? activeLineRef : null}
-                        onClick={() => {
-                          if (!isCurrentPlayingTrack) {
-                            playTrackById(track.id);
-                          }
-                          handleSeek(line.time);
-                          triggerHaptic('light');
-                        }}
-                        className={`group px-4 py-3 rounded-2xl transition-all duration-300 cursor-pointer flex items-center justify-between gap-3 ${
+                        onClick={() => handleSeekLine(line.time)}
+                        className={`group px-4 py-3.5 rounded-2xl transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 border select-none ${
                           isActive
-                            ? 'bg-[#edf4ef]/90 text-[#15221b] scale-[1.02] shadow-xs'
+                            ? 'bg-[#edf4ef] border-[#bad3c3] text-[#15221b] scale-[1.01] shadow-xs'
                             : isPast
-                            ? 'text-[#8b9e93] hover:text-[#15221b] hover:bg-[#fafcfa]'
-                            : 'text-[#47574e] hover:text-[#15221b] hover:bg-[#fafcfa]'
+                            ? 'bg-transparent border-transparent text-[#8b9e93] hover:text-[#15221b] hover:bg-white'
+                            : 'bg-transparent border-transparent text-[#47574e] hover:text-[#15221b] hover:bg-white'
                         }`}
                       >
-                        {/* Lyric Text with High Typography Craft */}
-                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                          {/* Active Pulsing Indicator Line */}
-                          <div
-                            className={`w-1.5 self-stretch rounded-full transition-all duration-300 ${
-                              isActive
-                                ? 'bg-[#215641]'
-                                : 'bg-transparent group-hover:bg-[#dbe4dc]'
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <span
+                            className={`w-2 h-2 rounded-full flex-shrink-0 transition-all ${
+                              isActive ? 'bg-[#215641] scale-150 ring-4 ring-[#215641]/15' : 'bg-transparent'
                             }`}
                           />
-
-                          <div
-                            className={`text-base sm:text-[17px] leading-relaxed transition-all duration-200 ${
+                          <p
+                            className={`font-display leading-relaxed transition-all break-words ${
                               isActive
-                                ? 'text-[#215641] font-extrabold font-display'
-                                : 'font-medium font-display'
+                                ? 'text-base sm:text-lg md:text-xl font-bold text-[#15221b]'
+                                : 'text-sm sm:text-base font-medium'
                             }`}
                           >
                             {line.text}
-                          </div>
+                          </p>
                         </div>
 
-                        {/* Subtle Time Tag */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span
-                            className={`text-[11px] font-mono font-bold transition-all px-2 py-0.5 rounded-lg ${
-                              isActive
-                                ? 'text-[#215641] bg-[#dbe8df]'
-                                : 'text-[#a3b3a9] opacity-70 group-hover:opacity-100'
-                            }`}
-                          >
-                            {formatTime(line.time)}
-                          </span>
-                        </div>
+                        <span
+                          className={`text-xs font-mono font-bold px-2.5 py-1 rounded-xl flex-shrink-0 border transition-all ${
+                            isActive
+                              ? 'text-[#215641] bg-white border-[#bad3c3] shadow-2xs'
+                              : 'text-[#94a39a] bg-white/60 border-[#e2ebe3]'
+                          }`}
+                        >
+                          {formatTime(line.time)}
+                        </span>
                       </div>
                     );
                   })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ================= TAB 2: MECHANICAL TEXT AUTO-ALIGN ================= */}
-          {activeTab === 'auto_align' && (
-            <div className="flex-1 p-5 overflow-y-auto space-y-3 min-h-[300px] max-h-[52vh]">
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-[#15221b] flex items-center gap-1.5">
-                    <AlignLeft className="w-4 h-4 text-[#215641]" />
-                    {isAr ? 'محاذاة النص على موجات الصوت ميكانيكياً' : 'Text lokal zuordnen'}
-                  </span>
-                  <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
-                    {isAr ? 'محلي 100% بدون خادم' : '100% Offline'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-[#75877d] leading-relaxed">
-                  {isAr
-                    ? 'الصق كلمات المقطع سطراً بسطر. سيقوم المحرك الميكانيكي بالمتصفح بقياس طاقة الصوت وتوزيع الأسطر بدقة على فواصل الكلام.'
-                    : 'Füge den Text zeilenweise ein. Die Audio-Pausen werden automatisch erkannt.'}
-                </p>
               </div>
+            )}
 
-              <textarea
-                value={pasteTextInput}
-                onChange={(e) => setPasteTextInput(e.target.value)}
-                rows={8}
-                className="w-full bg-[#f8faf8] border border-[#dbe4dc] rounded-2xl p-3.5 text-xs font-medium text-[#15221b] focus:outline-none focus:border-[#215641] leading-relaxed placeholder:text-[#a0b0a6]"
-                placeholder={
-                  isAr
-                    ? 'الصق نص الكلمات هنا (سطر لكل بيت أو جملة):\nالسطر الأول هنا...\nالسطر الثاني هنا...\nالسطر الثالث هنا...'
-                    : 'Text hier zeilenweise einfügen...'
-                }
-              />
+            {/* C. EDIT MODE: LINE EDITOR */}
+            {sheetHeight !== 'peek' && viewMode === 'editor' && (
+              <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3 bg-white">
+                <div className="flex items-center justify-between gap-2.5 pb-1">
+                  <button
+                    type="button"
+                    onClick={handleAddLineNow}
+                    className="h-9 px-4 rounded-xl bg-[#215641] hover:bg-[#1a4735] text-white font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.5]" />
+                    <span>{isAr ? 'إضافة سطر بالتوقيت الحالي' : 'Zeile hinzufügen'}</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={handleAutoAlignPastedText}
-                disabled={isProcessing || !pasteTextInput.trim()}
-                className="w-full py-3 rounded-2xl bg-[#215641] hover:bg-[#1b4635] text-white font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm disabled:opacity-50"
-              >
-                {isProcessing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <div className="text-xs font-bold text-[#6b7c72]">
+                    {lines.length} {isAr ? 'سطر' : 'Zeilen'}
+                  </div>
+                </div>
+
+                {lines.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-[#75877d] space-y-1">
+                    <p className="font-bold text-[#15221b]">{isAr ? 'لا توجد أسطر بعد' : 'Keine Zeilen'}</p>
+                    <p>{isAr ? 'اضغط «إضافة سطر» للبدء' : 'Klicke oben auf "Zeile hinzufügen"'}</p>
+                  </div>
                 ) : (
-                  <Activity className="w-4 h-4 stroke-[2.5]" />
-                )}
-                <span>
-                  {isProcessing
-                    ? isAr
-                      ? 'جاري التحليل الميكانيكي وتوزيع الأسطر...'
-                      : 'Wird zugeordnet...'
-                    : isAr
-                    ? 'توليد التوقيت ميكانيكياً من موجات الصوت'
-                    : 'Automatisch ausrichten'}
-                </span>
-              </button>
-            </div>
-          )}
-
-          {/* ================= TAB 3: LINE-BY-LINE EDITOR & TAP SYNC ================= */}
-          {activeTab === 'editor' && (
-            <div className="flex-1 p-5 overflow-y-auto space-y-3 min-h-[300px] max-h-[52vh]">
-              <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#eef4f0]">
-                <span className="text-xs text-[#75877d] font-bold">
-                  {isAr ? 'تعديل نصوص وتوقيت كل سطر' : 'Zeilen bearbeiten'}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleAddLineAtCurrentTime}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#215641] hover:bg-[#1b4635] text-white font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>{isAr ? 'إضافة سطر بالتوقيت الحالي' : 'Zeile hinzufügen'}</span>
-                </button>
-              </div>
-
-              {editableLyrics.length === 0 ? (
-                <div className="py-12 text-center text-xs text-[#75877d] italic">
-                  {isAr ? 'لا توجد أسطر بعد. انقر زر الإضافة بالأعلى!' : 'Keine Zeilen vorhanden.'}
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {editableLyrics.map((line, idx) => {
-                    return (
+                  <div className="space-y-2.5">
+                    {lines.map((line, idx) => (
                       <div
                         key={line.id || idx}
-                        className="p-3 bg-[#fafcfa] border border-[#e2ebe3] rounded-2xl space-y-2"
+                        className="p-3 bg-[#fafcfa] border border-[#e2ebe3] rounded-2xl space-y-2.5 shadow-2xs"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono font-extrabold text-[#215641]">#{idx + 1}</span>
-                            <div className="flex items-center gap-1">
+                            <span className="w-6 h-6 rounded-lg bg-[#edf4ef] text-[#215641] flex items-center justify-center text-xs font-mono font-bold">
+                              #{idx + 1}
+                            </span>
+                            <div className="flex items-center gap-1 bg-white border border-[#dbe4dc] rounded-xl px-2 py-0.5 shadow-2xs">
                               <Clock className="w-3.5 h-3.5 text-[#75877d]" />
                               <input
                                 type="number"
                                 step="0.1"
-                                min="0"
                                 value={line.time}
                                 onChange={(e) => {
                                   const val = parseFloat(e.target.value) || 0;
-                                  const updated = [...editableLyrics];
-                                  updated[idx].time = val;
-                                  setEditableLyrics(updated);
+                                  const copy = [...lines];
+                                  copy[idx].time = val;
+                                  setLines(copy);
                                 }}
                                 onBlur={() => handleSaveLine(idx, line.text, line.time)}
-                                className="w-16 bg-white border border-[#dbe4dc] rounded-lg px-2 py-0.5 text-xs font-mono text-center text-[#15221b] font-bold"
+                                className="w-14 text-xs font-mono text-center text-[#15221b] font-bold focus:outline-none bg-transparent"
                               />
-                              <span className="text-[11px] text-[#75877d]">s</span>
+                              <span className="text-[11px] text-[#75877d] font-mono">s</span>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => {
-                                if (isCurrentPlayingTrack) {
-                                  const updated = [...editableLyrics];
-                                  updated[idx].time = parseFloat(currentTime.toFixed(2));
-                                  setEditableLyrics(updated);
-                                  handleSaveLine(idx, line.text, updated[idx].time);
-                                }
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-[#edf4ef] hover:bg-[#e4efe7] text-[11px] font-bold text-[#215641] transition-all"
-                              title={isAr ? 'تعيين التوقيت الحالي للصوت' : 'Jetzt'}
+                              onClick={() => handleSaveLine(idx, line.text, activePlayTime)}
+                              className="h-7 px-2.5 rounded-lg bg-[#edf4ef] hover:bg-[#dceade] border border-[#cbe0d2] text-xs font-bold text-[#215641] transition-all active:scale-95"
+                              title={isAr ? 'ضبط للتوقيت الحالي للمشغل' : 'Jetzt'}
                             >
                               {isAr ? 'ضبط للآن' : 'Jetzt'}
                             </button>
@@ -923,10 +893,10 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                             <button
                               type="button"
                               onClick={() => handleDeleteLine(idx)}
-                              className="w-7 h-7 rounded-lg text-rose-500 hover:bg-rose-50 flex items-center justify-center transition-all"
+                              className="w-7 h-7 rounded-lg text-rose-500 hover:bg-rose-50 border border-rose-200/60 flex items-center justify-center transition-all active:scale-95"
                               title={isAr ? 'حذف' : 'Löschen'}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
@@ -935,126 +905,122 @@ export const LyricsModal: React.FC<LyricsModalProps> = ({
                           type="text"
                           value={line.text}
                           onChange={(e) => {
-                            const updated = [...editableLyrics];
-                            updated[idx].text = e.target.value;
-                            setEditableLyrics(updated);
+                            const copy = [...lines];
+                            copy[idx].text = e.target.value;
+                            setLines(copy);
                           }}
                           onBlur={() => handleSaveLine(idx, line.text, line.time)}
-                          className="w-full bg-white border border-[#dbe4dc] rounded-xl px-3 py-2 text-xs sm:text-sm text-[#15221b] font-medium focus:outline-none focus:border-[#215641]"
+                          className="w-full bg-white border border-[#dbe4dc] rounded-xl px-3 py-2 text-sm text-[#15221b] font-medium focus:outline-none focus:border-[#215641] focus:ring-2 focus:ring-[#215641]/10"
                           placeholder={isAr ? 'نص السطر...' : 'Text...'}
                         />
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-          {/* ================= TAB 4: RAW LRC IMPORT / EXPORT ================= */}
-          {activeTab === 'raw_lrc' && (
-            <div className="flex-1 p-5 overflow-y-auto space-y-3 min-h-[300px] max-h-[52vh]">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-[#75877d] font-bold">
-                  {isAr ? 'نص LRC القياسي مع التوقيت بالثواني' : 'LRC-Format'}
-                </span>
+          {/* ================= 4. INTEGRATED COMPACT PLAYER BAR ================= */}
+          <div className="px-4 sm:px-5 py-2.5 bg-white border-t border-[#eef4f0] flex flex-col gap-1.5 flex-shrink-0 shadow-lg">
+            {/* Timeline Bar */}
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-mono font-bold text-[#6b7c72] w-9 text-right">
+                {formatTime(activePlayTime)}
+              </span>
+              <div
+                className="flex-1 h-1.5 bg-[#edf2ee] rounded-full overflow-hidden cursor-pointer relative group"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  const targetTime = percent * (activeDuration || 1);
+                  handleSeekLine(targetTime);
+                }}
+              >
+                <div
+                  className="h-full bg-[#215641] transition-all duration-100 rounded-full"
+                  style={{
+                    width: `${activeDuration ? (activePlayTime / activeDuration) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+              <span className="text-xs font-mono font-bold text-[#6b7c72] w-9">
+                {formatTime(activeDuration)}
+              </span>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <Volume2 className="w-3.5 h-3.5 text-[#215641] flex-shrink-0" />
+                <span className="text-xs font-bold text-[#15221b] truncate">{activeTrack.name}</span>
+              </div>
+
+              {/* Player Controls (Prev, Play, Next) */}
+              <div className="flex items-center gap-1.5" dir="ltr">
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    handlePrev();
+                  }}
+                  className="w-8 h-8 rounded-xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#596b60] hover:text-[#15221b] flex items-center justify-center transition-all border border-[#dbe4dc] active:scale-95 shadow-2xs"
+                  title={isAr ? 'السابق' : 'Zurück'}
+                >
+                  <SkipBack className="w-3.5 h-3.5 fill-current" />
+                </button>
 
                 <button
                   type="button"
-                  onClick={() => lrcFileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-xl bg-[#edf4ef] hover:bg-[#e4efe7] text-[#215641] font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 border border-[#cbe0d2]"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    if (!isCurrentPlaying) {
+                      playTrackById(activeTrack.id);
+                    } else {
+                      togglePlay();
+                    }
+                  }}
+                  className="w-9 h-9 rounded-2xl bg-[#215641] hover:bg-[#1a4735] text-white flex items-center justify-center font-bold transition-all active:scale-95 shadow-md flex-shrink-0"
                 >
-                  <Upload className="w-3.5 h-3.5 stroke-[2.2]" />
-                  <span>{isAr ? 'استيراد ملف' : 'Datei'}</span>
+                  {isCurrentPlaying && isPlaying ? (
+                    <Pause className="w-3.5 h-3.5 fill-current" />
+                  ) : (
+                    <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    handleNext();
+                  }}
+                  className="w-8 h-8 rounded-xl bg-[#f4f8f5] hover:bg-[#edf4ef] text-[#596b60] hover:text-[#15221b] flex items-center justify-center transition-all border border-[#dbe4dc] active:scale-95 shadow-2xs"
+                  title={isAr ? 'التالي' : 'Weiter'}
+                >
+                  <SkipForward className="w-3.5 h-3.5 fill-current" />
                 </button>
               </div>
-
-              <textarea
-                value={rawLrcText}
-                onChange={(e) => setRawLrcText(e.target.value)}
-                rows={9}
-                className="w-full bg-[#f8faf8] border border-[#dbe4dc] rounded-2xl p-3.5 text-xs font-mono text-[#15221b] focus:outline-none focus:border-[#215641] leading-relaxed"
-                placeholder="[00:04.20] السطر الأول هنا&#10;[00:08.50] السطر الثاني هنا"
-                dir="ltr"
-              />
-
-              <button
-                type="button"
-                onClick={handleSaveRawLrc}
-                className="w-full py-2.5 rounded-2xl bg-[#215641] hover:bg-[#1b4635] text-white font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
-              >
-                <Check className="w-4 h-4 stroke-[2.5]" />
-                <span>{isAr ? 'حفظ وتطبيق الكلمات' : 'Speichern & Anwenden'}</span>
-              </button>
-            </div>
-          )}
-
-          {/* Bottom Audio Player Controls Bar */}
-          <div className="px-5 py-3.5 bg-[#fafcfa] border-t border-[#eef4f0] flex items-center justify-between gap-3 flex-shrink-0">
-            {/* Play/Pause & Time */}
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isCurrentPlayingTrack) {
-                    playTrackById(track.id);
-                  } else {
-                    togglePlay();
-                  }
-                  triggerHaptic('light');
-                }}
-                className="w-10 h-10 rounded-2xl bg-[#215641] text-white flex items-center justify-center font-bold transition-all active:scale-95 shadow-sm shadow-[#215641]/20 flex-shrink-0"
-              >
-                {isCurrentPlayingTrack && isPlaying ? (
-                  <Pause className="w-4 h-4 fill-current" />
-                ) : (
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                )}
-              </button>
-
-              <div className="min-w-0">
-                <div className="text-xs font-mono font-extrabold text-[#15221b] truncate">
-                  {isCurrentPlayingTrack ? formatTime(currentTime) : '0:00'} / {formatTime(track.duration || duration)}
-                </div>
-                <div className="text-[11px] text-[#75877d] truncate font-medium flex items-center gap-1">
-                  <Volume2 className="w-3 h-3 text-[#215641]" />
-                  <span>
-                    {isCurrentPlayingTrack && isPlaying
-                      ? isAr
-                        ? 'قيد التشغيل'
-                        : 'Wird abgespielt'
-                      : isAr
-                      ? 'انقر للاستماع والمطابقة'
-                      : 'Klicken zum Abspielen'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Fast Sync Button or Skip */}
-            <div className="flex items-center gap-1.5" dir="ltr">
-              <button
-                type="button"
-                onClick={() => handleSkip(-5)}
-                disabled={!isCurrentPlayingTrack}
-                className="w-8 h-8 rounded-xl bg-white border border-[#dbe4dc] text-[#596b60] hover:text-[#15221b] hover:bg-[#edf4ef] flex items-center justify-center transition-all disabled:opacity-40 active:scale-95 shadow-2xs"
-                title="-5s"
-              >
-                <RotateCcw className="w-3.5 h-3.5 stroke-[2.2]" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSkip(5)}
-                disabled={!isCurrentPlayingTrack}
-                className="w-8 h-8 rounded-xl bg-white border border-[#dbe4dc] text-[#596b60] hover:text-[#15221b] hover:bg-[#edf4ef] flex items-center justify-center transition-all disabled:opacity-40 active:scale-95 shadow-2xs"
-                title="+5s"
-              >
-                <RotateCw className="w-3.5 h-3.5 stroke-[2.2]" />
-              </button>
             </div>
           </div>
         </motion.div>
+
+        {/* Clear All Lyrics Confirmation Modal */}
+        <ConfirmModal
+          isOpen={showClearConfirm}
+          title={isAr ? 'حذف جميع الكلمات' : 'Alle Lyrics löschen'}
+          description={
+            isAr
+              ? `هل أنت متأكد من رغبتك في حذف كافة الكلمات المحفوظة لمقطع "${activeTrack.name}" نهائياً؟`
+              : `Möchtest du wirklich alle synchronisierten Songtexte für "${activeTrack.name}" löschen?`
+          }
+          confirmText={isAr ? 'نعم، احذف الكلمات' : 'Ja, löschen'}
+          cancelText={isAr ? 'إلغاء' : 'Abbrechen'}
+          type="danger"
+          currentLang={currentLang}
+          onConfirm={handleConfirmClearAllLyrics}
+          onCancel={() => setShowClearConfirm(false)}
+        />
       </div>
     </AnimatePresence>
   );

@@ -353,6 +353,47 @@ export function updateExerciseOnDay(plan: WorkoutPlan, dayIndex: DayIndex, updat
 }
 
 /**
+ * Swaps/replaces an exercise on a specific day with a new exercise item
+ */
+export function swapExerciseOnDay(
+  plan: WorkoutPlan,
+  dayIndex: DayIndex,
+  oldId: number,
+  replacement: ExerciseItem
+): WorkoutPlan {
+  const daysMap = ensureDaysMap(plan);
+  const effectiveDay =
+    daysMap[dayIndex]?.linkedDay !== null && daysMap[dayIndex]?.linkedDay !== undefined
+      ? daysMap[dayIndex].linkedDay!
+      : dayIndex;
+
+  const currentExercises = daysMap[effectiveDay]?.exercises || [];
+  const updatedExercises = currentExercises.map((e) => (e.id === oldId ? replacement : e));
+
+  daysMap[effectiveDay] = {
+    ...daysMap[effectiveDay],
+    exercises: updatedExercises,
+  };
+
+  // Sync linked days
+  for (let d = 0; d < 7; d++) {
+    const dIdx = d as DayIndex;
+    if (daysMap[dIdx]?.linkedDay === effectiveDay) {
+      daysMap[dIdx] = {
+        ...daysMap[dIdx],
+        exercises: [...updatedExercises],
+      };
+    }
+  }
+
+  return {
+    ...plan,
+    days: daysMap,
+    exercises: effectiveDay === 0 ? updatedExercises : plan.exercises,
+  };
+}
+
+/**
  * Removes an exercise from a specific day (or linked days)
  */
 export function removeExerciseFromDay(plan: WorkoutPlan, dayIndex: DayIndex, exerciseId: number): WorkoutPlan {

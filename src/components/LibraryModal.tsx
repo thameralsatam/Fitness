@@ -76,6 +76,26 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
   const [editingExercise, setEditingExercise] = useState<ExerciseItem | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [mediaMap, setMediaMap] = useState<Record<number, ExerciseMediaItem[]>>({});
+
+  // Close 3-dot actions menu on any outside click / touch interaction
+  useEffect(() => {
+    if (!showActionsMenu) return;
+    const handleOutside = (e: MouseEvent | TouchEvent | PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('[data-library-actions-menu]')) {
+        return;
+      }
+      setShowActionsMenu(false);
+    };
+    window.addEventListener('pointerdown', handleOutside, true);
+    window.addEventListener('touchstart', handleOutside, true);
+    window.addEventListener('click', handleOutside, true);
+    return () => {
+      window.removeEventListener('pointerdown', handleOutside, true);
+      window.removeEventListener('touchstart', handleOutside, true);
+      window.removeEventListener('click', handleOutside, true);
+    };
+  }, [showActionsMenu]);
   const [activeMediaViewer, setActiveMediaViewer] = useState<{
     name: string;
     list: ExerciseMediaItem[];
@@ -766,7 +786,7 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
                   <span>{isAr ? 'إضافة جهاز جديد' : 'Neues Gerät hinzufügen'}</span>
                 </button>
 
-                <div className="relative">
+                <div data-library-actions-menu className="relative">
                   <button
                     type="button"
                     onClick={() => {

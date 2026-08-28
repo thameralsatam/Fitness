@@ -71,7 +71,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
-  const [playbackMode, setPlaybackMode] = useState<'all' | 'shuffle' | 'one' | 'off'>('all');
+  const [playbackMode, setPlaybackMode] = useState<'all' | 'shuffle' | 'one' | 'off'>(() => {
+    try {
+      const saved = localStorage.getItem('app_playback_mode');
+      if (saved === 'all' || saved === 'shuffle' || saved === 'one' || saved === 'off') {
+        return saved;
+      }
+    } catch {}
+    return 'all';
+  });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -100,6 +108,32 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
       const loadedFolders = getAudioFolders();
       setFolders(loadedFolders);
       const loadedTracks = await getAllTracks();
+
+      // Check if current track still exists in the newly loaded tracks
+      const currentId = currentTrackRef.current?.id;
+      if (currentId) {
+        const newIndex = loadedTracks.findIndex((t) => t.id === currentId);
+        if (newIndex === -1) {
+          // The current active track was deleted
+          setCurrentTrackIndex(-1);
+          setIsPlaying(false);
+          setCurrentTime(0);
+          setDuration(0);
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.src = '';
+          }
+          if (isNative) {
+            NativeAudioPlayer.stop().catch(() => {});
+          }
+        } else {
+          // Update index to match its new position in the loaded tracks list
+          setCurrentTrackIndex(newIndex);
+        }
+      } else if (currentTrackIndexRef.current >= loadedTracks.length) {
+        setCurrentTrackIndex(-1);
+      }
+
       setTracks(loadedTracks);
     } catch (err) {
       console.error('Failed to load tracks and folders:', err);
@@ -200,7 +234,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         audioRef.current.src = url;
         audioRef.current.playbackRate = playbackRate;
         audioRef.current.muted = isMuted;
-        audioRef.current.loop = playbackMode === 'one';
+        audioRef.current.loop = false; // Always manage repeat/loop via onEnded for Blob URLs
         audioRef.current
           .play()
           .then(() => setIsPlaying(true))
@@ -482,10 +516,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
       if (index === currentTrackIndexRef.current) {
         if (audioRef.current) {
           audioRef.current.currentTime = 0;
+          setCurrentTime(0);
           audioRef.current
             .play()
             .then(() => setIsPlaying(true))
-            .catch(() => setIsPlaying(false));
+            .catch(() => {
+              const track = tracksRef.current[index];
+              if (track) {
+                const url = URL.createObjectURL(track.blob);
+                audioRef.current!.src = url;
+                audioRef.current!.currentTime = 0;
+                audioRef.current!.play().then(() => setIsPlaying(true)).catch(() => {});
+              }
+            });
         }
       } else {
         setCurrentTrackIndex(index);
@@ -494,7 +537,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   };
 
   const playTrackById = (id: string) => {
-    const targetIdx = tracks.findIndex((t) => t.id === id);
+    const targetIdx = tracksRef.current.findIndex((t) => t.id === id);
     if (targetIdx !== -1) {
       playTrackAtIndex(targetIdx);
     }
@@ -653,19 +696,26 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
 
   const cyclePlaybackMode = () => {
     setPlaybackMode((prev) => {
+      // Natural cycle: Repeat All -> Repeat One -> Shuffle -> Repeat Off -> Repeat All
       const next =
         prev === 'all'
-          ? 'shuffle'
-          : prev === 'shuffle'
           ? 'one'
           : prev === 'one'
+          ? 'shuffle'
+          : prev === 'shuffle'
           ? 'off'
           : 'all';
+
+      playbackModeRef.current = next;
+      try {
+        localStorage.setItem('app_playback_mode', next);
+      } catch {}
 
       if (isNative) {
         NativeAudioPlayer.setRepeatMode({ mode: next }).catch(() => {});
       } else if (audioRef.current) {
-        audioRef.current.loop = next === 'one';
+        // Keep HTML5 audio.loop = false so the `ended` event fires reliably on all browsers and Blob URLs
+        audioRef.current.loop = false;
       }
       return next;
     });
@@ -739,10 +789,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     if (mode === 'one') {
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
+        setCurrentTime(0);
         audioRef.current
           .play()
           .then(() => setIsPlaying(true))
-          .catch(() => {});
+          .catch(() => {
+            // Re-load object url if audio element was locked on ended
+            const currentTrk = currentTrackRef.current;
+            if (currentTrk && audioRef.current) {
+              const url = URL.createObjectURL(currentTrk.blob);
+              audioRef.current.src = url;
+              audioRef.current.currentTime = 0;
+              audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+            }
+          });
       }
       return;
     }
@@ -762,9 +822,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     if (currentInFilteredIdx >= 0 && currentInFilteredIdx < list.length - 1) {
       playTrackById(list[currentInFilteredIdx + 1].id);
     } else if (mode === 'all') {
+      // Loop entire playlist / folder back to start
       playTrackById(list[0].id);
     } else {
+      // mode === 'off' (stop when reaching the end of the playlist)
       setIsPlaying(false);
+      setCurrentTime(0);
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
       }

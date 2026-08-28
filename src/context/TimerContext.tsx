@@ -126,6 +126,14 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
       osc2.start(now + 0.1);
       osc1.stop(now + 0.8);
       osc2.stop(now + 0.8);
+
+      setTimeout(() => {
+        try {
+          ctx.close().catch(() => {});
+        } catch {
+          // ignore
+        }
+      }, 1000);
     } catch {
       // Audio fallback
     }

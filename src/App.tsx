@@ -36,6 +36,7 @@ import {
   isDayRestDay,
   addExerciseToDay,
   updateExerciseOnDay,
+  swapExerciseOnDay,
   removeExerciseFromDay,
   clearDayExercises,
   setTrainingDays,
@@ -403,11 +404,7 @@ export default function App() {
   };
 
   const handleSwapExerciseInPlan = (oldId: number, replacement: ExerciseItem) => {
-    const updatedExercises = currentDayExercises.map((e) => (e.id === oldId ? replacement : e));
-    const updatedPlan: WorkoutPlan = {
-      ...activePlan,
-      exercises: updatedExercises,
-    };
+    const updatedPlan = swapExerciseOnDay(activePlan, selectedDayIndex, oldId, replacement);
     setActivePlan(updatedPlan);
     saveActivePlan(updatedPlan);
     showToast(

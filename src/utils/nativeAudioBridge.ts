@@ -62,7 +62,11 @@ export const NativeAudioPlayer = registerPlugin<NativeAudioPlayerInterface>('Nat
 
 export const isNativeAudioAvailable = (): boolean => {
   try {
-    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    return (
+      Capacitor.isNativePlatform() &&
+      Capacitor.getPlatform() === 'android' &&
+      Capacitor.isPluginAvailable('NativeAudioPlayer')
+    );
   } catch {
     return false;
   }

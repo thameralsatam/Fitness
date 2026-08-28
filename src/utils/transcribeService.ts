@@ -5,7 +5,6 @@ export async function fileToBase64(blob: Blob): Promise<string> {
     const reader = new FileReader();
     reader.onloadend = () => {
       const res = reader.result as string;
-      // Extract pure base64
       const base64 = res.includes(',') ? res.split(',')[1] : res;
       resolve(base64);
     };
@@ -17,15 +16,21 @@ export async function fileToBase64(blob: Blob): Promise<string> {
   });
 }
 
+/**
+ * Transcribe audio track using the server-side Gemini multimodal API
+ * Extracts accurate spoken words and start timestamps (in seconds).
+ */
 export async function transcribeAudioTrack(
   blob: Blob,
   mimeType = 'audio/mp3',
-  lang: 'ar' | 'de' = 'ar'
+  lang: 'ar' | 'de' = 'ar',
+  trackTitle?: string
 ): Promise<LyricLine[]> {
   console.log('[transcribeService] Starting transcription for audio blob...', {
     blobSize: blob.size,
     mimeType,
     lang,
+    trackTitle,
   });
 
   let audioBase64: string;
@@ -49,6 +54,7 @@ export async function transcribeAudioTrack(
         audioBase64,
         mimeType,
         language: lang,
+        trackTitle,
       }),
     });
   } catch (networkErr: any) {
@@ -66,7 +72,6 @@ export async function transcribeAudioTrack(
     console.log('[transcribeService] Received response from /api/transcribe:', {
       status: response.status,
       ok: response.ok,
-      data,
     });
   } catch (parseErr) {
     console.error('[transcribeService] Error parsing JSON response from server:', parseErr);
@@ -82,18 +87,18 @@ export async function transcribeAudioTrack(
   const rawLyrics: Array<{ time: number; text: string }> = data.lyrics || [];
   console.log('[transcribeService] Successfully parsed lyrics count:', rawLyrics.length);
 
-  // Map and normalize
-  return rawLyrics.map((item, idx) => ({
-    id: `lyric_${Date.now()}_${idx}`,
-    time: Math.max(0, Number(item.time) || 0),
-    text: (item.text || '').trim(),
-  })).filter((item) => item.text.length > 0);
+  // Map and normalize to LyricLine
+  return rawLyrics
+    .map((item, idx) => ({
+      id: `lyric_${Date.now()}_${idx}`,
+      time: Math.max(0, parseFloat((Number(item.time) || 0).toFixed(2))),
+      text: (item.text || '').trim(),
+    }))
+    .filter((item) => item.text.length > 0);
 }
 
 /**
- * Parse standard LRC format:
- * [00:12.30] Line text here
- * [01:05.00] Another line
+ * Parse standard LRC subtitle text format
  */
 export function parseLrcFormat(lrcContent: string): LyricLine[] {
   const lines = lrcContent.split('\n');

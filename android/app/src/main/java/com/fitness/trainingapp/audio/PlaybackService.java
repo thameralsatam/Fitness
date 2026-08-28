@@ -377,13 +377,20 @@ public class PlaybackService extends MediaSessionService {
             if (player != null) {
                 switch (mode) {
                     case "one":
+                        player.setShuffleModeEnabled(false);
                         player.setRepeatMode(Player.REPEAT_MODE_ONE);
                         break;
                     case "all":
+                        player.setShuffleModeEnabled(false);
+                        player.setRepeatMode(Player.REPEAT_MODE_ALL);
+                        break;
+                    case "shuffle":
+                        player.setShuffleModeEnabled(true);
                         player.setRepeatMode(Player.REPEAT_MODE_ALL);
                         break;
                     case "off":
                     default:
+                        player.setShuffleModeEnabled(false);
                         player.setRepeatMode(Player.REPEAT_MODE_OFF);
                         break;
                 }

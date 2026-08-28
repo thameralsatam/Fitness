@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Play,
@@ -8,11 +8,14 @@ import {
   Headphones,
   Timer as TimerIcon,
   RotateCcw,
+  Sparkles,
+  ChevronDown,
 } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
 import { useTimer } from '../context/TimerContext';
 import { ViewTab, Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
+import { LyricsModal } from './LyricsModal';
 
 interface UniversalFloatingControlProps {
   currentTab: ViewTab;
@@ -120,6 +123,32 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
     }
   }, [hasActiveActivity, isExpanded, onExpandStatusChange]);
 
+  // State to control lyrics sheet directly from floating bubble
+  const [isLyricsModalOpen, setIsLyricsModalOpen] = useState(false);
+  // State to control inline bottom lyric drawer of the floating bubble
+  const [isLyricDrawerOpen, setIsLyricDrawerOpen] = useState(false);
+
+  // Active live lyric line for currentTrack during playback
+  const activeLiveLyric = useMemo(() => {
+    if (!currentTrack || !currentTrack.lyrics || currentTrack.lyrics.length === 0) return null;
+    let active = null;
+    let next = null;
+    for (let i = 0; i < currentTrack.lyrics.length; i++) {
+      if (audioCurrentTime >= currentTrack.lyrics[i].time) {
+        active = currentTrack.lyrics[i];
+        next = currentTrack.lyrics[i + 1] || null;
+      } else {
+        if (!active && i === 0) {
+          next = currentTrack.lyrics[0];
+        }
+        break;
+      }
+    }
+    return { active, next };
+  }, [currentTrack, audioCurrentTime]);
+
+  const hasLyrics = Boolean(currentTrack && currentTrack.lyrics && currentTrack.lyrics.length > 0);
+
   // Click Outside Listener: when expanded, clicking outside shrinks to minimal capsule
   useEffect(() => {
     if (!isExpanded || !hasActiveActivity) return;
@@ -165,6 +194,7 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
           <motion.div
             key="dynamic-island-wrapper"
             ref={containerRef}
+            layout
             initial={{ opacity: 0, scale: 0.8, y: -10 }}
             animate={{
               opacity: 1,
@@ -175,12 +205,17 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
             exit={{ opacity: 0, scale: 0.8, y: -10 }}
             transition={{
               type: 'spring',
-              stiffness: 240,
+              stiffness: 260,
               damping: 28,
               mass: 0.8,
-              opacity: { duration: 0.22, ease: 'easeOut' },
             }}
-            className="pointer-events-auto h-12 rounded-full bg-[#0a110d]/95 backdrop-blur-2xl border border-emerald-500/35 text-white shadow-[0_10px_30px_rgba(0,0,0,0.5)] ring-1 ring-white/10 relative overflow-hidden select-none"
+            className={`pointer-events-auto bg-[#0a110d]/95 backdrop-blur-2xl border border-emerald-500/35 text-white shadow-[0_10px_30px_rgba(0,0,0,0.5)] ring-1 ring-white/10 relative overflow-hidden select-none flex flex-col ${
+              !isExpanded
+                ? 'h-12 w-12 rounded-full items-center justify-center'
+                : isLyricDrawerOpen && activeMode === 'audio'
+                ? 'rounded-2xl sm:rounded-3xl'
+                : 'h-12 rounded-full'
+            }`}
           >
             <AnimatePresence initial={false}>
               {!isExpanded ? (
@@ -218,201 +253,269 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
                   )}
                 </motion.button>
               ) : (
-                /* ================= EXPANDED STATE (MATCHING HEIGHT H-12 CAPSULE BAR) ================= */
+                /* ================= EXPANDED STATE ================= */
                 <motion.div
                   key="expanded-bar"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute inset-0 w-full h-full px-3 flex items-center justify-between gap-2 overflow-hidden whitespace-nowrap"
+                  className="w-full flex flex-col overflow-hidden"
                 >
-                  {/* Minimal Progress Line at Bottom */}
-                  <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-emerald-950/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-400 transition-all duration-300"
-                      style={{
-                        width: `${activeMode === 'audio' ? audioProgress : timerProgress}%`,
-                      }}
-                    />
-                  </div>
+                  {/* Top Bar Row (Height 48px) */}
+                  <div className="h-12 w-full px-3 flex items-center justify-between gap-2 overflow-hidden whitespace-nowrap relative">
+                    {/* Minimal Progress Line at Bottom */}
+                    <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-emerald-950/80 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-400 transition-all duration-300"
+                        style={{
+                          width: `${activeMode === 'audio' ? audioProgress : timerProgress}%`,
+                        }}
+                      />
+                    </div>
 
-                  {/* Left/Right Main Content Info */}
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {/* Mode Icon or Selector */}
-                    {isAudioActive && isTimerActive ? (
-                      <div className="flex items-center gap-0.5 bg-black/40 p-0.5 rounded-full border border-emerald-900/60 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerHaptic('selection');
-                            setActiveMode('audio');
-                          }}
-                          className={`p-1.5 rounded-full transition-all ${
-                            activeMode === 'audio'
-                              ? 'bg-emerald-500 text-black shadow-xs'
-                              : 'text-zinc-400 hover:text-white'
-                          }`}
-                          title={isAr ? 'المشغل الصوتي' : 'Audio Player'}
-                        >
-                          <Headphones className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerHaptic('selection');
-                            setActiveMode('timer');
-                          }}
-                          className={`p-1.5 rounded-full transition-all ${
-                            activeMode === 'timer'
-                              ? 'bg-emerald-500 text-black shadow-xs'
-                              : 'text-zinc-400 hover:text-white'
-                          }`}
-                          title={isAr ? 'المؤقت الذكي' : 'Timer'}
-                        >
-                          <TimerIcon className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                    {/* Left/Right Main Content Info */}
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {/* Mode Icon or Selector */}
+                      {isAudioActive && isTimerActive ? (
+                        <div className="flex items-center gap-0.5 bg-black/40 p-0.5 rounded-full border border-emerald-900/60 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerHaptic('selection');
+                              setActiveMode('audio');
+                            }}
+                            className={`p-1.5 rounded-full transition-all ${
+                              activeMode === 'audio'
+                                ? 'bg-emerald-500 text-black shadow-xs'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                            title={isAr ? 'المشغل الصوتي' : 'Audio Player'}
+                          >
+                            <Headphones className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerHaptic('selection');
+                              setActiveMode('timer');
+                            }}
+                            className={`p-1.5 rounded-full transition-all ${
+                              activeMode === 'timer'
+                                ? 'bg-emerald-500 text-black shadow-xs'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                            title={isAr ? 'المؤقت الذكي' : 'Timer'}
+                          >
+                            <TimerIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                          {activeMode === 'audio' ? (
+                            <Headphones className="w-3.5 h-3.5" />
+                          ) : (
+                            <TimerIcon className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Text & Meta Information (Displays Track Name & Duration) */}
+                      <div
+                        className="flex flex-col min-w-0 flex-1 cursor-pointer"
+                        onClick={() => {
+                          triggerHaptic('light');
+                          if (activeMode === 'audio') {
+                            onNavigateTab('audio');
+                          } else {
+                            onNavigateTab('timer');
+                          }
+                        }}
+                      >
                         {activeMode === 'audio' ? (
-                          <Headphones className="w-3.5 h-3.5" />
+                          <>
+                            <div className="text-xs font-bold text-zinc-100 truncate leading-tight">
+                              {currentTrack?.name || (isAr ? 'المشغل الصوتي' : 'Audio')}
+                            </div>
+
+                            <div className="text-[10px] text-emerald-400 font-mono tracking-tight flex items-center gap-1.5 leading-none mt-0.5">
+                              <span>
+                                {Math.floor(audioCurrentTime / 60)}:
+                                {Math.floor(audioCurrentTime % 60).toString().padStart(2, '0')}
+                              </span>
+                              <span className="text-zinc-500">/</span>
+                              <span className="text-zinc-400">
+                                {Math.floor(audioDuration / 60)}:
+                                {Math.floor(audioDuration % 60).toString().padStart(2, '0')}
+                              </span>
+                            </div>
+                          </>
                         ) : (
-                          <TimerIcon className="w-3.5 h-3.5" />
+                          <>
+                            <div className="text-xs font-bold text-zinc-100 truncate leading-tight">
+                              {isTimerRunning ? (isAr ? 'المؤقت جارٍ' : 'Timer läuft') : (isAr ? 'المؤقت متوقف' : 'Pausiert')}
+                            </div>
+                            <div className="text-[11px] text-emerald-400 font-mono font-black tracking-wider leading-none mt-0.5">
+                              {formattedTime}
+                            </div>
+                          </>
                         )}
                       </div>
-                    )}
+                    </div>
 
-                    {/* Text & Meta Information */}
-                    <div
-                      className="flex flex-col min-w-0 flex-1 cursor-pointer"
-                      onClick={() => {
-                        triggerHaptic('light');
-                        if (activeMode === 'audio') {
-                          onNavigateTab('audio');
-                        } else {
-                          onNavigateTab('timer');
-                        }
-                      }}
-                    >
+                    {/* Interactive Quick Control Buttons */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       {activeMode === 'audio' ? (
                         <>
-                          <div className="text-xs font-bold text-zinc-100 truncate leading-tight">
-                            {currentTrack?.name || (isAr ? 'المشغل الصوتي' : 'Audio')}
-                          </div>
-                          <div className="text-[10px] text-emerald-400 font-mono tracking-tight flex items-center gap-1.5 leading-none mt-0.5">
-                            <span>
-                              {Math.floor(audioCurrentTime / 60)}:
-                              {Math.floor(audioCurrentTime % 60).toString().padStart(2, '0')}
-                            </span>
-                            <span className="text-zinc-500">/</span>
-                            <span className="text-zinc-400">
-                              {Math.floor(audioDuration / 60)}:
-                              {Math.floor(audioDuration % 60).toString().padStart(2, '0')}
-                            </span>
-                          </div>
+                          {/* Toggle Lyric Line Expansion Button */}
+                          {hasLyrics && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                triggerHaptic('selection');
+                                setIsLyricDrawerOpen((prev) => !prev);
+                              }}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-95 ${
+                                isLyricDrawerOpen
+                                  ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 shadow-2xs'
+                                  : 'bg-white/10 text-zinc-300 hover:text-emerald-300 hover:bg-white/20'
+                              }`}
+                              title={isAr ? (isLyricDrawerOpen ? 'إغلاق السطر' : 'إظهار السطر الحالي') : 'Lyrics'}
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                  isLyricDrawerOpen ? 'rotate-180 text-emerald-400' : ''
+                                }`}
+                              />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerHaptic('medium');
+                              toggleAudioPlay();
+                            }}
+                            className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center hover:bg-emerald-400 active:scale-95 transition-all shadow-xs"
+                            title={isAudioPlaying ? (isAr ? 'إيقاف مؤقت' : 'Pause') : (isAr ? 'تشغيل' : 'Play')}
+                          >
+                            {isAudioPlaying ? (
+                              <Pause className="w-3.5 h-3.5 fill-current" />
+                            ) : (
+                              <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerHaptic('light');
+                              handleAudioNext();
+                            }}
+                            className="w-7 h-7 rounded-full bg-white/10 text-zinc-300 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
+                            title={isAr ? 'التالي' : 'Weiter'}
+                          >
+                            <SkipForward className="w-3.5 h-3.5" />
+                          </button>
                         </>
                       ) : (
                         <>
-                          <div className="text-xs font-bold text-zinc-100 truncate leading-tight">
-                            {isTimerRunning ? (isAr ? 'المؤقت جارٍ' : 'Timer läuft') : (isAr ? 'المؤقت متوقف' : 'Pausiert')}
-                          </div>
-                          <div className="text-[11px] text-emerald-400 font-mono font-black tracking-wider leading-none mt-0.5">
-                            {formattedTime}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerHaptic('medium');
+                              if (isTimerRunning) {
+                                pauseTimer();
+                              } else {
+                                resumeTimer();
+                              }
+                            }}
+                            className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center hover:bg-emerald-400 active:scale-95 transition-all shadow-xs"
+                            title={isTimerRunning ? (isAr ? 'إيقاف مؤقت' : 'Pause') : (isAr ? 'استئناف' : 'Start')}
+                          >
+                            {isTimerRunning ? (
+                              <Pause className="w-3.5 h-3.5 fill-current" />
+                            ) : (
+                              <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerHaptic('light');
+                              resetTimer();
+                            }}
+                            className="w-7 h-7 rounded-full bg-white/10 text-zinc-300 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
+                            title={isAr ? 'إعادة ضبط' : 'Reset'}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
                         </>
                       )}
+
+                      {/* Close / Dismiss Button */}
+                      <button
+                        type="button"
+                        onClick={handleDismiss}
+                        className="w-7 h-7 rounded-full bg-white/5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/20 flex items-center justify-center active:scale-95 transition-all ml-0.5"
+                        title={isAr ? 'إغلاق الجزيرة' : 'Schließen'}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
 
-                  {/* Interactive Quick Control Buttons */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {activeMode === 'audio' ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerHaptic('medium');
-                            toggleAudioPlay();
-                          }}
-                          className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center hover:bg-emerald-400 active:scale-95 transition-all shadow-xs"
-                          title={isAudioPlaying ? (isAr ? 'إيقاف مؤقت' : 'Pause') : (isAr ? 'تشغيل' : 'Play')}
-                        >
-                          {isAudioPlaying ? (
-                            <Pause className="w-3.5 h-3.5 fill-current" />
-                          ) : (
-                            <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                  {/* Clean Bottom Dropdown Part showing ONLY the current active lyric line */}
+                  <AnimatePresence>
+                    {isLyricDrawerOpen && activeMode === 'audio' && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="overflow-hidden border-t border-emerald-500/20 bg-emerald-950/40"
+                      >
+                        <div
+                          className="px-4 py-2 flex items-center justify-center text-center cursor-pointer group hover:bg-emerald-900/30 transition-colors"
+                          onClick={() => {
                             triggerHaptic('light');
-                            handleAudioNext();
+                            setIsLyricsModalOpen(true);
                           }}
-                          className="w-7 h-7 rounded-full bg-white/10 text-zinc-300 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
-                          title={isAr ? 'التالي' : 'Weiter'}
+                          title={isAr ? 'انقر لفتح نافذة الكلمات' : 'Lyrics'}
                         >
-                          <SkipForward className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerHaptic('medium');
-                            if (isTimerRunning) {
-                              pauseTimer();
-                            } else {
-                              resumeTimer();
-                            }
-                          }}
-                          className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center hover:bg-emerald-400 active:scale-95 transition-all shadow-xs"
-                          title={isTimerRunning ? (isAr ? 'إيقاف مؤقت' : 'Pause') : (isAr ? 'استئناف' : 'Start')}
-                        >
-                          {isTimerRunning ? (
-                            <Pause className="w-3.5 h-3.5 fill-current" />
-                          ) : (
-                            <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerHaptic('light');
-                            resetTimer();
-                          }}
-                          className="w-7 h-7 rounded-full bg-white/10 text-zinc-300 flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
-                          title={isAr ? 'إعادة ضبط' : 'Reset'}
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
-                      </>
+                          <p className="text-xs sm:text-[13px] font-bold text-emerald-200 truncate font-display group-hover:text-emerald-100 transition-colors">
+                            {activeLiveLyric?.active
+                              ? activeLiveLyric.active.text
+                              : isAr
+                              ? '🎵 جاري المتابعة...'
+                              : '🎵 Live-Lyrics'}
+                          </p>
+                        </div>
+                      </motion.div>
                     )}
-
-                    {/* Close / Dismiss Button */}
-                    <button
-                      type="button"
-                      onClick={handleDismiss}
-                      className="w-7 h-7 rounded-full bg-white/5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/20 flex items-center justify-center active:scale-95 transition-all ml-0.5"
-                      title={isAr ? 'إغلاق الجزيرة' : 'Schließen'}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  </AnimatePresence>
                 </motion.div>
               )}
             </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Direct Lyrics Sheet from Floating Island */}
+      {currentTrack && isLyricsModalOpen && (
+        <LyricsModal
+          track={currentTrack}
+          isOpen={isLyricsModalOpen}
+          onClose={() => setIsLyricsModalOpen(false)}
+          currentLang={lang}
+        />
+      )}
     </div>
   );
 };

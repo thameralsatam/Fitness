@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Play,
@@ -35,6 +35,7 @@ import {
   Clock,
   FileAudio,
   Sparkles,
+  FileText,
 } from 'lucide-react';
 import {
   AudioTrack,
@@ -150,14 +151,28 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Close 3-dot dropdown menus on outside click
+  // Close 3-dot dropdown menus on outside click / tap
   useEffect(() => {
-    const handleWindowClick = () => {
+    if (!activeMenuTrackId) return;
+
+    const handleOutsideClick = (e: MouseEvent | TouchEvent | PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('[data-track-menu]')) {
+        return;
+      }
       setActiveMenuTrackId(null);
     };
-    window.addEventListener('click', handleWindowClick);
-    return () => window.removeEventListener('click', handleWindowClick);
-  }, []);
+
+    window.addEventListener('pointerdown', handleOutsideClick, true);
+    window.addEventListener('touchstart', handleOutsideClick, true);
+    window.addEventListener('click', handleOutsideClick, true);
+
+    return () => {
+      window.removeEventListener('pointerdown', handleOutsideClick, true);
+      window.removeEventListener('touchstart', handleOutsideClick, true);
+      window.removeEventListener('click', handleOutsideClick, true);
+    };
+  }, [activeMenuTrackId]);
 
   // Sync active modals state to notify bottom nav hiding
   const isAnyAudioModalOpen = Boolean(
@@ -409,9 +424,10 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
     if (!deletingTrack) return;
     const { id } = deletingTrack;
 
-    const trackIndex = tracks.findIndex((t) => t.id === id);
-
     try {
+      if (currentTrack?.id === id) {
+        stopAudio();
+      }
       await deleteTrack(id);
       await refreshTracksAndFolders();
     } catch (err) {
@@ -458,6 +474,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   // Clear All Tracks
   const handleConfirmClearAll = async () => {
     try {
+      stopAudio();
       await clearAllTracks();
       await refreshTracksAndFolders();
     } catch (err) {
@@ -473,6 +490,25 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
     const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
+
+  // Active live lyric line for currentTrack during playback
+  const activeLiveLyric = useMemo(() => {
+    if (!currentTrack || !currentTrack.lyrics || currentTrack.lyrics.length === 0) return null;
+    let active = null;
+    let next = null;
+    for (let i = 0; i < currentTrack.lyrics.length; i++) {
+      if (currentTime >= currentTrack.lyrics[i].time) {
+        active = currentTrack.lyrics[i];
+        next = currentTrack.lyrics[i + 1] || null;
+      } else {
+        if (!active && i === 0) {
+          next = currentTrack.lyrics[0];
+        }
+        break;
+      }
+    }
+    return { active, next };
+  }, [currentTrack, currentTime]);
 
   const activeFolder = folders.find((f) => f.id === selectedFolderId);
 
@@ -530,12 +566,28 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                 className={`h-7.5 px-3 rounded-2xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-[11px] font-bold ${
                   currentTrack.lyrics && currentTrack.lyrics.length > 0
                     ? 'bg-[#215641] border-[#7be3af]/40 text-[#7be3af]'
-                    : 'bg-white/5 border-white/10 text-white/70 hover:text-white'
+                    : 'bg-white/5 border-white/10 text-white/80 hover:text-white'
                 }`}
-                title={currentLang === 'ar' ? 'كلمات المقطع والترجمة المتزامنة' : 'Synchrone Lyrics'}
+                title={
+                  currentTrack.lyrics && currentTrack.lyrics.length > 0
+                    ? currentLang === 'ar'
+                      ? `الكلمات المتزامنة (${currentTrack.lyrics.length} سطر)`
+                      : `Synchrone Lyrics (${currentTrack.lyrics.length} Zeilen)`
+                    : currentLang === 'ar'
+                    ? 'الكلمات والترجمة المتزامنة للمقطع'
+                    : 'Synchrone Lyrics anzeigen'
+                }
               >
-                <Sparkles className="w-3 h-3 text-[#7be3af]" />
-                <span className="hidden sm:inline">{currentLang === 'ar' ? 'الكلمات' : 'Lyrics'}</span>
+                <FileText className="w-3 h-3 text-[#7be3af]" />
+                <span className="hidden sm:inline">
+                  {currentTrack.lyrics && currentTrack.lyrics.length > 0
+                    ? currentLang === 'ar'
+                      ? 'الكلمات'
+                      : 'Lyrics'
+                    : currentLang === 'ar'
+                    ? 'الكلمات'
+                    : 'Lyrics'}
+                </span>
               </button>
             )}
 
@@ -576,7 +628,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
               {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
             </button>
 
-            {/* Smart Unified Playback Mode Button (All -> Shuffle -> One -> Off) */}
+            {/* Smart Unified Playback Mode Button (All -> One -> Shuffle -> Off) */}
             <button
               type="button"
               onClick={cyclePlaybackMode}
@@ -588,16 +640,16 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
               title={
                 playbackMode === 'all'
                   ? currentLang === 'ar'
-                    ? 'الوضع: تكرار القائمة بالترتيب (انقر للتبديل للعشوائي)'
-                    : 'Modus: Alle wiederholen (Klicken für Shuffle)'
-                  : playbackMode === 'shuffle'
-                  ? currentLang === 'ar'
-                    ? 'الوضع: تشغيل عشوائي للقائمة (انقر للتبديل لتكرار المقطع)'
-                    : 'Modus: Zufallswiedergabe (Klicken für 1 Titel)'
+                    ? 'الوضع: تكرار القائمة بالكامل (انقر لتكرار المقطع الحالي)'
+                    : 'Modus: Alle wiederholen (Klicken für 1 Titel wiederholen)'
                   : playbackMode === 'one'
                   ? currentLang === 'ar'
-                    ? 'الوضع: تكرار المقطع الحالي فقط (انقر لإيقاف التكرار)'
-                    : 'Modus: Titel wiederholen (Klicken für Aus)'
+                    ? 'الوضع: تكرار المقطع الحالي باستمرار (انقر للتشغيل العشوائي)'
+                    : 'Modus: Aktuellen Titel wiederholen (Klicken für Zufall)'
+                  : playbackMode === 'shuffle'
+                  ? currentLang === 'ar'
+                    ? 'الوضع: تشغيل عشوائي للقائمة (انقر لإيقاف التكرار)'
+                    : 'Modus: Zufallswiedergabe (Klicken für Aus)'
                   : currentLang === 'ar'
                   ? 'الوضع: إيقاف التكرار - تشغيل متتابع ثم توقف (انقر لتكرار الكل)'
                   : 'Modus: Aus - Einmal abspielen (Klicken für Alle)'
@@ -1035,6 +1087,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
 
                     <div
                       className="relative flex-shrink-0"
+                      data-track-menu
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
@@ -1056,18 +1109,26 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                       {/* Dropdown Menu - smart upward or downward positioning */}
                       <AnimatePresence>
                         {isMenuOpen && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: openUpwards ? 4 : -4 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: openUpwards ? 4 : -4 }}
-                            transition={{ duration: 0.15 }}
-                            className={`absolute z-30 ${
-                              currentLang === 'ar' ? 'left-0' : 'right-0'
-                            } ${
-                              openUpwards ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-                            } w-48 bg-white rounded-2xl shadow-xl border border-[#dbe4dc] p-1.5 space-y-0.5`}
-                            dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
-                          >
+                          <>
+                            <div
+                              className="fixed inset-0 z-20"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuTrackId(null);
+                              }}
+                            />
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95, y: openUpwards ? 4 : -4 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.95, y: openUpwards ? 4 : -4 }}
+                              transition={{ duration: 0.15 }}
+                              className={`absolute z-30 ${
+                                currentLang === 'ar' ? 'left-0' : 'right-0'
+                              } ${
+                                openUpwards ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                              } w-48 bg-white rounded-2xl shadow-xl border border-[#dbe4dc] p-1.5 space-y-0.5`}
+                              dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
+                            >
                             {/* 1. Lyrics Button */}
                             <button
                               type="button"
@@ -1120,6 +1181,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                             <button
                               type="button"
                               onClick={() => {
+                                if (isPlaying && currentTrack?.id === track.id) return;
                                 setActiveMenuTrackId(null);
                                 setEditingTrack({
                                   id: track.id,
@@ -1127,9 +1189,23 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                                   folderId: track.folderId || '',
                                 });
                               }}
-                              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-[#215641] hover:bg-[#eef4f0] rounded-xl transition-colors text-right"
+                              disabled={isPlaying && currentTrack?.id === track.id}
+                              className={`w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold rounded-xl transition-colors text-right ${
+                                isPlaying && currentTrack?.id === track.id
+                                  ? 'text-[#75877d] opacity-50 cursor-not-allowed'
+                                  : 'text-[#215641] hover:bg-[#eef4f0]'
+                              }`}
+                              title={
+                                isPlaying && currentTrack?.id === track.id
+                                  ? currentLang === 'ar'
+                                    ? 'أوقف تشغيل المقطع لتعديل بياناته'
+                                    : 'Pausiere Wiedergabe zum Bearbeiten'
+                                  : currentLang === 'ar'
+                                  ? 'تعديل البيانات'
+                                  : 'Bearbeiten'
+                              }
                             >
-                              <Pencil className="w-3.5 h-3.5 text-[#215641]" />
+                              <Pencil className="w-3.5 h-3.5" />
                               <span>{currentLang === 'ar' ? 'تعديل البيانات' : 'Bearbeiten'}</span>
                             </button>
 
@@ -1151,6 +1227,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                               <span>{currentLang === 'ar' ? 'حذف المقطع' : 'Löschen'}</span>
                             </button>
                           </motion.div>
+                        </>
                         )}
                       </AnimatePresence>
                     </div>
