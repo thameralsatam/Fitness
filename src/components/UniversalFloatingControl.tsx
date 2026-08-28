@@ -5,7 +5,6 @@ import {
   Pause,
   SkipForward,
   SkipBack,
-  X,
   Headphones,
   Timer as TimerIcon,
   RotateCcw,
@@ -13,11 +12,11 @@ import {
   FileText,
   ChevronDown,
   Dumbbell,
-  Activity,
-  Layers,
-  Wrench,
   BarChart2,
-  User,
+  Layers,
+  Compass,
+  Volume2,
+  ExternalLink,
 } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
 import { useTimer } from '../context/TimerContext';
@@ -47,11 +46,10 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
     isPlaying: isAudioPlaying,
     togglePlay: toggleAudioPlay,
     handleNext: handleAudioNext,
-    handlePrevious: handleAudioPrev,
-    stopAudio,
+    handlePrev: handleAudioPrev,
     currentTime: audioCurrentTime,
     duration: audioDuration,
-    seekTo: audioSeekTo,
+    handleSeek: audioSeekTo,
   } = useAudio();
 
   // Timer Context
@@ -64,6 +62,7 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
     pauseTimer,
     resumeTimer,
     resetTimer,
+    startTimer,
   } = timerContext || {
     isRunning: false,
     secondsLeft: 0,
@@ -72,6 +71,7 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
     pauseTimer: () => {},
     resumeTimer: () => {},
     resetTimer: () => {},
+    startTimer: () => {},
   };
 
   const isAr = lang === 'ar';
@@ -81,24 +81,30 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
   const isTimerActive = isTimerRunning || (secondsLeft > 0 && secondsLeft < selectedDuration);
   const hasActiveActivity = isAudioActive || isTimerActive;
 
-  // Active mode inside floating control ('audio' | 'timer' | 'idle')
-  const [activeMode, setActiveMode] = useState<'audio' | 'timer' | 'idle'>(
-    isAudioActive ? 'audio' : isTimerActive ? 'timer' : 'idle'
+  // Active page index inside floating control (0: audio, 1: timer, 2: nav)
+  const [pageIndex, setPageIndex] = useState<number>(
+    isAudioActive ? 0 : isTimerActive ? 1 : 2
   );
-  
+
+  const pages: { id: 'audio' | 'timer' | 'nav'; label: string }[] = [
+    { id: 'audio', label: isAr ? 'الصوتيات' : 'Audio' },
+    { id: 'timer', label: isAr ? 'المؤقت' : 'Timer' },
+    { id: 'nav', label: isAr ? 'التنقل السريع' : 'Navigation' },
+  ];
+
   // Floating Dynamic Island Expansion State
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   // Ref for click outside detection
   const islandRef = useRef<HTMLDivElement>(null);
 
-  // Auto-switch mode & expand when new activity starts
+  // Auto-switch page & expand when new activity starts
   const prevAudioPlaying = useRef(isAudioPlaying);
   const prevTimerRunning = useRef(isTimerRunning);
 
   useEffect(() => {
     if (isAudioPlaying && !prevAudioPlaying.current) {
-      setActiveMode('audio');
+      setPageIndex(0); // Jump to audio
       setIsExpanded(true);
     }
     prevAudioPlaying.current = isAudioPlaying;
@@ -106,25 +112,11 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
 
   useEffect(() => {
     if (isTimerRunning && !prevTimerRunning.current) {
-      setActiveMode('timer');
+      setPageIndex(1); // Jump to timer
       setIsExpanded(true);
     }
     prevTimerRunning.current = isTimerRunning;
   }, [isTimerRunning]);
-
-  // If active modes change
-  useEffect(() => {
-    if (activeMode === 'audio' && !isAudioActive) {
-      if (isTimerActive) setActiveMode('timer');
-      else setActiveMode('idle');
-    } else if (activeMode === 'timer' && !isTimerActive) {
-      if (isAudioActive) setActiveMode('audio');
-      else setActiveMode('idle');
-    } else if (activeMode === 'idle') {
-      if (isAudioActive) setActiveMode('audio');
-      else if (isTimerActive) setActiveMode('timer');
-    }
-  }, [isAudioActive, isTimerActive, activeMode]);
 
   // Notify parent of active status
   useEffect(() => {
@@ -149,24 +141,19 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
   const activeLiveLyric = useMemo(() => {
     if (!currentTrack || !currentTrack.lyrics || currentTrack.lyrics.length === 0) return null;
     let active = null;
-    let next = null;
     for (let i = 0; i < currentTrack.lyrics.length; i++) {
       if (audioCurrentTime >= currentTrack.lyrics[i].time) {
         active = currentTrack.lyrics[i];
-        next = currentTrack.lyrics[i + 1] || null;
       } else {
-        if (!active && i === 0) {
-          next = currentTrack.lyrics[0];
-        }
         break;
       }
     }
-    return { active, next };
+    return active;
   }, [currentTrack, audioCurrentTime]);
 
   const hasLyrics = Boolean(currentTrack && currentTrack.lyrics && currentTrack.lyrics.length > 0);
 
-  // Click Outside Listener: when expanded, clicking outside shrinks back to compact island
+  // Click Outside Listener
   useEffect(() => {
     if (!isExpanded) return;
 
@@ -204,13 +191,11 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Handle Close / Dismiss
-  const handleDismiss = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    triggerHaptic('warning');
-    if (activeMode === 'audio' && isAudioActive) stopAudio();
-    if (activeMode === 'timer' && isTimerActive) resetTimer();
-    setIsExpanded(false);
+  // Switch pages helper
+  const goToPage = (index: number) => {
+    triggerHaptic('selection');
+    const clamped = (index + pages.length) % pages.length;
+    setPageIndex(clamped);
   };
 
   return (
@@ -219,27 +204,28 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
         key="dynamic-island-header"
         ref={islandRef}
         layout
-        initial={{ y: -30, opacity: 0, scale: 0.9 }}
+        initial={{ y: -20, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         transition={{
           type: 'spring',
-          stiffness: 400,
+          stiffness: 380,
           damping: 28,
-          mass: 0.7,
+          mass: 0.6,
         }}
-        className={`pointer-events-auto bg-[#080a09]/95 backdrop-blur-2xl border-x border-b border-white/15 text-white shadow-[0_16px_40px_rgba(0,0,0,0.85)] relative overflow-hidden transition-all duration-300 ease-out ${
+        className={`pointer-events-auto bg-[#080a09]/95 backdrop-blur-2xl border-x border-b border-white/15 text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] relative overflow-hidden transform-gpu will-change-transform ${
           isExpanded
-            ? 'w-[calc(100vw-20px)] max-w-[380px] rounded-t-none rounded-b-[30px] sm:rounded-b-[34px] p-4'
+            ? 'w-[calc(100vw-20px)] max-w-[380px] rounded-t-none rounded-b-[26px] sm:rounded-b-[30px] px-3.5 pt-2 pb-2.5'
             : 'w-[280px] sm:w-[330px] h-[40px] sm:h-[42px] rounded-t-none rounded-b-[22px] sm:rounded-b-[24px] px-3 flex items-center justify-between cursor-pointer hover:bg-[#0c100d] active:scale-[0.98]'
         }`}
         onClick={() => {
           if (!isExpanded) {
             triggerHaptic('selection');
+            // Retain user's current pageIndex when re-opening
             setIsExpanded(true);
           }
         }}
       >
-        <AnimatePresence mode="wait" initial={false}>
+        <AnimatePresence mode="popLayout" initial={false}>
           {!isExpanded ? (
             /* ================= COMPACT TOP NOTCH HEADER WITH CAMERA CUTOUT ================= */
             <motion.div
@@ -250,10 +236,10 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className="w-full h-full flex items-center justify-between gap-1 text-xs font-medium"
             >
-              {/* Left Wing: Activity Icon & Label */}
+              {/* Left Wing: Activity Icon & Title */}
               <div className="flex-1 flex items-center gap-1.5 min-w-0 justify-start">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
-                  {activeMode === 'audio' && isAudioActive ? (
+                  {pageIndex === 0 && isAudioActive ? (
                     isAudioPlaying ? (
                       <div className="flex items-end gap-[1.5px] h-2.5 px-0.5">
                         <motion.span
@@ -275,7 +261,7 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
                     ) : (
                       <Headphones className="w-3 h-3 text-emerald-400" />
                     )
-                  ) : activeMode === 'timer' && isTimerActive ? (
+                  ) : pageIndex === 1 && isTimerActive ? (
                     <TimerIcon className={`w-3 h-3 text-amber-400 ${isTimerRunning ? 'animate-spin-slow' : ''}`} />
                   ) : (
                     <Dumbbell className="w-3 h-3 text-emerald-400 transform -rotate-12" />
@@ -283,9 +269,9 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
                 </div>
 
                 <p className="text-[11px] font-bold text-zinc-200 truncate leading-tight">
-                  {activeMode === 'audio' && isAudioActive
+                  {pageIndex === 0 && isAudioActive
                     ? currentTrack?.name || (isAr ? 'الصوتيات' : 'Audio')
-                    : activeMode === 'timer' && isTimerActive
+                    : pageIndex === 1 && isTimerActive
                     ? isAr ? 'مؤقت الراحة' : 'Rest Timer'
                     : isAr ? 'تمارين وصوتيات' : 'Gym & Audio'}
                 </p>
@@ -293,7 +279,6 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
 
               {/* CENTER FORBIDDEN ZONE: Phone Camera Lens Notch Cutout */}
               <div className="w-12 sm:w-16 h-3.5 sm:h-4 bg-black/95 rounded-full border border-white/10 flex items-center justify-center gap-1.5 flex-shrink-0 mx-1 shadow-[inset_0_1px_3px_rgba(0,0,0,0.9)]">
-                {/* Simulated Camera Lens & Ambient Light Sensor */}
                 <div className="w-2.5 h-2.5 rounded-full bg-[#0a0a0d] border border-zinc-700/80 flex items-center justify-center shadow-[inset_0_0_2px_rgba(30,144,255,0.5)]">
                   <div className="w-1 h-1 rounded-full bg-indigo-900/80" />
                 </div>
@@ -304,11 +289,11 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
 
               {/* Right Wing: Duration / Time / Status Indicator */}
               <div className="flex-1 flex items-center gap-1.5 min-w-0 justify-end">
-                {activeMode === 'audio' && isAudioActive ? (
+                {pageIndex === 0 && isAudioActive ? (
                   <span className="text-[10px] font-mono text-emerald-400/90 font-semibold tracking-tight">
                     {formatTime(audioCurrentTime)}
                   </span>
-                ) : activeMode === 'timer' && isTimerActive ? (
+                ) : pageIndex === 1 && isTimerActive ? (
                   <span className="text-[11px] font-bold text-amber-300 font-mono tracking-wider">
                     {formattedTime}
                   </span>
@@ -328,370 +313,439 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.94, y: -5 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="w-full flex flex-col gap-3.5 relative pt-1"
+              className="w-full flex flex-col gap-2 relative pt-0.5"
             >
               {/* Camera Notch Indicator in Expanded Top Center */}
-              <div className="absolute -top-3.5 left-1/2 transform -translate-x-1/2 w-14 h-3 bg-black/90 rounded-b-full border-x border-b border-white/10 flex items-center justify-center gap-1 shadow-xs">
-                <div className="w-2 h-2 rounded-full bg-zinc-900 border border-zinc-700/60 flex items-center justify-center">
+              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-14 h-2.5 bg-black/90 rounded-b-full border-x border-b border-white/10 flex items-center justify-center gap-1 shadow-xs z-10">
+                <div className="w-1.5 h-1.5 rounded-full bg-zinc-900 border border-zinc-700/60 flex items-center justify-center">
                   <div className="w-0.5 h-0.5 rounded-full bg-blue-500/70" />
                 </div>
                 <div className="w-1 h-1 rounded-full bg-emerald-500/60 animate-pulse" />
               </div>
 
-              {/* Top Bar: Icon + Meta + Mode Switcher + Controls */}
-              <div className="flex items-center justify-between gap-2.5 pt-1">
-                {/* Left: Thumbnail / Badge */}
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('light');
-                      if (activeMode === 'audio') onNavigateTab('audio');
-                      else if (activeMode === 'timer') onNavigateTab('timer');
-                      else onNavigateTab('plan');
-                    }}
-                    className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#13281d] to-[#1c3d2e] border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0 shadow-xs cursor-pointer hover:border-emerald-400/60 transition-colors"
-                  >
-                    {activeMode === 'audio' && isAudioActive ? (
-                      <Headphones className="w-5 h-5 text-emerald-400" />
-                    ) : activeMode === 'timer' && isTimerActive ? (
-                      <TimerIcon className="w-5 h-5 text-amber-400" />
-                    ) : (
-                      <Dumbbell className="w-5 h-5 text-emerald-400 transform -rotate-12" />
-                    )}
-                  </div>
-
-                  {/* Title & Subtitle */}
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('light');
-                      if (activeMode === 'audio') onNavigateTab('audio');
-                      else if (activeMode === 'timer') onNavigateTab('timer');
-                      else onNavigateTab('plan');
-                    }}
-                    className="flex flex-col min-w-0 flex-1 cursor-pointer"
-                  >
-                    <h4 className="text-xs sm:text-[13px] font-extrabold text-white truncate leading-tight">
-                      {activeMode === 'audio' && isAudioActive
-                        ? currentTrack?.name || (isAr ? 'مشغل الصوتيات' : 'Audio Player')
-                        : activeMode === 'timer' && isTimerActive
-                        ? isTimerRunning
-                          ? isAr ? 'المؤقت جارٍ' : 'Timer läuft'
-                          : isAr ? 'المؤقت متوقف' : 'Pausiert'
-                        : isAr ? 'تطبيق التمارين والصوتيات' : 'Gym & Audio Suite'}
-                    </h4>
-                    <p className="text-[10px] text-zinc-400 truncate mt-0.5 font-medium">
-                      {activeMode === 'audio' && isAudioActive
-                        ? currentTrack?.folderName || (isAr ? 'الصوتيات المحفوظة' : 'Audio Track')
-                        : activeMode === 'timer' && isTimerActive
-                        ? `${isAr ? 'المدة الكلية:' : 'Dauer:'} ${Math.floor(selectedDuration / 60)}m`
-                        : isAr ? 'مركز التحكم والتنقل السريع' : 'Zentrale Steuerung'}
-                    </p>
-                  </div>
+              {/* Clean Minimal Top Header Bar */}
+              <div className="flex items-center justify-between pt-0.5 pb-1 border-b border-white/10">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[11px] font-extrabold text-zinc-300 tracking-wide">
+                    {pages[pageIndex].label}
+                  </span>
                 </div>
 
-                {/* Mode Selector & Action Icons */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {isAudioActive && isTimerActive && (
-                    <div className="flex items-center bg-zinc-900/90 p-0.5 rounded-full border border-white/10 mr-1">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerHaptic('selection');
-                          setActiveMode('audio');
-                        }}
-                        className={`px-2 py-1 rounded-full text-[10px] font-bold transition-colors ${
-                          activeMode === 'audio'
-                            ? 'bg-emerald-500 text-black shadow-2xs'
-                            : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        {isAr ? 'صوت' : 'Audio'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerHaptic('selection');
-                          setActiveMode('timer');
-                        }}
-                        className={`px-2 py-1 rounded-full text-[10px] font-bold transition-colors ${
-                          activeMode === 'timer'
-                            ? 'bg-amber-500 text-black shadow-2xs'
-                            : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        {isAr ? 'مؤقت' : 'Timer'}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Collapse Button */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerHaptic('light');
-                      setIsExpanded(false);
-                    }}
-                    className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 flex items-center justify-center transition-all active:scale-95"
-                    title={isAr ? 'تقليص' : 'Minimieren'}
-                  >
-                    <ChevronUp className="w-3.5 h-3.5" />
-                  </button>
-
-                  {/* Close / Dismiss Button if activity active */}
-                  {hasActiveActivity && (
-                    <button
-                      type="button"
-                      onClick={handleDismiss}
-                      className="w-7 h-7 rounded-full bg-white/5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 flex items-center justify-center transition-all active:scale-95"
-                      title={isAr ? 'إغلاق' : 'Schließen'}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+                {/* Minimize Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerHaptic('light');
+                    setIsExpanded(false);
+                  }}
+                  className="w-5.5 h-5.5 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 flex items-center justify-center transition-all active:scale-95"
+                  title={isAr ? 'تقليص' : 'Minimieren'}
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
               </div>
 
-              {/* Progress Bar (for Audio or Timer) */}
-              {activeMode !== 'idle' && (
-                <div className="flex flex-col gap-1 px-0.5">
-                  <div
-                    className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative cursor-pointer group"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (activeMode === 'audio' && audioDuration > 0) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const clickX = e.clientX - rect.left;
-                        const ratio = Math.max(0, Math.min(1, clickX / rect.width));
-                        audioSeekTo(ratio * audioDuration);
-                      }
-                    }}
-                  >
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        activeMode === 'audio' ? 'bg-emerald-400' : 'bg-amber-400'
-                      }`}
-                      style={{
-                        width: `${activeMode === 'audio' ? audioProgress : timerProgress}%`,
-                      }}
-                    />
-                  </div>
+              {/* Swipeable Motion Content Box with Fixed Spacious Height */}
+              <motion.div
+                key={`page-content-${pageIndex}`}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.2}
+                onDragEnd={(e, info) => {
+                  if (info.offset.x < -30) {
+                    goToPage(pageIndex + 1);
+                  } else if (info.offset.x > 30) {
+                    goToPage(pageIndex - 1);
+                  }
+                }}
+                initial={{ opacity: 0, x: 15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -15 }}
+                transition={{ duration: 0.18 }}
+                className="w-full h-[122px] min-h-[122px] touch-pan-y cursor-grab active:cursor-grabbing flex flex-col justify-between py-1 px-0.5"
+              >
+                {/* PAGE 0: AUDIO CONTROL */}
+                {pageIndex === 0 && (
+                  <div className="flex flex-col justify-between h-full">
+                    {/* Track Info */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('light');
+                            onNavigateTab('audio');
+                            setIsExpanded(false);
+                          }}
+                          className="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0 shadow-xs cursor-pointer hover:border-emerald-400/60 transition-colors"
+                        >
+                          <Volume2 className="w-4 h-4 text-emerald-400" />
+                        </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono tracking-tight font-semibold">
-                    <span>
-                      {activeMode === 'audio'
-                        ? formatTime(audioCurrentTime)
-                        : formattedTime}
-                    </span>
-                    <span>
-                      {activeMode === 'audio'
-                        ? formatTime(audioDuration)
-                        : `${Math.floor(selectedDuration / 60)}:00`}
-                    </span>
-                  </div>
-                </div>
-              )}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('light');
+                            onNavigateTab('audio');
+                            setIsExpanded(false);
+                          }}
+                          className="flex flex-col min-w-0 cursor-pointer"
+                        >
+                          <h4 className="text-xs font-bold text-white truncate leading-tight">
+                            {currentTrack?.name || (isAr ? 'لم يتم اختيار مقطع' : 'Kein Track')}
+                          </h4>
+                          <p className="text-[10px] text-zinc-400 truncate mt-0.5 font-medium">
+                            {currentTrack?.folderName || (isAr ? 'اضغط للانتقال لمكتبة الصوتيات' : 'Zur Audiothek')}
+                          </p>
+                        </div>
+                      </div>
 
-              {/* Bottom Controls Bar */}
-              <div className="flex items-center justify-between pt-0.5">
-                {activeMode === 'audio' && isAudioActive ? (
-                  <>
-                    {/* Lyrics Toggle */}
-                    <div className="flex items-center gap-1">
+                      {/* Direct Jump to Audio Tab */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic('selection');
+                          onNavigateTab('audio');
+                          setIsExpanded(false);
+                        }}
+                        className="px-2 py-1 rounded-md bg-white/5 border border-white/10 hover:bg-white/10 text-emerald-400 text-[10px] font-bold flex items-center gap-1 transition-all flex-shrink-0"
+                      >
+                        <span>{isAr ? 'المكتبة' : 'Bibliothek'}</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+
+                    {/* Progress Bar (Strict LTR left-to-right seeking) */}
+                    <div className="flex flex-col gap-1 px-0.5" dir="ltr">
+                      <div
+                        className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (audioDuration > 0) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const clickX = e.clientX - rect.left;
+                            const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+                            audioSeekTo(ratio * audioDuration);
+                          }
+                        }}
+                      >
+                        <div
+                          className="h-full rounded-full bg-emerald-400 transition-all duration-75"
+                          style={{
+                            width: `${audioProgress}%`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[9px] text-zinc-400 font-mono font-semibold tracking-tight">
+                        <span>{formatTime(audioCurrentTime)}</span>
+                        <span>{formatTime(audioDuration)}</span>
+                      </div>
+                    </div>
+
+                    {/* Centered Controls Bar */}
+                    <div className="relative flex items-center justify-center min-h-[34px]">
+                      {/* Lyrics Toggle on side */}
                       {hasLyrics && (
+                        <div className="absolute left-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerHaptic('selection');
+                              setIsLyricDrawerOpen((prev) => !prev);
+                            }}
+                            className={`h-6 px-2 rounded-full flex items-center gap-1 text-[10px] font-bold transition-all ${
+                              isLyricDrawerOpen
+                                ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-white/10 text-zinc-300 hover:bg-white/20'
+                            }`}
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span className="hidden sm:inline">
+                              {isAr ? 'الكلمات' : 'Text'}
+                            </span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Main Centered Playback Controls */}
+                      <div className="flex items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('light');
+                            handleAudioPrev();
+                          }}
+                          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 flex items-center justify-center active:scale-95 transition-all shadow-xs"
+                          title={isAr ? 'السابق' : 'Zurück'}
+                        >
+                          <SkipBack className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('medium');
+                            toggleAudioPlay();
+                          }}
+                          className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-md active:scale-95 transition-all"
+                          title={isAudioPlaying ? (isAr ? 'إيقاف' : 'Pause') : (isAr ? 'تشغيل' : 'Play')}
+                        >
+                          {isAudioPlaying ? (
+                            <Pause className="w-4 h-4 fill-current" />
+                          ) : (
+                            <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('light');
+                            handleAudioNext();
+                          }}
+                          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 flex items-center justify-center active:scale-95 transition-all shadow-xs"
+                          title={isAr ? 'التالي' : 'Weiter'}
+                        >
+                          <SkipForward className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* PAGE 1: TIMER CONTROL */}
+                {pageIndex === 1 && (
+                  <div className="flex flex-col justify-between h-full">
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between px-0.5">
+                      <div className="flex flex-col">
+                        <h4 className="text-xs font-bold text-white leading-tight">
+                          {isAr ? 'مؤقت الراحة بين المجموعات' : 'Satzpause Timer'}
+                        </h4>
+                        <p className="text-[10px] text-zinc-400 font-medium">
+                          {isTimerRunning
+                            ? isAr ? 'المؤقت يعمل حالياً' : 'Timer läuft'
+                            : isAr ? 'اختر مدة الراحة أو ابدأ' : 'Wähle Pause'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-black font-mono text-amber-400 tracking-wider">
+                          {formattedTime}
+                        </span>
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             triggerHaptic('selection');
-                            setIsLyricDrawerOpen((prev) => !prev);
+                            onNavigateTab('timer');
+                            setIsExpanded(false);
                           }}
-                          className={`h-7 px-2.5 rounded-full flex items-center gap-1.5 text-xs font-bold transition-all ${
-                            isLyricDrawerOpen
-                              ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40'
-                              : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                          }`}
+                          className="p-1 rounded-md bg-white/5 border border-white/10 hover:bg-white/10 text-amber-300 transition-all"
+                          title={isAr ? 'فتح صفحة المؤقت' : 'Öffnen'}
                         >
-                          <FileText className="w-3.5 h-3.5" />
-                          <span className="text-[11px]">
-                            {isAr ? 'الكلمات' : 'Text'}
-                          </span>
-                          <ChevronDown
-                            className={`w-3 h-3 transition-transform ${
-                              isLyricDrawerOpen ? 'rotate-180' : ''
-                            }`}
-                          />
+                          <ExternalLink className="w-3 h-3" />
                         </button>
-                      )}
+                      </div>
                     </div>
 
-                    {/* Audio Controls */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerHaptic('light');
-                          handleAudioPrev();
-                        }}
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 flex items-center justify-center active:scale-95 transition-all"
-                      >
-                        <SkipBack className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerHaptic('medium');
-                          toggleAudioPlay();
-                        }}
-                        className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-md active:scale-95 transition-all"
-                      >
-                        {isAudioPlaying ? (
-                          <Pause className="w-4 h-4 fill-current" />
-                        ) : (
-                          <Play className="w-4 h-4 fill-current translate-x-0.5" />
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerHaptic('light');
-                          handleAudioNext();
-                        }}
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 flex items-center justify-center active:scale-95 transition-all"
-                      >
-                        <SkipForward className="w-3.5 h-3.5" />
-                      </button>
+                    {/* Progress Bar */}
+                    <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden" dir="ltr">
+                      <div
+                        className="h-full rounded-full bg-amber-400 transition-all duration-300"
+                        style={{ width: `${timerProgress}%` }}
+                      />
                     </div>
-                  </>
-                ) : activeMode === 'timer' && isTimerActive ? (
-                  /* Timer Controls */
-                  <div className="w-full flex items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic('light');
-                        resetTimer();
-                      }}
-                      className="h-8 px-3 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 flex items-center gap-1.5 text-xs font-bold active:scale-95 transition-all"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>{isAr ? 'إعادة' : 'Reset'}</span>
-                    </button>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic('medium');
-                        if (isTimerRunning) pauseTimer();
-                        else resumeTimer();
-                      }}
-                      className="h-9 px-5 rounded-full bg-amber-500 hover:bg-amber-400 text-black flex items-center gap-1.5 text-xs font-black shadow-md active:scale-95 transition-all"
-                    >
-                      {isTimerRunning ? (
-                        <>
-                          <Pause className="w-3.5 h-3.5 fill-current" />
-                          <span>{isAr ? 'إيقاف مؤقت' : 'Pause'}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
-                          <span>{isAr ? 'استئناف' : 'Start'}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  /* Idle Quick Navigation Shortcuts */
-                  <div className="w-full flex items-center justify-between gap-1.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic('selection');
-                        onNavigateTab('plan');
-                        setIsExpanded(false);
-                      }}
-                      className={`flex-1 py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${
-                        currentTab === 'plan'
-                          ? 'bg-emerald-500 text-black'
-                          : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                      }`}
-                    >
-                      <Layers className="w-3 h-3" />
-                      <span>{isAr ? 'الخطة' : 'Plan'}</span>
-                    </button>
+                    {/* Single Unified Bottom Row: Presets on Left, Actions on Right */}
+                    <div className="flex items-center justify-between gap-2">
+                      {/* Presets */}
+                      <div className="flex items-center gap-1">
+                        {[30, 60, 90, 120].map((sec) => (
+                          <button
+                            key={sec}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerHaptic('selection');
+                              startTimer(sec);
+                            }}
+                            className={`px-1.5 py-1 rounded-md text-[10px] font-bold border transition-all ${
+                              selectedDuration === sec && isTimerRunning
+                                ? 'bg-amber-500 text-black border-amber-400'
+                                : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/15'
+                            }`}
+                          >
+                            {sec}s
+                          </button>
+                        ))}
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic('selection');
-                        onNavigateTab('audio');
-                        setIsExpanded(false);
-                      }}
-                      className={`flex-1 py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${
-                        currentTab === 'audio'
-                          ? 'bg-emerald-500 text-black'
-                          : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                      }`}
-                    >
-                      <Headphones className="w-3 h-3" />
-                      <span>{isAr ? 'الصوتيات' : 'Audio'}</span>
-                    </button>
+                      {/* Action Controls */}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('light');
+                            resetTimer();
+                          }}
+                          className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 flex items-center justify-center active:scale-95 transition-all"
+                          title={isAr ? 'إعادة' : 'Reset'}
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic('selection');
-                        onNavigateTab('timer');
-                        setIsExpanded(false);
-                      }}
-                      className={`flex-1 py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${
-                        currentTab === 'timer'
-                          ? 'bg-amber-500 text-black'
-                          : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                      }`}
-                    >
-                      <TimerIcon className="w-3 h-3" />
-                      <span>{isAr ? 'المؤقت' : 'Timer'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic('selection');
-                        onNavigateTab('stats');
-                        setIsExpanded(false);
-                      }}
-                      className={`flex-1 py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${
-                        currentTab === 'stats'
-                          ? 'bg-emerald-500 text-black'
-                          : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                      }`}
-                    >
-                      <BarChart2 className="w-3 h-3" />
-                      <span>{isAr ? 'الإحصائيات' : 'Stats'}</span>
-                    </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerHaptic('medium');
+                            if (isTimerRunning) pauseTimer();
+                            else resumeTimer();
+                          }}
+                          className="h-7 px-3 rounded-full bg-amber-500 hover:bg-amber-400 text-black flex items-center gap-1 text-[11px] font-black shadow-md active:scale-95 transition-all"
+                        >
+                          {isTimerRunning ? (
+                            <>
+                              <Pause className="w-3 h-3 fill-current" />
+                              <span>{isAr ? 'إيقاف' : 'Pause'}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3 h-3 fill-current translate-x-0.5" />
+                              <span>{isAr ? 'بدء' : 'Start'}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                {/* PAGE 2: QUICK NAVIGATION */}
+                {pageIndex === 2 && (
+                  <div className="flex flex-col justify-between h-full py-0.5">
+                    <p className="text-[10px] text-zinc-400 font-medium px-0.5">
+                      {isAr ? 'التنقل السريع بين أقسام التطبيق:' : 'Schnellnavigation:'}
+                    </p>
+
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic('selection');
+                          onNavigateTab('plan');
+                          setIsExpanded(false);
+                        }}
+                        className={`py-2 px-1 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 border transition-all ${
+                          currentTab === 'plan'
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                            : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/15'
+                        }`}
+                      >
+                        <Layers className="w-4 h-4 text-emerald-400" />
+                        <span>{isAr ? 'الخطة' : 'Plan'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic('selection');
+                          onNavigateTab('audio');
+                          setIsExpanded(false);
+                        }}
+                        className={`py-2 px-1 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 border transition-all ${
+                          currentTab === 'audio'
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                            : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/15'
+                        }`}
+                      >
+                        <Headphones className="w-4 h-4 text-emerald-400" />
+                        <span>{isAr ? 'الصوتيات' : 'Audio'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic('selection');
+                          onNavigateTab('timer');
+                          setIsExpanded(false);
+                        }}
+                        className={`py-2 px-1 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 border transition-all ${
+                          currentTab === 'timer'
+                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                            : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/15'
+                        }`}
+                      >
+                        <TimerIcon className="w-4 h-4 text-amber-400" />
+                        <span>{isAr ? 'المؤقت' : 'Timer'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic('selection');
+                          onNavigateTab('stats');
+                          setIsExpanded(false);
+                        }}
+                        className={`py-2 px-1 rounded-xl text-[10px] font-bold flex flex-col items-center gap-1 border transition-all ${
+                          currentTab === 'stats'
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                            : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/15'
+                        }`}
+                      >
+                        <BarChart2 className="w-4 h-4 text-emerald-400" />
+                        <span>{isAr ? 'الإحصائيات' : 'Stats'}</span>
+                      </button>
+                    </div>
+
+                    <div className="text-center">
+                      <p className="text-[9px] text-zinc-500 font-medium">
+                        {isAr ? 'اسحب للتنقل بين التحكم بالصوت والمؤقت' : 'Wische zwischen Audio & Timer'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+
+              {/* Bottom Interactive Swipe Page Indicator Dots */}
+              <div className="flex items-center justify-center gap-2 pt-1">
+                {pages.map((p, idx) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      goToPage(idx);
+                    }}
+                    className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${
+                      pageIndex === idx
+                        ? idx === 1
+                          ? 'w-6 bg-amber-400 shadow-xs'
+                          : 'w-6 bg-emerald-400 shadow-xs'
+                        : 'w-2 bg-zinc-700 hover:bg-zinc-500'
+                    }`}
+                    title={p.label}
+                  />
+                ))}
               </div>
 
               {/* Inline Live Lyric Drawer */}
               <AnimatePresence>
-                {isLyricDrawerOpen && activeMode === 'audio' && isAudioActive && (
+                {isLyricDrawerOpen && pageIndex === 0 && isAudioActive && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
@@ -708,8 +762,8 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
                       }}
                     >
                       <p className="text-xs font-bold text-emerald-200 truncate font-display">
-                        {activeLiveLyric?.active
-                          ? activeLiveLyric.active.text
+                        {activeLiveLyric
+                          ? activeLiveLyric.text
                           : isAr
                           ? '🎵 متابعة الكلمات الحية...'
                           : '🎵 Live-Text...'}

@@ -491,7 +491,7 @@ export default function App() {
         />
 
         {/* Main View Container */}
-        <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-4 py-4 sm:py-6 overflow-x-hidden min-w-0 pb-28">
+        <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-4 pt-16 sm:pt-20 pb-28 overflow-x-hidden min-w-0">
           <AnimatePresence mode="wait">
             {currentTab === 'plan' && (
               <motion.div
