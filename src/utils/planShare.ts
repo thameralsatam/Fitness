@@ -5,12 +5,20 @@ import {
   SerializedMediaItem,
 } from './mediaStorage';
 
+export interface ExportOptions {
+  includeVideos?: boolean;
+}
+
 /**
- * Prepares a workout plan for export by embedding all IndexedDB exercise media as Base64 Data URLs
+ * Prepares a workout plan for export by embedding IndexedDB exercise media as Base64 Data URLs
  */
-export async function prepareExportablePlan(plan: WorkoutPlan): Promise<WorkoutPlan> {
+export async function prepareExportablePlan(
+  plan: WorkoutPlan,
+  options?: ExportOptions
+): Promise<WorkoutPlan> {
   try {
-    const mediaMap = await getAllExerciseMediaBase64Map();
+    const includeVideos = options?.includeVideos ?? true;
+    const mediaMap = await getAllExerciseMediaBase64Map({ includeVideos });
     const clonedPlan: WorkoutPlan = JSON.parse(JSON.stringify(plan));
 
     const enrichExercise = (ex: ExerciseItem) => {
@@ -50,44 +58,94 @@ export async function prepareExportablePlan(plan: WorkoutPlan): Promise<WorkoutP
 }
 
 /**
- * Downloads the workout plan with embedded media as a formatted JSON file
+ * Downloads the workout plan with embedded media as a formatted JSON file.
+ * Handles Android WebViews and memory crash fallbacks gracefully.
  */
-export async function exportPlanAsFile(plan: WorkoutPlan): Promise<void> {
-  const exportablePlan = await prepareExportablePlan(plan);
-  const jsonStr = JSON.stringify(exportablePlan, null, 2);
+export async function exportPlanAsFile(plan: WorkoutPlan, options?: ExportOptions): Promise<void> {
+  let exportablePlan = await prepareExportablePlan(plan, options);
+  let jsonStr: string;
+
+  try {
+    jsonStr = JSON.stringify(exportablePlan, null, 2);
+  } catch {
+    // Memory limit fallback: retry without heavy videos
+    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false });
+    jsonStr = JSON.stringify(exportablePlan, null, 2);
+  }
+
+  const fileName = (plan.nameAr || plan.nameDe || 'Gym_Workout_Plan')
+    .replace(/[^\w\u0600-\u06FF]+/g, '_')
+    .toLowerCase() + '_schedule.json';
+
   const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+
+  // Try Web Share API with file first (most reliable on mobile apps)
+  if (navigator.share && navigator.canShare) {
+    try {
+      const file = new File([blob], fileName, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: plan.nameAr || 'جدول التمارين',
+          files: [file],
+        });
+        return;
+      }
+    } catch {
+      // Fallback to standard anchor download
+    }
+  }
+
+  // Standard Blob Download
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  const fileName = (plan.nameAr || plan.nameDe || 'Gym_Workout_Plan')
-    .replace(/[^\w\u0600-\u06FF]+/g, '_')
-    .toLowerCase();
-  link.download = `${fileName}_schedule.json`;
+  link.download = fileName;
+  link.setAttribute('target', '_blank');
   document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  
+  // Dispatch mouse event for mobile WebViews
+  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  
+  setTimeout(() => {
+    if (document.body.contains(link)) {
+      document.body.removeChild(link);
+    }
+    URL.revokeObjectURL(url);
+  }, 2000);
 }
 
 /**
  * Returns JSON text representation of the plan with embedded media
  */
-export async function exportPlanAsJsonString(plan: WorkoutPlan): Promise<string> {
-  const exportablePlan = await prepareExportablePlan(plan);
-  return JSON.stringify(exportablePlan, null, 2);
+export async function exportPlanAsJsonString(plan: WorkoutPlan, options?: ExportOptions): Promise<string> {
+  let exportablePlan = await prepareExportablePlan(plan, options);
+  try {
+    return JSON.stringify(exportablePlan, null, 2);
+  } catch {
+    // Retry without heavy videos if memory boundary hit
+    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false });
+    return JSON.stringify(exportablePlan, null, 2);
+  }
 }
 
 /**
  * Shares plan with embedded media using Web Share API if supported
  */
-export async function sharePlanNative(plan: WorkoutPlan): Promise<boolean> {
-  const exportablePlan = await prepareExportablePlan(plan);
-  const jsonStr = JSON.stringify(exportablePlan, null, 2);
+export async function sharePlanNative(plan: WorkoutPlan, options?: ExportOptions): Promise<boolean> {
+  let exportablePlan = await prepareExportablePlan(plan, options);
+  let jsonStr: string;
+  try {
+    jsonStr = JSON.stringify(exportablePlan, null, 2);
+  } catch {
+    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false });
+    jsonStr = JSON.stringify(exportablePlan, null, 2);
+  }
+
   const planName = plan.nameAr || plan.nameDe || 'جدول التمارين';
 
   if (navigator.share) {
     try {
-      const file = new File([jsonStr], 'workout_plan.json', { type: 'application/json' });
+      const file = new File([jsonStr], `${planName}_schedule.json`, { type: 'application/json' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           title: planName,
@@ -96,14 +154,16 @@ export async function sharePlanNative(plan: WorkoutPlan): Promise<boolean> {
         });
         return true;
       } else {
-        await navigator.share({
-          title: planName,
-          text: `جدول التمارين: ${planName}\n\n${jsonStr}`,
-        });
-        return true;
+        // If string is too long for text share, share file or fail gracefully
+        if (jsonStr.length < 50000) {
+          await navigator.share({
+            title: planName,
+            text: `جدول التمارين: ${planName}\n\n${jsonStr}`,
+          });
+          return true;
+        }
       }
     } catch {
-      // User cancelled or unsupported share fallback
       return false;
     }
   }

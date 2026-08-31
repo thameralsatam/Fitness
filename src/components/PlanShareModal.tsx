@@ -50,6 +50,7 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
+  const [includeVideos, setIncludeVideos] = useState<boolean>(true);
   const [pastedJson, setPastedJson] = useState('');
   const [copied, setCopied] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -81,8 +82,14 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
     try {
       setIsProcessing(true);
       triggerHaptic('success');
-      await exportPlanAsFile(plan);
-      showToast(isAr ? 'تم تحميل ملف الجدول شاملاً الوسائط بنجاح (.json)' : 'Plan inkl. Medien heruntergeladen');
+      await exportPlanAsFile(plan, { includeVideos });
+      showToast(
+        isAr
+          ? includeVideos
+            ? 'تم تحميل ملف الجدول شاملاً الوسائط والفيديو (.json)'
+            : 'تم تحميل ملف الجدول بنجاح (.json)'
+          : 'Plan heruntergeladen'
+      );
     } catch {
       showToast(isAr ? 'حدث خطأ أثناء تحميل الملف' : 'Fehler beim Herunterladen');
     } finally {
@@ -94,13 +101,19 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
     try {
       setIsProcessing(true);
       triggerHaptic('success');
-      const jsonStr = await exportPlanAsJsonString(plan);
+      const jsonStr = await exportPlanAsJsonString(plan, { includeVideos });
       await navigator.clipboard.writeText(jsonStr);
       setCopied(true);
-      showToast(isAr ? 'تم نسخ كود الجدول شاملاً الوسائط إلى الحافظة' : 'Plan-Code in die Zwischenablage kopiert');
+      showToast(isAr ? 'تم نسخ كود الجدول إلى الحافظة بنجاح' : 'Plan-Code in die Zwischenablage kopiert');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      showToast(isAr ? 'تعذر النسخ التلقائي' : 'Kopieren fehlgeschlagen');
+      // Fallback: If copy fails due to memory/clipboard size limits, trigger file download directly
+      try {
+        await exportPlanAsFile(plan, { includeVideos });
+        showToast(isAr ? 'الكود كبير للحافظة، تم تحويله لتنزيل ملف تلقائياً!' : 'Code zu groß, Datei wurde heruntergeladen');
+      } catch {
+        showToast(isAr ? 'تعذر النسخ أو التحميل' : 'Kopieren fehlgeschlagen');
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -110,11 +123,11 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
     try {
       setIsProcessing(true);
       triggerHaptic('selection');
-      const success = await sharePlanNative(plan);
+      const success = await sharePlanNative(plan, { includeVideos });
       if (success) {
         showToast(isAr ? 'تم فتح خيارات المشاركة' : 'Freigabe geöffnet');
       } else {
-        await handleCopyJson();
+        await handleDownloadFile();
       }
     } catch {
       showToast(isAr ? 'تعذر المشاركة' : 'Teilen fehlgeschlagen');
@@ -325,6 +338,34 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
                       {isAr ? plan.scheduleDaysAr : plan.scheduleDaysDe}
                     </p>
                   </div>
+
+                  {/* Video Media Toggle Option */}
+                  <label className="flex items-center justify-between p-3 rounded-2xl bg-[#f0f6f2] border border-[#d2e4d7] cursor-pointer hover:bg-[#e7f1eb] transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-xl bg-[#215641] text-white">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-[#15241c]">
+                          {isAr ? 'تضمين مقاطع الفيديو المسجلة' : 'Videos einschließen'}
+                        </div>
+                        <div className="text-[10px] text-[#5a7364]">
+                          {isAr
+                            ? 'تضمن الفيديو داخل ملف JSON (تعطيل هذا الخيار يجعل الملف أصغر وأسرع)'
+                            : 'Fügt Videos direkt in die Datei ein'}
+                        </div>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={includeVideos}
+                      onChange={(e) => {
+                        triggerHaptic('selection');
+                        setIncludeVideos(e.target.checked);
+                      }}
+                      className="w-4 h-4 accent-[#215641] rounded cursor-pointer"
+                    />
+                  </label>
 
                   {/* Action Buttons Stack */}
                   <div className="space-y-2.5 pt-1">

@@ -235,9 +235,15 @@ function dataUrlToBlob(dataUrl: string): Blob {
 }
 
 /**
- * Retrieves all stored exercise media from IndexedDB as Base64 Data URLs
+ * Retrieves stored exercise media from IndexedDB as Base64 Data URLs with options and size guards
  */
-export async function getAllExerciseMediaBase64Map(): Promise<Record<number, SerializedMediaItem[]>> {
+export async function getAllExerciseMediaBase64Map(options?: {
+  includeVideos?: boolean;
+  maxVideoSizeBytes?: number;
+}): Promise<Record<number, SerializedMediaItem[]>> {
+  const includeVideos = options?.includeVideos ?? true;
+  const maxVideoSizeBytes = options?.maxVideoSizeBytes ?? 20 * 1024 * 1024; // 20MB inline safeguard
+
   try {
     const db = await openMediaDB();
     return new Promise((resolve) => {
@@ -251,6 +257,14 @@ export async function getAllExerciseMediaBase64Map(): Promise<Record<number, Ser
 
         for (const rec of records) {
           try {
+            if (rec.type === 'video') {
+              if (!includeVideos) continue;
+              if (rec.blob.size > maxVideoSizeBytes) {
+                console.warn(`Skipping large inline video ${rec.name} (${rec.blob.size} bytes) to prevent crash`);
+                continue;
+              }
+            }
+
             const dataUrl = await blobToDataUrl(rec.blob);
             if (!map[rec.exerciseId]) {
               map[rec.exerciseId] = [];
@@ -264,7 +278,7 @@ export async function getAllExerciseMediaBase64Map(): Promise<Record<number, Ser
               createdAt: rec.createdAt,
             });
           } catch {
-            // ignore failed blobs
+            // ignore failed blob read
           }
         }
         resolve(map);
