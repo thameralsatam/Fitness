@@ -17,6 +17,9 @@ import {
   Code2,
   ArrowUpDown,
   Loader2,
+  Globe,
+  Link2,
+  ExternalLink,
 } from 'lucide-react';
 import { WorkoutPlan, Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
@@ -28,6 +31,7 @@ import {
   sharePlanNative,
   parseAndHydratePlanJson,
   copyTextToClipboardAndroid,
+  createServerDownloadLink,
 } from '../utils/planShare';
 import { DEFAULT_WORKOUT_PLAN } from '../data/workoutData';
 
@@ -55,9 +59,11 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
   const [includeVideos, setIncludeVideos] = useState<boolean>(true);
   const [pastedJson, setPastedJson] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importPreview, setImportPreview] = useState<WorkoutPlan | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [generatedServerUrl, setGeneratedServerUrl] = useState<string | null>(null);
 
   // Code Inspector state for Android WebView / Direct Copy
   const [showCodeInspector, setShowCodeInspector] = useState(false);
@@ -83,6 +89,25 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const handleCreateServerLink = async () => {
+    try {
+      setIsProcessing(true);
+      triggerHaptic('success');
+      const res = await createServerDownloadLink(plan, { includeVideos });
+      if (res.success && res.downloadUrl) {
+        setGeneratedServerUrl(res.downloadUrl);
+        showToast(isAr ? 'تم إنشاء رابط التنزيل المباشر بنجاح!' : 'Direkt-Download-Link erstellt!');
+      } else {
+        showToast(isAr ? 'تعذر إنشاء رابط التنزيل على السيرفر' : 'Link-Erstellung fehlgeschlagen');
+      }
+    } catch (err: any) {
+      console.error('[PlanShareModal] CreateServerLink error:', err);
+      showToast(isAr ? 'حدث خطأ أثناء إنشاء رابط السيرفر' : 'Fehler beim Erstellen des Links');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleFolderPickerSave = async () => {
     try {
@@ -153,13 +178,21 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
       setIsProcessing(true);
       triggerHaptic('success');
       const jsonStr = await exportPlanAsJsonString(plan, { includeVideos });
-      const success = copyTextToClipboardAndroid(jsonStr);
-      if (success) {
+      const res = await copyTextToClipboardAndroid(jsonStr);
+      if (res.success) {
         setCopied(true);
-        showToast(isAr ? 'تم نسخ كود الجدول إلى الحافظة بنجاح!' : 'Plan-Code kopiert!');
+        if (res.isLightweightFallback) {
+          showToast(
+            isAr
+              ? 'تم نسخ بيانات وتفاصيل الجدول بنجاح! (تم استبعاد كود الفيديوهات لتجاوزها سعة الحافظة)'
+              : 'Plan-Details kopiert! (Videos wegen Größe ausgeschlossen)'
+          );
+        } else {
+          showToast(isAr ? 'تم نسخ كود الجدول إلى الحافظة بنجاح!' : 'Plan-Code kopiert!');
+        }
         setTimeout(() => setCopied(false), 2500);
       } else {
-        showToast(isAr ? 'تعذر النسخ التلقائي، يمكنك استخدام زر عرض الكود' : 'Kopieren fehlgeschlagen');
+        showToast(isAr ? 'تعذر النسخ التلقائي، يمكنك استخدام زر عرض الكود أو تنزيل الملف' : 'Kopieren fehlgeschlagen');
       }
     } catch (err: any) {
       console.error('[PlanShareModal] CopyJson error:', err);
@@ -420,6 +453,82 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
 
                   {/* Action Buttons Stack */}
                   <div className="space-y-2.5 pt-1">
+                    {/* 0. Direct Server Download & Share Link (100% Guaranteed Solution) */}
+                    <button
+                      type="button"
+                      onClick={handleCreateServerLink}
+                      disabled={isProcessing}
+                      className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#184232] to-[#215641] hover:from-[#123327] hover:to-[#1a4434] text-white font-display font-bold text-sm flex items-center justify-between transition-all active:scale-[0.99] shadow-md cursor-pointer disabled:opacity-60 border border-emerald-500/30"
+                    >
+                      <div className="flex items-center gap-3">
+                        {isProcessing ? (
+                          <Loader2 className="w-5 h-5 text-emerald-300 animate-spin" />
+                        ) : (
+                          <Globe className="w-5 h-5 text-emerald-300" />
+                        )}
+                        <div className="text-start">
+                          <div className="leading-snug text-emerald-50 font-black">
+                            {isAr ? 'إنشاء رابط تحميل ومشاركة مباشر (السيرفر المؤكد 💯)' : 'Direkt-Download-Link erstellen'}
+                          </div>
+                          <div className="text-[10px] text-emerald-200/90 font-normal">
+                            {isAr ? 'تنزيل فوري بحافظة أندرويد + رابط مشاركة سريع 40 حرف' : 'Sicherer Download & Schneller Link'}
+                          </div>
+                        </div>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-emerald-300" />
+                    </button>
+
+                    {/* Generated Direct Server Link Card */}
+                    {generatedServerUrl && (
+                      <div className="p-4 rounded-2xl bg-emerald-950 text-white space-y-3 animate-in fade-in duration-200 border border-emerald-500/40">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                            <Link2 className="w-4 h-4" />
+                            <span>{isAr ? 'رابط التنزيل المباشر جاهز!' : 'Download-Link bereit!'}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setGeneratedServerUrl(null)}
+                            className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-black/40 border border-emerald-500/20 font-mono text-[11px] text-emerald-300 break-all select-all">
+                          {generatedServerUrl}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const res = await copyTextToClipboardAndroid(generatedServerUrl);
+                              triggerHaptic('success');
+                              setCopiedLink(true);
+                              showToast(isAr ? 'تم نسخ رابط التحميل المباشر بنجاح!' : 'Link kopiert!');
+                              setTimeout(() => setCopiedLink(false), 2500);
+                            }}
+                            className="py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[#0d1712] font-display font-black text-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                          >
+                            {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                            <span>{copiedLink ? (isAr ? 'تم النسخ!' : 'Kopiert!') : (isAr ? 'نسخ الرابط' : 'Link kopieren')}</span>
+                          </button>
+
+                          <a
+                            href={generatedServerUrl}
+                            target="_self"
+                            download
+                            onClick={() => triggerHaptic('selection')}
+                            className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-display font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                          >
+                            <Download className="w-4 h-4 text-emerald-400" />
+                            <span>{isAr ? 'تنزيل مباشر' : 'Direkt-Download'}</span>
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
                     {/* 1. Pick Folder & Save Directly */}
                     <button
                       type="button"
@@ -559,11 +668,19 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
                       <div className="flex items-center justify-between gap-2 pt-1">
                         <button
                           type="button"
-                          onClick={() => {
-                            const success = copyTextToClipboardAndroid(codeInspectorText);
-                            triggerHaptic(success ? 'success' : 'warning');
-                            if (success) {
-                              showToast(isAr ? 'تم تحديد الكود ونسخه بنجاح!' : 'Code kopiert!');
+                          onClick={async () => {
+                            const res = await copyTextToClipboardAndroid(codeInspectorText);
+                            triggerHaptic(res.success ? 'success' : 'warning');
+                            if (res.success) {
+                              if (res.isLightweightFallback) {
+                                showToast(
+                                  isAr
+                                    ? 'تم نسخ تفاصيل الجدول بنجاح (تم استبعاد الفيديوهات لأن حجمها يتجاوز الحافظة)'
+                                    : 'Plan kopiert (ohne schwere Videos)'
+                                );
+                              } else {
+                                showToast(isAr ? 'تم تحديد الكود ونسخه بنجاح!' : 'Code kopiert!');
+                              }
                             } else {
                               showToast(isAr ? 'انقر داخل المربع وحدد النص كاملاً لنسخه' : 'Bitte manuell auswählen');
                             }
