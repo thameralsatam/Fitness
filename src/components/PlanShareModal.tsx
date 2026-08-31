@@ -12,10 +12,10 @@ import {
   AlertTriangle,
   RotateCcw,
   FileText,
+  FolderDown,
+  Eye,
+  Code2,
   ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
-  Dumbbell,
   Loader2,
 } from 'lucide-react';
 import { WorkoutPlan, Language } from '../types';
@@ -23,6 +23,7 @@ import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
 import {
   exportPlanAsFile,
+  exportPlanWithFolderPicker,
   exportPlanAsJsonString,
   sharePlanNative,
   parseAndHydratePlanJson,
@@ -57,6 +58,10 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
   const [importPreview, setImportPreview] = useState<WorkoutPlan | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
+  // Code Inspector state for Android WebView / Direct Copy
+  const [showCodeInspector, setShowCodeInspector] = useState(false);
+  const [codeInspectorText, setCodeInspectorText] = useState('');
+
   useEffect(() => {
     if (isOpen) {
       notifyModalChange(true);
@@ -78,18 +83,61 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const handleFolderPickerSave = async () => {
+    try {
+      setIsProcessing(true);
+      triggerHaptic('success');
+      const supported = await exportPlanWithFolderPicker(plan, { includeVideos });
+      if (supported) {
+        showToast(isAr ? 'تم اختيار مجلد الملفات وتم حفظ الملف بنجاح!' : 'In Ausgewähltem Ordner gespeichert');
+      } else {
+        // Fallback to general export or native share sheet
+        const res = await exportPlanAsFile(plan, { includeVideos });
+        if (res === 'share') {
+          showToast(isAr ? 'تم فتح تطبيق المشاركة وحفظ الملفات' : 'Freigabe geöffnet');
+        } else {
+          showToast(isAr ? 'تم تنفيذ طلب التنزيل' : 'Download gestartet');
+        }
+      }
+    } catch {
+      showToast(isAr ? 'تعذر الحفظ في المجلد المحدد' : 'Ordnerauswahl fehlgeschlagen');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleOpenCodeInspector = async () => {
+    try {
+      setIsProcessing(true);
+      triggerHaptic('selection');
+      const jsonStr = await exportPlanAsJsonString(plan, { includeVideos });
+      setCodeInspectorText(jsonStr);
+      setShowCodeInspector(true);
+    } catch {
+      showToast(isAr ? 'تعذر توليد كود الملف' : 'Fehler beim Generieren');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleDownloadFile = async () => {
     try {
       setIsProcessing(true);
       triggerHaptic('success');
-      await exportPlanAsFile(plan, { includeVideos });
-      showToast(
-        isAr
-          ? includeVideos
-            ? 'تم تحميل ملف الجدول شاملاً الوسائط والفيديو (.json)'
-            : 'تم تحميل ملف الجدول بنجاح (.json)'
-          : 'Plan heruntergeladen'
-      );
+      const res = await exportPlanAsFile(plan, { includeVideos });
+      if (res === 'file_picker') {
+        showToast(isAr ? 'تم حفظ الملف في المجلد المحدد بنجاح' : 'Datei im Ordner gespeichert');
+      } else if (res === 'share') {
+        showToast(isAr ? 'تم فتح نافذة الحفظ والمشاركة' : 'Freigabe geöffnet');
+      } else {
+        showToast(
+          isAr
+            ? includeVideos
+              ? 'تم تحميل ملف الجدول (.json)'
+              : 'تم تحميل ملف الجدول بنجاح (.json)'
+            : 'Plan heruntergeladen'
+        );
+      }
     } catch {
       showToast(isAr ? 'حدث خطأ أثناء تحميل الملف' : 'Fehler beim Herunterladen');
     } finally {
@@ -369,10 +417,10 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
 
                   {/* Action Buttons Stack */}
                   <div className="space-y-2.5 pt-1">
-                    {/* 1. Download JSON File */}
+                    {/* 1. Pick Folder & Save Directly */}
                     <button
                       type="button"
-                      onClick={handleDownloadFile}
+                      onClick={handleFolderPickerSave}
                       disabled={isProcessing}
                       className="w-full py-3 px-4 rounded-2xl bg-[#215641] hover:bg-[#184232] text-white font-display font-bold text-sm flex items-center justify-between transition-all active:scale-[0.99] shadow-xs cursor-pointer disabled:opacity-60"
                     >
@@ -380,69 +428,165 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
                         {isProcessing ? (
                           <Loader2 className="w-5 h-5 text-emerald-200 animate-spin" />
                         ) : (
-                          <FileJson className="w-5 h-5 text-emerald-200" />
+                          <FolderDown className="w-5 h-5 text-emerald-200" />
                         )}
                         <div className="text-start">
                           <div className="leading-snug">
-                            {isAr ? 'تنزيل كملف (.json)' : 'Als .json Datei herunterladen'}
+                            {isAr ? 'اختيار مجلد وقسم الحفظ للجهاز' : 'Ordner wählen & Speichern'}
                           </div>
                           <div className="text-[10px] text-emerald-100 font-normal">
-                            {isAr ? 'ملف مناسب للمشاركة والاحتفاظ بنسخة احتياطية (يشمل الوسائط)' : 'Ideal zum Sichern inkl. Medien'}
+                            {isAr ? 'يفتح تطبيق الملفات لتحديد مجلد التنزيلات أو Documents' : 'Wählt direkt den Speicherort'}
                           </div>
                         </div>
                       </div>
-                      {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderDown className="w-4 h-4" />}
                     </button>
 
-                    {/* 2. Share via Native Share App */}
+                    {/* 2. Download standard file */}
+                    <button
+                      type="button"
+                      onClick={handleDownloadFile}
+                      disabled={isProcessing}
+                      className="w-full py-3 px-4 rounded-2xl bg-[#edf5f0] hover:bg-[#e2ede6] text-[#1b4332] font-display font-bold text-sm flex items-center justify-between border border-[#bad5c2] transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileJson className="w-5 h-5 text-[#215641]" />
+                        <div className="text-start">
+                          <div className="leading-snug">
+                            {isAr ? 'تنزيل ملف عادي (.json)' : 'Als .json Datei speichern'}
+                          </div>
+                          <div className="text-[10px] text-[#5a7364] font-normal">
+                            {isAr ? 'تنزيل تلقائي مباشر بحافظة الملفات' : 'Direkter Dateidownload'}
+                          </div>
+                        </div>
+                      </div>
+                      <Download className="w-4 h-4 text-[#215641]" />
+                    </button>
+
+                    {/* 3. Share via Native Share App */}
                     <button
                       type="button"
                       onClick={handleNativeShare}
                       disabled={isProcessing}
-                      className="w-full py-3 px-4 rounded-2xl bg-[#edf5f0] hover:bg-[#e2ede6] text-[#1b4332] font-display font-bold text-sm flex items-center justify-between border border-[#bad5c2] transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60"
+                      className="w-full py-3 px-4 rounded-2xl bg-[#f5faf7] hover:bg-[#edf5f0] text-[#1b4332] font-display font-bold text-sm flex items-center justify-between border border-[#d2e2d7] transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60"
                     >
                       <div className="flex items-center gap-3">
                         <Share2 className="w-5 h-5 text-[#215641]" />
                         <div className="text-start">
                           <div className="leading-snug">
-                            {isAr ? 'مشاركة عبر تطبيقات الجوال' : 'Über Smartphone teilen'}
+                            {isAr ? 'مشاركة وحفظ عبر تطبيق الملفات' : 'Über App / Dateien teilen'}
                           </div>
                           <div className="text-[10px] text-[#5a7364] font-normal">
-                            {isAr ? 'واتساب، تلغرام، أو الحفظ في الملفات' : 'WhatsApp, Telegram oder Dateien'}
+                            {isAr ? 'فتح قائمة المشاركة (واتساب، تطبيق الملفات، Drive)' : 'Über WhatsApp, Files, Drive'}
                           </div>
                         </div>
                       </div>
                       <Share2 className="w-4 h-4 text-[#215641]" />
                     </button>
 
-                    {/* 3. Copy JSON String */}
+                    {/* 4. Display Code Inspector */}
                     <button
                       type="button"
-                      onClick={handleCopyJson}
+                      onClick={handleOpenCodeInspector}
                       disabled={isProcessing}
                       className="w-full py-3 px-4 rounded-2xl bg-[#fafcfa] hover:bg-[#edf5f0] text-[#2c4235] font-display font-bold text-sm flex items-center justify-between border border-[#e0ece3] transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60"
                     >
                       <div className="flex items-center gap-3">
-                        {copied ? (
-                          <Check className="w-5 h-5 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-5 h-5 text-[#4f6156]" />
-                        )}
+                        <Code2 className="w-5 h-5 text-[#215641]" />
                         <div className="text-start">
                           <div className="leading-snug">
-                            {copied
-                              ? (isAr ? 'تم النسخ بنجاح!' : 'Kopiert!')
-                              : (isAr ? 'نسخ كود الجدول (JSON)' : 'Plan-Code kopieren')}
+                            {isAr ? 'عرض واستعراض كود الملف (JSON)' : 'Plan-Code anzeigen'}
                           </div>
                           <div className="text-[10px] text-[#6e8276] font-normal">
-                            {isAr ? 'لصقه مباشرة في التطبيق على جهاز آخر' : 'Code auf anderem Gerät einfügen'}
+                            {isAr ? 'يعرض الكود كاملاً لنسخه يدوياً أو معاينته' : 'Code anzeigen & manuell kopieren'}
                           </div>
                         </div>
                       </div>
-                      {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6e8276]" />}
+                      <Eye className="w-4 h-4 text-[#4f6156]" />
                     </button>
 
+                    {/* 5. Copy JSON String */}
+                    <button
+                      type="button"
+                      onClick={handleCopyJson}
+                      disabled={isProcessing}
+                      className="w-full py-2.5 px-4 rounded-2xl bg-white hover:bg-[#fafcfa] text-[#4f6156] font-display font-bold text-xs flex items-center justify-between border border-[#e8f0eb] transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {copied ? (
+                          <Check className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-[#5a7364]" />
+                        )}
+                        <span>
+                          {copied
+                            ? (isAr ? 'تم نسخ الكود!' : 'Kopiert!')
+                            : (isAr ? 'نسخ سريع للكود' : 'Code kopieren')}
+                        </span>
+                      </div>
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-[#6e8276]" />}
+                    </button>
                   </div>
+
+                  {/* Code Inspector Box Modal View */}
+                  {showCodeInspector && (
+                    <div className="p-4 rounded-2xl bg-[#15241c] text-white space-y-3 animate-in fade-in duration-200 border border-[#215641]">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                          <Code2 className="w-4 h-4" />
+                          <span>{isAr ? 'كود الجدول المباشر (JSON Code)' : 'Plan JSON Code'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowCodeInspector(false)}
+                          className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <textarea
+                        readOnly
+                        value={codeInspectorText}
+                        onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                        rows={6}
+                        className="w-full p-3 rounded-xl bg-[#0d1712] border border-[#215641] font-mono text-[11px] text-emerald-300 resize-none outline-none focus:ring-1 focus:ring-emerald-400"
+                      />
+
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(codeInspectorText);
+                              triggerHaptic('success');
+                              showToast(isAr ? 'تم تحديد الكود ونسخه بنجاح!' : 'Code kopiert!');
+                            } catch {
+                              showToast(isAr ? 'انقر داخل المربع وحدد النص كاملاً لنسخه' : 'Bitte manuell auswählen');
+                            }
+                          }}
+                          className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-[#0d1712] font-display font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                        >
+                          <Copy className="w-4 h-4" />
+                          <span>{isAr ? 'تحديد الكل ونسخ الكود' : 'Alles kopieren'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowCodeInspector(false)}
+                          className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-display font-bold text-xs cursor-pointer"
+                        >
+                          {isAr ? 'إغلاق المعاينة' : 'Schließen'}
+                        </button>
+                      </div>
+
+                      <p className="text-[10px] text-emerald-200/80 leading-relaxed pt-1">
+                        {isAr
+                          ? '💡 نصيحة: إذا كنت تستخدم التطبيق المحمل على جوالك، يمكنك نسخ هذا النص بالكامل ثم فتح شاشة (استيراد جدول) ولصقه في الصندوق ليتم تطبيق الجدول بجميع أجهزته وفيديوهاته مباشرة!'
+                          : 'Code kopieren und unter Import einfügen.'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* IMPORT TAB */

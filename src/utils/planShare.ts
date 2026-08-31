@@ -58,10 +58,64 @@ export async function prepareExportablePlan(
 }
 
 /**
- * Downloads the workout plan with embedded media as a formatted JSON file.
- * Handles Android WebViews and memory crash fallbacks gracefully.
+ * Opens native OS File Picker (Files app) so user explicitly selects target folder & filename
  */
-export async function exportPlanAsFile(plan: WorkoutPlan, options?: ExportOptions): Promise<void> {
+export async function exportPlanWithFolderPicker(
+  plan: WorkoutPlan,
+  options?: ExportOptions
+): Promise<boolean> {
+  if (!('showSaveFilePicker' in window) || typeof (window as any).showSaveFilePicker !== 'function') {
+    return false;
+  }
+
+  let exportablePlan = await prepareExportablePlan(plan, options);
+  let jsonStr: string;
+
+  try {
+    jsonStr = JSON.stringify(exportablePlan, null, 2);
+  } catch {
+    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false });
+    jsonStr = JSON.stringify(exportablePlan, null, 2);
+  }
+
+  const fileName =
+    (plan.nameAr || plan.nameDe || 'Gym_Workout_Plan')
+      .replace(/[^\w\u0600-\u06FF]+/g, '_')
+      .toLowerCase() + '_schedule.json';
+
+  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+
+  try {
+    const handle = await (window as any).showSaveFilePicker({
+      suggestedName: fileName,
+      types: [
+        {
+          description: 'JSON Workout Plan File',
+          accept: { 'application/json': ['.json'] },
+        },
+      ],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return true;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      // User cancelled picker
+      return true;
+    }
+    return false;
+  }
+}
+
+/**
+ * Downloads the workout plan with embedded media as a formatted JSON file.
+ * Handles Native Folder Picker, WebShare, and WebView fallbacks gracefully.
+ */
+export async function exportPlanAsFile(
+  plan: WorkoutPlan,
+  options?: ExportOptions
+): Promise<'file_picker' | 'share' | 'download' | 'failed'> {
   let exportablePlan = await prepareExportablePlan(plan, options);
   let jsonStr: string;
 
@@ -77,9 +131,34 @@ export async function exportPlanAsFile(plan: WorkoutPlan, options?: ExportOption
     .replace(/[^\w\u0600-\u06FF]+/g, '_')
     .toLowerCase() + '_schedule.json';
 
+  // 1. Try Native File System Picker (User chooses folder)
+  if ('showSaveFilePicker' in window && typeof (window as any).showSaveFilePicker === 'function') {
+    try {
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: fileName,
+        types: [
+          {
+            description: 'JSON Workout Plan',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return 'file_picker';
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return 'file_picker';
+      }
+      // Fall through to other options
+    }
+  }
+
   const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
 
-  // Try Web Share API with file first (most reliable on mobile apps)
+  // 2. Try Web Share API with file (Opens Android native file manager / share sheet)
   if (navigator.share && navigator.canShare) {
     try {
       const file = new File([blob], fileName, { type: 'application/json' });
@@ -88,30 +167,34 @@ export async function exportPlanAsFile(plan: WorkoutPlan, options?: ExportOption
           title: plan.nameAr || 'جدول التمارين',
           files: [file],
         });
-        return;
+        return 'share';
       }
     } catch {
-      // Fallback to standard anchor download
+      // Fallback
     }
   }
 
-  // Standard Blob Download
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.setAttribute('target', '_blank');
-  document.body.appendChild(link);
-  
-  // Dispatch mouse event for mobile WebViews
-  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-  
-  setTimeout(() => {
-    if (document.body.contains(link)) {
-      document.body.removeChild(link);
-    }
-    URL.revokeObjectURL(url);
-  }, 2000);
+  // 3. Fallback to standard Anchor click with Data URI and Blob URL
+  try {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener noreferrer');
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      URL.revokeObjectURL(url);
+    }, 3000);
+    return 'download';
+  } catch {
+    return 'failed';
+  }
 }
 
 /**
