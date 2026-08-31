@@ -13,7 +13,8 @@ import {
   Copy,
   Layers,
   Sparkles,
-  BookOpen
+  BookOpen,
+  ArrowUpDown
 } from 'lucide-react';
 import { Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
@@ -28,6 +29,7 @@ interface SettingsModalProps {
   onOpenFontSettings: () => void;
   onOpenDebugLogs: () => void;
   onOpenLibrary?: () => void;
+  onOpenPlanShare?: () => void;
   onResetProgress?: () => void;
   onCopyPlan?: () => void;
   onFactoryReset?: () => void;
@@ -42,6 +44,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenFontSettings,
   onOpenDebugLogs,
   onOpenLibrary,
+  onOpenPlanShare,
   onResetProgress,
   onCopyPlan,
   onFactoryReset,
@@ -236,6 +239,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                     </div>
                     <ArrowIcon className="w-4 h-4 text-[#75877d] group-hover:text-[#215641] transition-colors flex-shrink-0" />
+                  </button>
+                </div>
+              )}
+
+              {/* Plan Share / Import & Export Section */}
+              {onOpenPlanShare && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#4f6156] px-1">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-[#215641]" />
+                    <span>{isAr ? 'تصدير واستيراد الجدول' : 'Plan Export / Import'}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      onClose();
+                      onOpenPlanShare();
+                    }}
+                    className="w-full p-3.5 rounded-2xl bg-[#edf5f0] border border-[#c2dcd0] hover:border-[#215641]/60 hover:bg-[#e2ede6] transition-all flex items-center justify-between group active:scale-[0.99] text-start shadow-2xs cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-[#215641] text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                        <ArrowUpDown className="w-4 h-4 stroke-[2.2]" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-[#15221b]">
+                          {isAr ? 'مشاركة وتصدير أو استيراد ملف' : 'Plan teilen, sichern oder importieren'}
+                        </div>
+                        <div className="text-xs font-semibold text-[#215641] mt-0.5">
+                          {isAr
+                            ? 'تحميل كملف JSON أو استيراد جدول آخر'
+                            : 'Als JSON speichern oder externen Plan laden'}
+                        </div>
+                      </div>
+                    </div>
+                    <ArrowIcon className="w-4 h-4 text-[#215641] flex-shrink-0" />
                   </button>
                 </div>
               )}

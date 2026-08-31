@@ -94,18 +94,17 @@ export function resetLibraryToDefaults(): ExerciseItem[] {
  */
 export function getStoredActivePlan(): WorkoutPlan {
   try {
-    // Unconditional force wipe of initial default exercises on v99 key
-    if (!localStorage.getItem('gym_force_empty_plan_v99')) {
-      localStorage.setItem('gym_force_empty_plan_v99', 'true');
-      const emptyPlan = { ...DEFAULT_WORKOUT_PLAN, exercises: [] };
-      saveActivePlan(emptyPlan);
-      return emptyPlan;
+    // Populate/Restore new default 4-day workout schedule on first launch / v106 update
+    if (!localStorage.getItem('gym_force_default_plan_v106')) {
+      localStorage.setItem('gym_force_default_plan_v106', 'true');
+      saveActivePlan(DEFAULT_WORKOUT_PLAN);
+      return DEFAULT_WORKOUT_PLAN;
     }
 
     const raw = localStorage.getItem(ACTIVE_PLAN_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.exercises)) {
+      if (parsed && (parsed.days || Array.isArray(parsed.exercises))) {
         return parsed;
       }
     }
@@ -114,9 +113,8 @@ export function getStoredActivePlan(): WorkoutPlan {
   }
 
   // Fallback to default
-  const emptyPlan = { ...DEFAULT_WORKOUT_PLAN, exercises: [] };
-  saveActivePlan(emptyPlan);
-  return emptyPlan;
+  saveActivePlan(DEFAULT_WORKOUT_PLAN);
+  return DEFAULT_WORKOUT_PLAN;
 }
 
 /**

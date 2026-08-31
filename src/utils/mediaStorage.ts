@@ -202,3 +202,102 @@ export async function clearAllMediaForExercise(exerciseId: number): Promise<void
     // fallback
   }
 }
+
+export interface SerializedMediaItem {
+  id: string;
+  type: 'image' | 'video';
+  name: string;
+  dataUrl: string;
+  size?: number;
+  createdAt?: number;
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const parts = dataUrl.split(',');
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+  const bstr = atob(parts[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
+/**
+ * Retrieves all stored exercise media from IndexedDB as Base64 Data URLs
+ */
+export async function getAllExerciseMediaBase64Map(): Promise<Record<number, SerializedMediaItem[]>> {
+  try {
+    const db = await openMediaDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+
+      request.onsuccess = async () => {
+        const records: StoredMediaRecord[] = request.result || [];
+        const map: Record<number, SerializedMediaItem[]> = {};
+
+        for (const rec of records) {
+          try {
+            const dataUrl = await blobToDataUrl(rec.blob);
+            if (!map[rec.exerciseId]) {
+              map[rec.exerciseId] = [];
+            }
+            map[rec.exerciseId].push({
+              id: rec.id,
+              type: rec.type,
+              name: rec.name,
+              dataUrl,
+              size: rec.size,
+              createdAt: rec.createdAt,
+            });
+          } catch {
+            // ignore failed blobs
+          }
+        }
+        resolve(map);
+      };
+
+      request.onerror = () => resolve({});
+    });
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Saves a list of Base64 media items into IndexedDB for a given exercise ID
+ */
+export async function importBase64MediaItems(
+  exerciseId: number,
+  items: SerializedMediaItem[]
+): Promise<ExerciseMediaItem[]> {
+  const savedMediaItems: ExerciseMediaItem[] = [];
+  for (const item of items) {
+    try {
+      if (!item.dataUrl) continue;
+      const blob = dataUrlToBlob(item.dataUrl);
+      const file = new File([blob], item.name || (item.type === 'video' ? 'video.mp4' : 'photo.jpg'), {
+        type: blob.type,
+      });
+      const saved = await saveExerciseMediaFile(exerciseId, file);
+      savedMediaItems.push(saved);
+    } catch {
+      // skip invalid item
+    }
+  }
+  return savedMediaItems;
+}
+

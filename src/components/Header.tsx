@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExpandStatusChange,
 }) => {
   return (
-    <header className="fixed top-0 left-0 right-0 z-[100] w-full pointer-events-none flex justify-center bg-transparent transform-gpu will-change-transform">
+    <header className="fixed top-0 left-0 right-0 z-[100] w-full pointer-events-none flex justify-center bg-transparent">
       <UniversalFloatingControl
         currentTab={currentTab}
         onNavigateTab={onNavigateTab}

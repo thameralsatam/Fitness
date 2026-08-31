@@ -16,12 +16,14 @@ import {
   Link2,
   Sparkles,
   Copy,
+  ArrowUpDown,
 } from 'lucide-react';
 import { ExerciseItem, Language, WorkoutPlan, ViewTab, ExerciseMediaItem, DayIndex } from '../types';
 import { I18N } from '../data/workoutData';
 import { WorkoutWidgets } from './WorkoutWidgets';
 import { triggerHaptic } from '../utils/haptics';
 import { MediaViewerModal } from './MediaViewerModal';
+import { PlanShareModal } from './PlanShareModal';
 import { getAllExerciseMediaMap } from '../utils/mediaStorage';
 import {
   DAYS_NAMES_AR,
@@ -80,6 +82,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
   const [notesOpen, setNotesOpen] = useState(false);
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [mediaMap, setMediaMap] = useState<Record<number, ExerciseMediaItem[]>>({});
   const [activeMediaViewer, setActiveMediaViewer] = useState<{
     name: string;
@@ -169,8 +172,21 @@ export const PlanView: React.FC<PlanViewProps> = ({
             </div>
           </div>
 
-          {/* Action buttons (Single clean options trigger + optional clear) */}
+          {/* Action buttons (Day options, Export/Import, and optional clear) */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('selection');
+                setIsShareModalOpen(true);
+              }}
+              className="p-2.5 rounded-2xl text-[#4f6156] hover:text-[#15221b] hover:bg-[#edf5f0] transition-all active:scale-95 cursor-pointer"
+              title={isAr ? 'تصدير واستيراد ملف الجدول' : 'Plan exportieren / importieren'}
+              aria-label={isAr ? 'تصدير واستيراد ملف الجدول' : 'Plan exportieren / importieren'}
+            >
+              <ArrowUpDown className="w-4 h-4 stroke-[2.2]" />
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -578,6 +594,16 @@ export const PlanView: React.FC<PlanViewProps> = ({
         isOpen={isDayModalOpen}
         onClose={() => setIsDayModalOpen(false)}
         dayIndex={selectedDayIndex}
+        plan={plan}
+        currentLang={currentLang}
+        onUpdatePlan={onUpdatePlan}
+        showToast={showToast}
+      />
+
+      {/* Plan Export & Import Modal */}
+      <PlanShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
         plan={plan}
         currentLang={currentLang}
         onUpdatePlan={onUpdatePlan}

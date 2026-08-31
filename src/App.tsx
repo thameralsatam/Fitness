@@ -20,6 +20,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ActiveWorkoutModal } from './components/ActiveWorkoutModal';
 import { LibraryModal } from './components/LibraryModal';
 import { ExerciseEditModal } from './components/ExerciseEditModal';
+import { PlanShareModal } from './components/PlanShareModal';
 import { ProfileView } from './components/ProfileView';
 import { triggerHaptic } from './utils/haptics';
 import { initializeCustomFonts } from './utils/customFonts';
@@ -112,6 +113,7 @@ export default function App() {
   const [isFontModalOpen, setIsFontModalOpen] = useState<boolean>(false);
   const [isDebugLogsOpen, setIsDebugLogsOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isPlanShareModalOpen, setIsPlanShareModalOpen] = useState<boolean>(false);
   const [isActiveWorkoutOpen, setIsActiveWorkoutOpen] = useState<boolean>(false);
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState<boolean>(false);
   const [editingExercise, setEditingExercise] = useState<ExerciseItem | null>(null);
@@ -381,6 +383,11 @@ export default function App() {
     });
   };
 
+  const handleUpdatePlan = (newPlan: WorkoutPlan) => {
+    setActivePlan(newPlan);
+    saveActivePlan(newPlan);
+  };
+
   const handleStartActiveWorkout = () => {
     if (isCurrentDayRest || currentDayExercises.length === 0) {
       triggerHaptic('warning');
@@ -491,7 +498,7 @@ export default function App() {
         />
 
         {/* Main View Container */}
-        <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-4 pt-16 sm:pt-20 pb-28 overflow-x-hidden min-w-0">
+        <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-4 pt-[72px] sm:pt-[88px] pb-28 overflow-x-hidden min-w-0">
           <AnimatePresence mode="wait">
             {currentTab === 'plan' && (
               <motion.div
@@ -670,10 +677,21 @@ export default function App() {
           onOpenFontSettings={() => setIsFontModalOpen(true)}
           onOpenDebugLogs={() => setIsDebugLogsOpen(true)}
           onOpenLibrary={() => setIsLibraryModalOpen(true)}
+          onOpenPlanShare={() => setIsPlanShareModalOpen(true)}
           onResetProgress={handleRequestResetProgress}
           onCopyPlan={handleCopyPlan}
           onFactoryReset={handleFactoryReset}
           libraryExercisesCount={libraryExercises.length}
+        />
+
+        {/* Plan Export & Import Modal */}
+        <PlanShareModal
+          isOpen={isPlanShareModalOpen}
+          onClose={() => setIsPlanShareModalOpen(false)}
+          plan={activePlan}
+          currentLang={currentLang}
+          onUpdatePlan={handleUpdatePlan}
+          showToast={showToast}
         />
 
         {/* Font Settings Modal */}

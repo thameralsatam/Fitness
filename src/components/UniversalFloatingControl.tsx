@@ -203,19 +203,17 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
       <motion.div
         key="dynamic-island-header"
         ref={islandRef}
-        layout
-        initial={{ y: -20, opacity: 0, scale: 0.95 }}
-        animate={{ y: 0, opacity: 1, scale: 1 }}
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
         transition={{
           type: 'spring',
           stiffness: 380,
           damping: 28,
-          mass: 0.6,
         }}
-        className={`pointer-events-auto bg-[#080a09]/95 backdrop-blur-2xl border-x border-b border-white/15 text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] relative overflow-hidden transform-gpu will-change-transform ${
+        className={`pointer-events-auto bg-[#080a09]/95 backdrop-blur-2xl border-x border-b border-white/15 text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] relative overflow-visible transition-[width,height,padding,border-radius] duration-300 ease-out ${
           isExpanded
             ? 'w-[calc(100vw-20px)] max-w-[380px] rounded-t-none rounded-b-[26px] sm:rounded-b-[30px] px-3.5 pt-2 pb-2.5'
-            : 'w-[280px] sm:w-[330px] h-[40px] sm:h-[42px] rounded-t-none rounded-b-[22px] sm:rounded-b-[24px] px-3 flex items-center justify-between cursor-pointer hover:bg-[#0c100d] active:scale-[0.98]'
+            : 'w-[285px] sm:w-[335px] h-[48px] sm:h-[50px] rounded-t-none rounded-b-[22px] sm:rounded-b-[24px] px-3.5 flex items-center justify-between cursor-pointer hover:bg-[#0c100d] active:scale-[0.98]'
         }`}
         onClick={() => {
           if (!isExpanded) {
@@ -225,6 +223,40 @@ export const UniversalFloatingControl: React.FC<UniversalFloatingControlProps> =
           }
         }}
       >
+        {/* Refined Natural Top Notch Shoulder Transitions (Organic 18px Fillet to Screen Top) */}
+        <svg
+          className="absolute -left-[18px] top-0 w-[18px] h-[18px] pointer-events-none z-30"
+          viewBox="0 0 18 18"
+          fill="none"
+        >
+          <path
+            d="M 0 0 C 9.5 0 18 8.5 18 18 L 18 0 Z"
+            fill="#080a09"
+            fillOpacity="0.95"
+          />
+          <path
+            d="M 0 0 C 9.5 0 18 8.5 18 18"
+            stroke="rgba(255, 255, 255, 0.15)"
+            strokeWidth="1"
+          />
+        </svg>
+
+        <svg
+          className="absolute -right-[18px] top-0 w-[18px] h-[18px] pointer-events-none z-30"
+          viewBox="0 0 18 18"
+          fill="none"
+        >
+          <path
+            d="M 18 0 C 8.5 0 0 8.5 0 18 L 0 0 Z"
+            fill="#080a09"
+            fillOpacity="0.95"
+          />
+          <path
+            d="M 18 0 C 8.5 0 0 8.5 0 18"
+            stroke="rgba(255, 255, 255, 0.15)"
+            strokeWidth="1"
+          />
+        </svg>
         <AnimatePresence mode="popLayout" initial={false}>
           {!isExpanded ? (
             /* ================= COMPACT TOP NOTCH HEADER WITH CAMERA CUTOUT ================= */
