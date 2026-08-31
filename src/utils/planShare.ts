@@ -5,26 +5,40 @@ import {
   SerializedMediaItem,
 } from './mediaStorage';
 
+/**
+ * Logger callback type for step-by-step debugging on mobile screens
+ */
+export type ShareLogger = (msg: string) => void;
+
 export interface ExportOptions {
   includeVideos?: boolean;
 }
 
 /**
- * Prepares a workout plan for export by embedding IndexedDB exercise media as Base64 Data URLs
- */
+  * Prepares a workout plan for export by embedding IndexedDB exercise media as Base64 Data URLs
+  */
 export async function prepareExportablePlan(
   plan: WorkoutPlan,
-  options?: ExportOptions
+  options?: ExportOptions,
+  logger?: ShareLogger
 ): Promise<WorkoutPlan> {
+  const log = (msg: string) => {
+    console.log(`[PlanShare] ${msg}`);
+    logger?.(msg);
+  };
+
   try {
     const includeVideos = options?.includeVideos ?? true;
+    log(`🔄 جاري تجهيز بيانات الجدول ${includeVideos ? 'شاملاً الوسائط والفيديوهات' : 'بدون فيديوهات'}...`);
     const mediaMap = await getAllExerciseMediaBase64Map({ includeVideos });
     const clonedPlan: WorkoutPlan = JSON.parse(JSON.stringify(plan));
 
+    let mediaCount = 0;
     const enrichExercise = (ex: ExerciseItem) => {
       if (!ex) return;
       const base64List = mediaMap[ex.id];
       if (base64List && base64List.length > 0) {
+        mediaCount += base64List.length;
         ex.media = base64List.map((item) => ({
           id: item.id,
           type: item.type,
@@ -51,9 +65,69 @@ export async function prepareExportablePlan(
       });
     }
 
+    log(`✅ تم تجهيز البيانات بنجاح! عدد وسائط التمارين المضمنة: ${mediaCount}`);
     return clonedPlan;
-  } catch {
+  } catch (err: any) {
+    log(`⚠️ تنبيه أثناء تجهيز الوسائط: ${err?.message || err}. سيتم تصدير النصوص الأساسية.`);
     return plan;
+  }
+}
+
+/**
+ * Universal Android-compatible Clipboard Copy using legacy execCommand DOM selection fallback
+ */
+export function copyTextToClipboardAndroid(text: string, logger?: ShareLogger): boolean {
+  const log = (msg: string) => {
+    console.log(`[PlanShare Copy] ${msg}`);
+    logger?.(msg);
+  };
+
+  log('📋 جاري بدء محاولة النسخ للحافظة...');
+
+  // 1. Try modern clipboard API
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    try {
+      navigator.clipboard.writeText(text);
+      log('✅ تم النسخ بنجاح باستخدام (navigator.clipboard)');
+      return true;
+    } catch (err: any) {
+      log(`⚠️ فشل navigator.clipboard: ${err?.message || err}. جاري استخدام المحول القديم لأندرويد...`);
+    }
+  }
+
+  // 2. Legacy execCommand copy (Works 100% in Android WebView apps)
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    // Hide off-screen
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, 9999999); // For Android/iOS touch devices
+
+    const successful = document.execCommand('copy');
+    document.body.removeChild(textArea);
+
+    if (successful) {
+      log('✅ تم النسخ بنجاح عبر محاكي أندرويد (document.execCommand)');
+      return true;
+    } else {
+      log('❌ فشل تنفيذ أمر document.execCommand');
+      return false;
+    }
+  } catch (err: any) {
+    log(`❌ خطأ استثناء أثناء النسخ: ${err?.message || err}`);
+    return false;
   }
 }
 
@@ -62,19 +136,28 @@ export async function prepareExportablePlan(
  */
 export async function exportPlanWithFolderPicker(
   plan: WorkoutPlan,
-  options?: ExportOptions
+  options?: ExportOptions,
+  logger?: ShareLogger
 ): Promise<boolean> {
+  const log = (msg: string) => {
+    console.log(`[PlanShare FolderPicker] ${msg}`);
+    logger?.(msg);
+  };
+
+  log('🔍 فحص دعم ميزة اختيار المجلد (showSaveFilePicker)...');
   if (!('showSaveFilePicker' in window) || typeof (window as any).showSaveFilePicker !== 'function') {
+    log('❌ ميزة showSaveFilePicker غير مدعومة في نظام أندرويد/WebView الخاص بالتطبيق الحالي.');
     return false;
   }
 
-  let exportablePlan = await prepareExportablePlan(plan, options);
+  let exportablePlan = await prepareExportablePlan(plan, options, logger);
   let jsonStr: string;
 
   try {
     jsonStr = JSON.stringify(exportablePlan, null, 2);
   } catch {
-    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false });
+    log('⚠️ حجم البيانات كبير جداً، جاري المحاولة بدون الفيديوهات...');
+    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false }, logger);
     jsonStr = JSON.stringify(exportablePlan, null, 2);
   }
 
@@ -86,6 +169,7 @@ export async function exportPlanWithFolderPicker(
   const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
 
   try {
+    log('📁 جاري طلب فتح منتقي الملفات الخاص بالجهاز...');
     const handle = await (window as any).showSaveFilePicker({
       suggestedName: fileName,
       types: [
@@ -98,32 +182,41 @@ export async function exportPlanWithFolderPicker(
     const writable = await handle.createWritable();
     await writable.write(blob);
     await writable.close();
+    log('✅ تم كتابة وحفظ الملف بنجاح داخل المجلد الذي اخترته!');
     return true;
   } catch (err: any) {
     if (err.name === 'AbortError') {
-      // User cancelled picker
-      return true;
+      log('⚠️ قمت بإلغاء نافذة اختيار المجلد ولم يتم حفظ الملف.');
+      return false;
     }
+    log(`❌ فشلت عملية حفظ المجلد: ${err?.message || err}`);
     return false;
   }
 }
 
 /**
  * Downloads the workout plan with embedded media as a formatted JSON file.
- * Handles Native Folder Picker, WebShare, and WebView fallbacks gracefully.
+ * Handles Native Folder Picker, WebShare, Base64 Data URIs, and WebView fallbacks gracefully.
  */
 export async function exportPlanAsFile(
   plan: WorkoutPlan,
-  options?: ExportOptions
-): Promise<'file_picker' | 'share' | 'download' | 'failed'> {
-  let exportablePlan = await prepareExportablePlan(plan, options);
+  options?: ExportOptions,
+  logger?: ShareLogger
+): Promise<'file_picker' | 'share' | 'download_data' | 'download_blob' | 'failed'> {
+  const log = (msg: string) => {
+    console.log(`[PlanShare FileExport] ${msg}`);
+    logger?.(msg);
+  };
+
+  log('🚀 بدء عملية تصدير الملف...');
+  let exportablePlan = await prepareExportablePlan(plan, options, logger);
   let jsonStr: string;
 
   try {
     jsonStr = JSON.stringify(exportablePlan, null, 2);
   } catch {
-    // Memory limit fallback: retry without heavy videos
-    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false });
+    log('⚠️ الكود كبير في الذاكرة، جاري استبعاد الفيديوهات لتسهيل التصدير...');
+    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false }, logger);
     jsonStr = JSON.stringify(exportablePlan, null, 2);
   }
 
@@ -131,9 +224,12 @@ export async function exportPlanAsFile(
     .replace(/[^\w\u0600-\u06FF]+/g, '_')
     .toLowerCase() + '_schedule.json';
 
-  // 1. Try Native File System Picker (User chooses folder)
+  log(`📄 حجم الملف المجهز: ${(jsonStr.length / 1024).toFixed(1)} كيلوبايت. اسم الملف: ${fileName}`);
+
+  // 1. Try Native File System Picker (If OS/Browser supports it)
   if ('showSaveFilePicker' in window && typeof (window as any).showSaveFilePicker === 'function') {
     try {
+      log('📁 تجربة showSaveFilePicker...');
       const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
       const handle = await (window as any).showSaveFilePicker({
         suggestedName: fileName,
@@ -147,38 +243,47 @@ export async function exportPlanAsFile(
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
+      log('✅ تم التصدير عبر showSaveFilePicker');
       return 'file_picker';
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        return 'file_picker';
-      }
-      // Fall through to other options
+      log(`ℹ️ showSaveFilePicker لم تكتمل (${err?.message || err}). الانتقال للمحاولات التالية...`);
     }
+  } else {
+    log('ℹ️ showSaveFilePicker غير متاح في بيئة هذا التطبيق.');
   }
 
   const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
 
-  // 2. Try Web Share API with file (Opens Android native file manager / share sheet)
-  if (navigator.share && navigator.canShare) {
+  // 2. Try Web Share API with File
+  if (navigator.share) {
+    log('📱 تجربة navigator.share للمشاركة أو الحفظ...');
     try {
       const file = new File([blob], fileName, { type: 'application/json' });
-      if (navigator.canShare({ files: [file] })) {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        log('📲 جاري فتح نافذة المشاركة والحفظ لأندرويد...');
         await navigator.share({
           title: plan.nameAr || 'جدول التمارين',
           files: [file],
         });
+        log('✅ تمت المشاركة عبر نافذة النظام');
         return 'share';
+      } else {
+        log('⚠️ متصفح التطبيق لا يدعم مشاركة الملفات المباشرة (canShare returned false).');
       }
-    } catch {
-      // Fallback
+    } catch (err: any) {
+      log(`⚠️ تعذرت المشاركة عبر WebShare: ${err?.message || err}`);
     }
+  } else {
+    log('ℹ️ WebShare API غير متاح في بيئة هذا التطبيق.');
   }
 
-  // 3. Fallback to standard Anchor click with Data URI and Blob URL
+  // 3. Android WebView Base64 Data URI Trigger
   try {
-    const url = URL.createObjectURL(blob);
+    log('🔗 تجربة رابط Base64 Data URI لتطبيق أندرويد...');
+    const base64Json = btoa(unescape(encodeURIComponent(jsonStr)));
+    const dataUrl = `data:application/octet-stream;charset=utf-8;base64,${base64Json}`;
     const link = document.createElement('a');
-    link.href = url;
+    link.href = dataUrl;
     link.download = fileName;
     link.setAttribute('target', '_blank');
     link.setAttribute('rel', 'noopener noreferrer');
@@ -189,10 +294,34 @@ export async function exportPlanAsFile(
       if (document.body.contains(link)) {
         document.body.removeChild(link);
       }
+    }, 2000);
+    log('✅ تم إطلاق رابط Base64 Data URL لتطبيق أندرويد.');
+    return 'download_data';
+  } catch (err: any) {
+    log(`⚠️ فشل التنزيل عبر Base64 Data URI: ${err?.message || err}`);
+  }
+
+  // 4. Fallback to Blob URL click
+  try {
+    log('🔗 تجربة رابط Blob URL...');
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.setAttribute('target', '_blank');
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
       URL.revokeObjectURL(url);
     }, 3000);
-    return 'download';
-  } catch {
+    log('✅ تم إطلاق رابط Blob URL.');
+    return 'download_blob';
+  } catch (err: any) {
+    log(`❌ فشل التنزيل عبر Blob URL: ${err?.message || err}`);
     return 'failed';
   }
 }
@@ -200,13 +329,16 @@ export async function exportPlanAsFile(
 /**
  * Returns JSON text representation of the plan with embedded media
  */
-export async function exportPlanAsJsonString(plan: WorkoutPlan, options?: ExportOptions): Promise<string> {
-  let exportablePlan = await prepareExportablePlan(plan, options);
+export async function exportPlanAsJsonString(
+  plan: WorkoutPlan,
+  options?: ExportOptions,
+  logger?: ShareLogger
+): Promise<string> {
+  let exportablePlan = await prepareExportablePlan(plan, options, logger);
   try {
     return JSON.stringify(exportablePlan, null, 2);
   } catch {
-    // Retry without heavy videos if memory boundary hit
-    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false });
+    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false }, logger);
     return JSON.stringify(exportablePlan, null, 2);
   }
 }
@@ -214,13 +346,24 @@ export async function exportPlanAsJsonString(plan: WorkoutPlan, options?: Export
 /**
  * Shares plan with embedded media using Web Share API if supported
  */
-export async function sharePlanNative(plan: WorkoutPlan, options?: ExportOptions): Promise<boolean> {
-  let exportablePlan = await prepareExportablePlan(plan, options);
+export async function sharePlanNative(
+  plan: WorkoutPlan,
+  options?: ExportOptions,
+  logger?: ShareLogger
+): Promise<boolean> {
+  const log = (msg: string) => {
+    console.log(`[PlanShare NativeShare] ${msg}`);
+    logger?.(msg);
+  };
+
+  log('📱 جاري تحضير مشاركة الجدول عبر نظام الهاتف...');
+  let exportablePlan = await prepareExportablePlan(plan, options, logger);
   let jsonStr: string;
+
   try {
     jsonStr = JSON.stringify(exportablePlan, null, 2);
   } catch {
-    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false });
+    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false }, logger);
     jsonStr = JSON.stringify(exportablePlan, null, 2);
   }
 
@@ -235,20 +378,24 @@ export async function sharePlanNative(plan: WorkoutPlan, options?: ExportOptions
           text: `جدول التمارين: ${planName}`,
           files: [file],
         });
+        log('✅ تم فتح قائمة المشاركة بالملف بنجاح!');
+        return true;
+      } else if (jsonStr.length < 50000) {
+        await navigator.share({
+          title: planName,
+          text: `جدول التمارين: ${planName}\n\n${jsonStr}`,
+        });
+        log('✅ تم فتح قائمة المشاركة بالنص بنجاح!');
         return true;
       } else {
-        // If string is too long for text share, share file or fail gracefully
-        if (jsonStr.length < 50000) {
-          await navigator.share({
-            title: planName,
-            text: `جدول التمارين: ${planName}\n\n${jsonStr}`,
-          });
-          return true;
-        }
+        log('⚠️ حجم الملف كبير جداً للمشاركة كـ نص مباشر.');
       }
-    } catch {
+    } catch (err: any) {
+      log(`❌ تعذرت المشاركة عبر نظام الهاتف: ${err?.message || err}`);
       return false;
     }
+  } else {
+    log('❌ ميزة navigator.share غير متاحة في هذا التطبيق.');
   }
   return false;
 }

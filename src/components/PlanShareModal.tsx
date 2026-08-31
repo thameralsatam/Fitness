@@ -27,6 +27,7 @@ import {
   exportPlanAsJsonString,
   sharePlanNative,
   parseAndHydratePlanJson,
+  copyTextToClipboardAndroid,
 } from '../utils/planShare';
 import { DEFAULT_WORKOUT_PLAN } from '../data/workoutData';
 
@@ -89,17 +90,21 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
       triggerHaptic('success');
       const supported = await exportPlanWithFolderPicker(plan, { includeVideos });
       if (supported) {
-        showToast(isAr ? 'تم اختيار مجلد الملفات وتم حفظ الملف بنجاح!' : 'In Ausgewähltem Ordner gespeichert');
+        showToast(isAr ? 'تم اختيار مجلد الحفظ بنجاح!' : 'In Ausgewähltem Ordner gespeichert');
       } else {
-        // Fallback to general export or native share sheet
         const res = await exportPlanAsFile(plan, { includeVideos });
-        if (res === 'share') {
-          showToast(isAr ? 'تم فتح تطبيق المشاركة وحفظ الملفات' : 'Freigabe geöffnet');
+        if (res === 'file_picker') {
+          showToast(isAr ? 'تم حفظ الملف في المجلد المحدد بنجاح' : 'Datei im Ordner gespeichert');
+        } else if (res === 'share') {
+          showToast(isAr ? 'تم فتح نافذة المشاركة الحية' : 'Freigabe geöffnet');
+        } else if (res === 'download_data' || res === 'download_blob') {
+          showToast(isAr ? 'تم تنزيل الملف بنجاح!' : 'Datei heruntergeladen');
         } else {
-          showToast(isAr ? 'تم تنفيذ طلب التنزيل' : 'Download gestartet');
+          showToast(isAr ? 'تعذر الحفظ تلقائياً، يمكنك نسخ كود الملف' : 'Speichern fehlgeschlagen');
         }
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[PlanShareModal] FolderPickerSave error:', err);
       showToast(isAr ? 'تعذر الحفظ في المجلد المحدد' : 'Ordnerauswahl fehlgeschlagen');
     } finally {
       setIsProcessing(false);
@@ -113,7 +118,8 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
       const jsonStr = await exportPlanAsJsonString(plan, { includeVideos });
       setCodeInspectorText(jsonStr);
       setShowCodeInspector(true);
-    } catch {
+    } catch (err: any) {
+      console.error('[PlanShareModal] CodeInspector error:', err);
       showToast(isAr ? 'تعذر توليد كود الملف' : 'Fehler beim Generieren');
     } finally {
       setIsProcessing(false);
@@ -126,19 +132,16 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
       triggerHaptic('success');
       const res = await exportPlanAsFile(plan, { includeVideos });
       if (res === 'file_picker') {
-        showToast(isAr ? 'تم حفظ الملف في المجلد المحدد بنجاح' : 'Datei im Ordner gespeichert');
+        showToast(isAr ? 'تم حفظ الملف بنجاح' : 'Datei gespeichert');
       } else if (res === 'share') {
         showToast(isAr ? 'تم فتح نافذة الحفظ والمشاركة' : 'Freigabe geöffnet');
+      } else if (res === 'download_data' || res === 'download_blob') {
+        showToast(isAr ? 'تم إرسال أمر التحميل للجهاز بنجاح!' : 'Download-Befehl gesendet');
       } else {
-        showToast(
-          isAr
-            ? includeVideos
-              ? 'تم تحميل ملف الجدول (.json)'
-              : 'تم تحميل ملف الجدول بنجاح (.json)'
-            : 'Plan heruntergeladen'
-        );
+        showToast(isAr ? 'تعذر التحميل، يمكنك النسخ عبر زر النسخ المباشر' : 'Download fehlgeschlagen');
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[PlanShareModal] DownloadFile error:', err);
       showToast(isAr ? 'حدث خطأ أثناء تحميل الملف' : 'Fehler beim Herunterladen');
     } finally {
       setIsProcessing(false);
@@ -150,18 +153,17 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
       setIsProcessing(true);
       triggerHaptic('success');
       const jsonStr = await exportPlanAsJsonString(plan, { includeVideos });
-      await navigator.clipboard.writeText(jsonStr);
-      setCopied(true);
-      showToast(isAr ? 'تم نسخ كود الجدول إلى الحافظة بنجاح' : 'Plan-Code in die Zwischenablage kopiert');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback: If copy fails due to memory/clipboard size limits, trigger file download directly
-      try {
-        await exportPlanAsFile(plan, { includeVideos });
-        showToast(isAr ? 'الكود كبير للحافظة، تم تحويله لتنزيل ملف تلقائياً!' : 'Code zu groß, Datei wurde heruntergeladen');
-      } catch {
-        showToast(isAr ? 'تعذر النسخ أو التحميل' : 'Kopieren fehlgeschlagen');
+      const success = copyTextToClipboardAndroid(jsonStr);
+      if (success) {
+        setCopied(true);
+        showToast(isAr ? 'تم نسخ كود الجدول إلى الحافظة بنجاح!' : 'Plan-Code kopiert!');
+        setTimeout(() => setCopied(false), 2500);
+      } else {
+        showToast(isAr ? 'تعذر النسخ التلقائي، يمكنك استخدام زر عرض الكود' : 'Kopieren fehlgeschlagen');
       }
+    } catch (err: any) {
+      console.error('[PlanShareModal] CopyJson error:', err);
+      showToast(isAr ? 'تعذر النسخ' : 'Kopieren fehlgeschlagen');
     } finally {
       setIsProcessing(false);
     }
@@ -173,11 +175,12 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
       triggerHaptic('selection');
       const success = await sharePlanNative(plan, { includeVideos });
       if (success) {
-        showToast(isAr ? 'تم فتح خيارات المشاركة' : 'Freigabe geöffnet');
+        showToast(isAr ? 'تم فتح خيارات المشاركة والحفظ' : 'Freigabe geöffnet');
       } else {
         await handleDownloadFile();
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[PlanShareModal] NativeShare error:', err);
       showToast(isAr ? 'تعذر المشاركة' : 'Teilen fehlgeschlagen');
     } finally {
       setIsProcessing(false);
@@ -556,12 +559,12 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
                       <div className="flex items-center justify-between gap-2 pt-1">
                         <button
                           type="button"
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(codeInspectorText);
-                              triggerHaptic('success');
+                          onClick={() => {
+                            const success = copyTextToClipboardAndroid(codeInspectorText);
+                            triggerHaptic(success ? 'success' : 'warning');
+                            if (success) {
                               showToast(isAr ? 'تم تحديد الكود ونسخه بنجاح!' : 'Code kopiert!');
-                            } catch {
+                            } else {
                               showToast(isAr ? 'انقر داخل المربع وحدد النص كاملاً لنسخه' : 'Bitte manuell auswählen');
                             }
                           }}
