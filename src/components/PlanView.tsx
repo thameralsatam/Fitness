@@ -24,6 +24,7 @@ import { WorkoutWidgets } from './WorkoutWidgets';
 import { triggerHaptic } from '../utils/haptics';
 import { MediaViewerModal } from './MediaViewerModal';
 import { PlanShareModal } from './PlanShareModal';
+import { VideoThumbnail } from './VideoThumbnail';
 import { getAllExerciseMediaMap } from '../utils/mediaStorage';
 import {
   DAYS_NAMES_AR,
@@ -414,12 +415,10 @@ export const PlanView: React.FC<PlanViewProps> = ({
                       >
                         {firstMedia.type === 'video' ? (
                           <div className="w-full h-full relative bg-black flex items-center justify-center">
-                            <video
+                            <VideoThumbnail
                               src={firstMedia.url}
+                              alt={item.nameDe}
                               className="w-full h-full object-cover pointer-events-none"
-                              preload="metadata"
-                              muted
-                              playsInline
                             />
                             <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
                               <div className="w-6 h-6 rounded-full bg-black/60 backdrop-blur-xs flex items-center justify-center text-white">

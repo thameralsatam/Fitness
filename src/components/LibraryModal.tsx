@@ -21,6 +21,7 @@ import {
 import { ExerciseItem, Language, WorkoutPlan, ExerciseMediaItem } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
+import { VideoThumbnail } from './VideoThumbnail';
 import {
   addLibraryExercise,
   updateLibraryExercise,
@@ -678,12 +679,10 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
                             >
                               {firstMedia.type === 'video' ? (
                                 <div className="w-full h-full relative bg-black flex items-center justify-center">
-                                  <video
+                                  <VideoThumbnail
                                     src={firstMedia.url}
+                                    alt={ex.nameDe}
                                     className="w-full h-full object-cover pointer-events-none"
-                                    preload="metadata"
-                                    muted
-                                    playsInline
                                   />
                                   <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
                                     <div className="w-5 h-5 rounded-full bg-black/60 backdrop-blur-xs flex items-center justify-center text-white">

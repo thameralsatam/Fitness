@@ -1,6 +1,8 @@
 import { WorkoutPlan, ExerciseItem, ExerciseMediaItem } from '../types';
 import {
   getAllExerciseMediaBase64Map,
+  getAllExerciseMediaRecordsMap,
+  saveRawMediaRecord,
   importBase64MediaItems,
   SerializedMediaItem,
 } from './mediaStorage';
@@ -8,6 +10,7 @@ import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Clipboard } from '@capacitor/clipboard';
+import JSZip from 'jszip';
 
 /**
  * Logger callback type for step-by-step debugging on mobile screens
@@ -74,50 +77,6 @@ export async function prepareExportablePlan(
   } catch (err: any) {
     log(`⚠️ تنبيه أثناء تجهيز الوسائط: ${err?.message || err}. سيتم تصدير النصوص الأساسية.`);
     return plan;
-  }
-}
-
-/**
- * Creates a temporary server-backed direct download link with Content-Disposition headers
- */
-export async function createServerDownloadLink(
-  plan: WorkoutPlan,
-  options?: ExportOptions,
-  logger?: ShareLogger
-): Promise<{ success: boolean; downloadUrl?: string; fileName?: string; error?: string }> {
-  const log = (msg: string) => {
-    console.log(`[PlanShare ServerLink] ${msg}`);
-    logger?.(msg);
-  };
-
-  try {
-    log('🌐 جاري رفع ملف الجدول وسائط على السيرفر لإنشاء رابط تنزيل مباشر مؤكد...');
-    const exportablePlan = await prepareExportablePlan(plan, options, logger);
-    const jsonStr = JSON.stringify(exportablePlan, null, 2);
-    const fileName = (plan.nameAr || plan.nameDe || 'Gym_Workout_Plan')
-      .replace(/[^\w\u0600-\u06FF]+/g, '_')
-      .toLowerCase() + '_schedule.json';
-
-    const response = await fetch('/api/share-plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonStr, fileName }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server returned HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (data.success && data.downloadUrl) {
-      log(`✅ تم إنشاء رابط التنزيل المباشر بنجاح: ${data.downloadUrl}`);
-      return { success: true, downloadUrl: data.downloadUrl, fileName: data.fileName };
-    } else {
-      throw new Error(data.error || 'Failed to generate link');
-    }
-  } catch (err: any) {
-    log(`⚠️ لم تكتمل استضافة الملف على السيرفر: ${err?.message || err}`);
-    return { success: false, error: err?.message || err };
   }
 }
 
@@ -248,6 +207,164 @@ export async function copyTextToClipboardAndroid(
 }
 
 /**
+ * Creates a compressed ZIP file package containing plan.json + binary media files (images & videos).
+ * Highly efficient: zero base64 overhead, losslessly compressed, tiny file size!
+ */
+export async function exportPlanAsZipPackage(
+  plan: WorkoutPlan,
+  options?: ExportOptions,
+  logger?: ShareLogger
+): Promise<{ success: boolean; blob?: Blob; fileName?: string; error?: string }> {
+  const log = (msg: string) => {
+    console.log(`[PlanShare ZIP Export] ${msg}`);
+    logger?.(msg);
+  };
+
+  try {
+    const includeVideos = options?.includeVideos ?? true;
+    log(`[ZIP] جاري تحضير الملف المضغوط (.zip) شامل الوسائط والفيديوهات...`);
+
+    const zip = new JSZip();
+    const mediaRecordsMap = await getAllExerciseMediaRecordsMap();
+    const clonedPlan: WorkoutPlan = JSON.parse(JSON.stringify(plan));
+    const mediaFolder = zip.folder('media');
+
+    let totalMediaFiles = 0;
+    let totalBytes = 0;
+
+    const processExercise = (ex: ExerciseItem) => {
+      if (!ex) return;
+      const records = mediaRecordsMap[ex.id];
+      if (records && records.length > 0) {
+        ex.media = [];
+        for (const rec of records) {
+          if (rec.type === 'video' && !includeVideos) continue;
+
+          const extMatch = rec.name.match(/\.([a-zA-Z0-9]+)$/);
+          const ext = extMatch ? extMatch[1] : rec.type === 'video' ? 'mp4' : 'jpg';
+          const zipPath = `media/${ex.id}_${rec.id}.${ext}`;
+
+          if (mediaFolder) {
+            mediaFolder.file(`${ex.id}_${rec.id}.${ext}`, rec.blob);
+            totalMediaFiles++;
+            totalBytes += rec.blob.size;
+          }
+
+          ex.media.push({
+            id: rec.id,
+            type: rec.type,
+            url: zipPath,
+            name: rec.name,
+            size: rec.size,
+            createdAt: rec.createdAt,
+          });
+        }
+      }
+    };
+
+    if (Array.isArray(clonedPlan.exercises)) {
+      clonedPlan.exercises.forEach(processExercise);
+    }
+    if (clonedPlan.days) {
+      Object.values(clonedPlan.days).forEach((d) => {
+        if (Array.isArray(d?.exercises)) d.exercises.forEach(processExercise);
+      });
+    }
+
+    zip.file('plan.json', JSON.stringify(clonedPlan, null, 2));
+
+    log(`[ZIP] ضغط الوسائط (${totalMediaFiles} ملف / ${(totalBytes / 1024 / 1024).toFixed(1)} MB)...`);
+    const zipBlob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
+
+    const fileName =
+      (plan.nameAr || plan.nameDe || 'Gym_Workout_Plan')
+        .replace(/[^\w\u0600-\u06FF]+/g, '_')
+        .toLowerCase() + '_package.zip';
+
+    log(`[ZIP] تم إنشاء الملف المضغوط بنجاح! الحجم النهائي: ${(zipBlob.size / 1024 / 1024).toFixed(2)} MB`);
+    return { success: true, blob: zipBlob, fileName };
+  } catch (err: any) {
+    log(`[ZIP Error] حدث خطأ أثناء إنشاء الملف المضغوط: ${err?.message || err}`);
+    return { success: false, error: err?.message || err };
+  }
+}
+
+/**
+ * Downloads the ZIP package (.zip) directly via Browser download link or Capacitor Filesystem/Share
+ */
+export async function exportPlanAsZipFile(
+  plan: WorkoutPlan,
+  options?: ExportOptions,
+  logger?: ShareLogger
+): Promise<boolean> {
+  const log = (msg: string) => {
+    console.log(`[PlanShare ZIP File] ${msg}`);
+    logger?.(msg);
+  };
+
+  const res = await exportPlanAsZipPackage(plan, options, logger);
+  if (!res.success || !res.blob || !res.fileName) {
+    return false;
+  }
+
+  // 1. Capacitor Native Android Save & Share
+  if (Capacitor.isNativePlatform()) {
+    try {
+      log('📱 حفظ الملف المضغوط مباشرة في ذاكرة أندرويد عبر Capacitor...');
+      // Convert blob to base64 for Capacitor Filesystem
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const resStr = reader.result as string;
+          resolve(resStr.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(res.blob!);
+      });
+
+      const fileResult = await Filesystem.writeFile({
+        path: res.fileName,
+        data: base64Data,
+        directory: Directory.Cache,
+      });
+
+      await Share.share({
+        title: plan.nameAr || 'جدول التمارين المضغوط',
+        files: [fileResult.uri],
+      });
+      log('✅ تم فتح نافذة الحفظ والمشاركة الأصلية للهاتف بنجاح!');
+      return true;
+    } catch (err: any) {
+      log(`⚠️ تعذر الحفظ عبر Capacitor Filesystem: ${err?.message || err}`);
+    }
+  }
+
+  // 2. Direct Browser Download link
+  try {
+    log('🔗 جاري تنزيل الملف المضغوط (.zip) مباشرة في المتصفح...');
+    const blobUrl = URL.createObjectURL(res.blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = res.fileName;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      if (document.body.contains(link)) document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    }, 5000);
+    log('✅ تم تنزيل الملف المضغوط بنجاح!');
+    return true;
+  } catch (err: any) {
+    log(`❌ فشل تنزيل الملف المضغوط: ${err?.message || err}`);
+    return false;
+  }
+}
+
+/**
  * Opens native OS File Picker (Files app) so user explicitly selects target folder & filename
  */
 export async function exportPlanWithFolderPicker(
@@ -356,30 +473,7 @@ export async function exportPlanAsFile(
     }
   }
 
-  // 2. Try Server-backed Direct Attachment Download URL (100% Android WebView Compatible)
-  const serverRes = await createServerDownloadLink(plan, options, logger);
-  if (serverRes.success && serverRes.downloadUrl) {
-    try {
-      log('🌐 جاري توجيه هاتف أندرويد لتنزيل الملف مباشرة عبر رابط السيرفر المباشر...');
-      const link = document.createElement('a');
-      link.href = serverRes.downloadUrl;
-      link.download = serverRes.fileName || 'workout_plan.json';
-      link.setAttribute('target', '_blank');
-      document.body.appendChild(link);
-      link.click();
-
-      setTimeout(() => {
-        if (document.body.contains(link)) document.body.removeChild(link);
-      }, 3000);
-
-      log('✅ تم إطلاق رابط التنزيل المباشر المضمون من السيرفر.');
-      return 'server_download';
-    } catch (err: any) {
-      log(`⚠️ تعذر النقر التلقائي على رابط السيرفر: ${err?.message || err}`);
-    }
-  }
-
-  // 3. Prepare local blob fallback
+  // 2. Prepare local blob fallback
   let exportablePlan = await prepareExportablePlan(plan, options, logger);
   let jsonStr: string;
 
@@ -511,26 +605,7 @@ export async function sharePlanNative(
     }
   }
 
-  // 2. Server Download Link Share (Creates a direct link and shares it via WebShare or Clipboard)
-  const serverRes = await createServerDownloadLink(plan, options, logger);
-  if (serverRes.success && serverRes.downloadUrl) {
-    if (navigator.share) {
-      try {
-        log('📲 فتح نافذة المشاركة بالنظام لرابط التحميل المباشر...');
-        await navigator.share({
-          title: planName,
-          text: `جدول التمارين: ${planName}\nرابط التنزيل المباشر:`,
-          url: serverRes.downloadUrl,
-        });
-        log('✅ تمت مشاركة رابط التحميل المباشر بنجاح!');
-        return true;
-      } catch (err: any) {
-        log(`ℹ️ تم التراجع أو الإلغاء في نافذة المشاركة: ${err?.message || err}`);
-      }
-    }
-  }
-
-  // 3. Fallback Web Share with File
+  // 2. Fallback Web Share with File
   if (navigator.share) {
     try {
       const exportablePlan = await prepareExportablePlan(plan, options, logger);
@@ -637,6 +712,146 @@ export async function parseAndHydratePlanJson(
     return { success: true, plan: importedPlan };
   } catch (e: any) {
     return { success: false, error: 'تعذر قراءة الملف: تأكد من صحة التنسيق' };
+  }
+}
+
+/**
+ * Universal importer: handles both compressed ZIP packages (.zip) containing binary media,
+ * AND standard JSON files / text with embedded Base64 or plain references.
+ */
+export async function parseAndHydrateZipOrJsonFile(
+  input: File | Blob | string,
+  logger?: ShareLogger
+): Promise<{ success: boolean; plan?: WorkoutPlan; error?: string; mediaRestoredCount?: number }> {
+  const log = (msg: string) => {
+    console.log(`[PlanShare Import] ${msg}`);
+    logger?.(msg);
+  };
+
+  try {
+    // 1. If input is string (pasted JSON text)
+    if (typeof input === 'string') {
+      log('📄 جاري معالجة كود JSON ملصق...');
+      const res = await parseAndHydratePlanJson(input);
+      return { success: res.success, plan: res.plan, error: res.error };
+    }
+
+    // 2. Try parsing input as a compressed ZIP file package first!
+    log('📦 جاري فحص الملف (فحص ضغط ZIP مقابل JSON)...');
+    let isZip = false;
+    let zip: JSZip | null = null;
+    try {
+      zip = await JSZip.loadAsync(input);
+      isZip = true;
+    } catch {
+      isZip = false;
+    }
+
+    if (isZip && zip) {
+      log('⚡ تم التعرف على ملف مضغوط (.zip)! جاري استخراج البيانات والوسائط الفضفاضة...');
+      const jsonFile = zip.file('plan.json') || Object.values(zip.files).find((f) => f.name.endsWith('.json'));
+      if (!jsonFile) {
+        return { success: false, error: 'الملف المضغوط لا يحتوي على ملف plan.json الأساسي' };
+      }
+
+      const jsonText = await jsonFile.async('string');
+      const data = JSON.parse(jsonText.trim());
+
+      if (!data || typeof data !== 'object' || (!data.days && !Array.isArray(data.exercises))) {
+        return { success: false, error: 'بيانات plan.json داخل الملف المضغوط غير صالحة' };
+      }
+
+      const importedPlan: WorkoutPlan = {
+        id: data.id || `plan_imported_${Date.now()}`,
+        nameDe: data.nameDe || 'Importierter Trainingsplan',
+        nameAr: data.nameAr || 'جدول تمارين مستورد',
+        scheduleDaysDe: data.scheduleDaysDe || 'Individuelles Training',
+        scheduleDaysAr: data.scheduleDaysAr || 'جدول مخصص',
+        frequencyDe: data.frequencyDe || 'Individuell',
+        frequencyAr: data.frequencyAr || 'مخصص',
+        trainingDays: Array.isArray(data.trainingDays) ? data.trainingDays : [0, 1, 3, 4],
+        exercises: Array.isArray(data.exercises) ? data.exercises : [],
+        days: data.days && typeof data.days === 'object' ? data.days : {},
+        notesDe: Array.isArray(data.notesDe) ? data.notesDe : [],
+        notesAr: Array.isArray(data.notesAr) ? data.notesAr : [],
+      };
+
+      let restoredCount = 0;
+      const processMediaRestoration = async (ex: ExerciseItem) => {
+        if (!ex || !Array.isArray(ex.media)) return;
+        const newMediaList: ExerciseMediaItem[] = [];
+
+        for (const m of ex.media) {
+          let zipMediaFile = zip!.file(m.url);
+          if (!zipMediaFile) {
+            const cleanFilename = m.url ? m.url.split('/').pop() || '' : '';
+            if (cleanFilename) {
+              zipMediaFile =
+                zip!.file(`media/${cleanFilename}`) ||
+                zip!.file(cleanFilename) ||
+                Object.values(zip!.files).find((f) => f.name.endsWith(cleanFilename)) ||
+                null;
+            }
+          }
+
+          if (zipMediaFile) {
+            const blob = await zipMediaFile.async('blob');
+            const saved = await saveRawMediaRecord({
+              id: m.id,
+              exerciseId: ex.id,
+              type: m.type || (blob.type.startsWith('video/') ? 'video' : 'image'),
+              name: m.name || (m.type === 'video' ? 'video.mp4' : 'photo.jpg'),
+              blob,
+              createdAt: m.createdAt,
+            });
+            newMediaList.push(saved);
+            restoredCount++;
+          } else if (m.url && m.url.startsWith('data:')) {
+            const savedList = await importBase64MediaItems(ex.id, [
+              {
+                id: m.id,
+                type: m.type,
+                name: m.name,
+                dataUrl: m.url,
+                size: m.size,
+                createdAt: m.createdAt,
+              },
+            ]);
+            newMediaList.push(...savedList);
+            restoredCount += savedList.length;
+          } else {
+            newMediaList.push(m);
+          }
+        }
+        ex.media = newMediaList;
+      };
+
+      if (Array.isArray(importedPlan.exercises)) {
+        for (const ex of importedPlan.exercises) {
+          await processMediaRestoration(ex);
+        }
+      }
+      if (importedPlan.days) {
+        for (const dayData of Object.values(importedPlan.days)) {
+          if (Array.isArray(dayData.exercises)) {
+            for (const ex of dayData.exercises) {
+              await processMediaRestoration(ex);
+            }
+          }
+        }
+      }
+
+      log(`🎉 تم استيراد الملف المضغوط (.zip) بنجاح! تم استرجاع ${restoredCount} ملف ميديا وفيديو كاملاً.`);
+      return { success: true, plan: importedPlan, mediaRestoredCount: restoredCount };
+    }
+
+    // 3. Fallback: Read as plain JSON file text
+    log('📄 الملف ليس ZIP مضغوط، جاري قراءته كملف JSON عادي...');
+    const text = await (input as Blob).text();
+    return await parseAndHydratePlanJson(text);
+  } catch (err: any) {
+    log(`❌ تعذر استيراد الملف: ${err?.message || err}`);
+    return { success: false, error: 'تعذر استيراد الملف: الرجاء التأكد من صحة وسلامة الملف' };
   }
 }
 

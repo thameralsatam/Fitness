@@ -15,6 +15,7 @@ import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
 import { ConfirmModal } from './ConfirmModal';
 import { CustomVideoPlayer } from './CustomVideoPlayer';
+import { VideoThumbnail } from './VideoThumbnail';
 
 interface MediaViewerModalProps {
   isOpen: boolean;
@@ -190,8 +191,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     }`}
                   >
                     {item.type === 'video' ? (
-                      <div className="w-full h-full flex items-center justify-center bg-[#182c21] text-[#73d29d]">
-                        <Play className="w-4 h-4 fill-[#73d29d]" />
+                      <div className="w-full h-full relative flex items-center justify-center bg-[#182c21]">
+                        <VideoThumbnail src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                          <Play className="w-3.5 h-3.5 fill-[#73d29d] text-[#73d29d]" />
+                        </div>
                       </div>
                     ) : (
                       <img

@@ -11,6 +11,7 @@ import {
 import { ExerciseMediaItem } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { ConfirmModal } from './ConfirmModal';
+import { VideoThumbnail } from './VideoThumbnail';
 
 interface ExerciseMediaUploaderProps {
   mediaList: ExerciseMediaItem[];
@@ -141,14 +142,18 @@ export const ExerciseMediaUploader: React.FC<ExerciseMediaUploaderProps> = ({
                 {item.type === 'video' ? (
                   <div
                     onClick={() => onPreviewMedia && onPreviewMedia(idx)}
-                    className="w-full h-full flex flex-col items-center justify-center bg-[#13231a] text-[#73d29d] cursor-pointer"
+                    className="w-full h-full relative cursor-pointer bg-[#13231a] flex items-center justify-center overflow-hidden"
                   >
-                    <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Play className="w-4 h-4 fill-[#73d29d]" />
+                    <VideoThumbnail
+                      src={item.url}
+                      alt={item.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-xs flex items-center justify-center group-hover:scale-110 transition-transform text-white">
+                        <Play className="w-4 h-4 fill-[#73d29d] text-[#73d29d]" />
+                      </div>
                     </div>
-                    <span className="text-[10px] font-bold text-white/90 mt-1 truncate px-2 max-w-full">
-                      {item.name || 'Video'}
-                    </span>
                   </div>
                 ) : (
                   <div

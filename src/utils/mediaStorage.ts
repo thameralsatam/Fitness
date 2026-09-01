@@ -234,6 +234,95 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([u8arr], { type: mime });
 }
 
+export interface RawMediaRecord {
+  id: string;
+  exerciseId: number;
+  type: 'image' | 'video';
+  name: string;
+  blob: Blob;
+  size: number;
+  createdAt: number;
+}
+
+export async function getAllExerciseMediaRecordsMap(): Promise<Record<number, RawMediaRecord[]>> {
+  try {
+    const db = await openMediaDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const records: StoredMediaRecord[] = request.result || [];
+        const map: Record<number, RawMediaRecord[]> = {};
+
+        for (const rec of records) {
+          if (!map[rec.exerciseId]) {
+            map[rec.exerciseId] = [];
+          }
+          map[rec.exerciseId].push({
+            id: rec.id,
+            exerciseId: rec.exerciseId,
+            type: rec.type,
+            name: rec.name,
+            blob: rec.blob,
+            size: rec.size,
+            createdAt: rec.createdAt,
+          });
+        }
+        resolve(map);
+      };
+
+      request.onerror = () => resolve({});
+    });
+  } catch {
+    return {};
+  }
+}
+
+export async function saveRawMediaRecord(item: {
+  id?: string;
+  exerciseId: number;
+  type: 'image' | 'video';
+  name: string;
+  blob: Blob;
+  createdAt?: number;
+}): Promise<ExerciseMediaItem> {
+  const db = await openMediaDB();
+  const id = item.id || `media_${item.exerciseId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const record: StoredMediaRecord = {
+    id,
+    exerciseId: item.exerciseId,
+    type: item.type,
+    name: item.name,
+    blob: item.blob,
+    size: item.blob.size,
+    createdAt: item.createdAt || Date.now(),
+  };
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.put(record);
+
+    request.onsuccess = () => {
+      const url = getOrCreateObjectUrl(id, item.blob);
+      resolve({
+        id,
+        type: item.type,
+        url,
+        name: record.name,
+        size: record.size,
+        createdAt: record.createdAt,
+      });
+    };
+
+    request.onerror = () => {
+      reject(new Error(`Failed to save raw media: ${request.error?.message || 'Unknown error'}`));
+    };
+  });
+}
+
 /**
  * Retrieves stored exercise media from IndexedDB as Base64 Data URLs with options and size guards
  */
