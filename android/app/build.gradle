@@ -1,17 +1,9 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
-apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
 android {
     namespace = "com.fitness.trainingapp"
     compileSdk = rootProject.ext.compileSdkVersion
-
-    buildFeatures {
-        compose true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion '1.5.11'
-    }
 
     defaultConfig {
         applicationId "com.fitness.trainingapp"

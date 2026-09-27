@@ -45,7 +45,30 @@ export const CustomVideoPlayer: React.FC<CustomVideoPlayerProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const [seekOverlay, setSeekOverlay] = useState<{ text: string; direction: 'left' | 'right' } | null>(null);
+
+  useEffect(() => {
+    setHasError(false);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      if (autoPlay) {
+        const p = videoRef.current.play();
+        if (p !== undefined) {
+          p.then(() => setIsPlaying(true)).catch(() => {
+            if (videoRef.current) {
+              videoRef.current.muted = true;
+              setIsMuted(true);
+              videoRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+            }
+          });
+        }
+      }
+    }
+  }, [src, autoPlay]);
 
   // Format seconds to mm:ss
   const formatTime = (timeInSec: number) => {
@@ -204,19 +227,66 @@ export const CustomVideoPlayer: React.FC<CustomVideoPlayerProps> = ({
           if (videoRef.current) {
             setDuration(videoRef.current.duration);
             if (autoPlay) {
-              videoRef.current.play().catch(() => {});
+              const p = videoRef.current.play();
+              if (p !== undefined) {
+                p.then(() => setIsPlaying(true)).catch(() => {
+                  if (videoRef.current) {
+                    videoRef.current.muted = true;
+                    setIsMuted(true);
+                    videoRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+                  }
+                });
+              }
             }
           }
         }}
+        onError={() => {
+          setIsBuffering(false);
+          setIsPlaying(false);
+          setHasError(true);
+        }}
         onWaiting={() => setIsBuffering(true)}
-        onPlaying={() => setIsBuffering(false)}
+        onPlaying={() => {
+          setIsBuffering(false);
+          setIsPlaying(true);
+        }}
         onClick={togglePlay}
         className="max-h-[60vh] sm:max-h-[65vh] w-auto max-w-full rounded-2xl shadow-xl object-contain cursor-pointer"
       />
 
+      {/* Error Fallback */}
+      {hasError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 p-6 text-center z-30 space-y-3">
+          <div className="w-12 h-12 rounded-full bg-red-950/60 border border-red-800/50 flex items-center justify-center text-red-400">
+            <RotateCcw className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-bold text-white">
+              {isAr ? 'تعذر تشغيل الفيديو' : 'Video konnte nicht geladen werden'}
+            </p>
+            <p className="text-xs text-zinc-400 max-w-xs">
+              {isAr ? 'اضغط لإعادة محاولة تحميل وتشغيل الفيديو' : 'Tippen, um das Laden des Videos erneut zu versuchen'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setHasError(false);
+              if (videoRef.current) {
+                videoRef.current.load();
+                videoRef.current.play().catch(() => {});
+              }
+            }}
+            className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold transition-all cursor-pointer"
+          >
+            {isAr ? 'إعادة المحاولة' : 'Erneut versuchen'}
+          </button>
+        </div>
+      )}
+
       {/* Buffering Spinner */}
-      {isBuffering && (
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center bg-black/30 backdrop-blur-2xs">
+      {isBuffering && !hasError && (
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center bg-black/30 backdrop-blur-2xs z-20">
           <div className="w-12 h-12 rounded-2xl bg-black/60 flex items-center justify-center text-emerald-400">
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>

@@ -27,6 +27,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
   const [isRunning, setIsRunning] = useState<boolean>(false);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const endTimeRef = useRef<number | null>(null);
 
   // Sync language prop
   useEffect(() => {
@@ -67,19 +68,23 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
         const left = Math.max(0, endTime - Date.now());
         
         if (left > 0) {
+          endTimeRef.current = endTime;
           setRemainingMs(left);
           setIsRunning(true);
         } else {
           // Timer finished while app was completely closed
+          endTimeRef.current = null;
           setRemainingMs(0);
           setIsRunning(false);
           clearStorage();
         }
       } else if (storedRemainingMs) {
         const ms = parseInt(storedRemainingMs, 10);
+        endTimeRef.current = null;
         setRemainingMs(ms);
         setIsRunning(false);
       } else {
+        endTimeRef.current = null;
         setRemainingMs(dur * 1000);
         setIsRunning(false);
       }
@@ -88,7 +93,38 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
     }
   }, []);
 
+  // Sync state accurately on resume or tab switch without polling
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const storedEndTime = localStorage.getItem('timer_endTime');
+          const storedIsRunning = localStorage.getItem('timer_isRunning');
+          if (storedIsRunning === 'true' && storedEndTime) {
+            const endTime = parseInt(storedEndTime, 10);
+            endTimeRef.current = endTime;
+            const left = Math.max(0, endTime - Date.now());
+            setRemainingMs(left);
+            if (left <= 0) {
+              endTimeRef.current = null;
+              setIsRunning(false);
+              clearStorage();
+            } else {
+              setIsRunning(true);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   const clearStorage = () => {
+    endTimeRef.current = null;
     localStorage.removeItem('timer_endTime');
     localStorage.removeItem('timer_remainingMs');
     localStorage.removeItem('timer_isRunning');
@@ -180,18 +216,17 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
     }
   };
 
-  // Core ticking effect with smooth 50ms sub-second precision
+  // Core ticking effect with smooth 100ms precision and ZERO localStorage calls in loop
   useEffect(() => {
     if (isRunning) {
       timerRef.current = setInterval(() => {
-        const storedEndTime = localStorage.getItem('timer_endTime');
-        if (storedEndTime) {
-          const endTime = parseInt(storedEndTime, 10);
+        const endTime = endTimeRef.current;
+        if (endTime !== null) {
           const left = Math.max(0, endTime - Date.now());
-          
           setRemainingMs(left);
 
           if (left <= 0) {
+            endTimeRef.current = null;
             setIsRunning(false);
             if (timerRef.current) clearInterval(timerRef.current);
             triggerCompletionEffects();
@@ -199,7 +234,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
           }
         } else {
           setRemainingMs((prev) => {
-            const next = Math.max(0, prev - 50);
+            const next = Math.max(0, prev - 100);
             if (next <= 0) {
               setIsRunning(false);
               if (timerRef.current) clearInterval(timerRef.current);
@@ -210,7 +245,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
             return next;
           });
         }
-      }, 50);
+      }, 100);
     } else {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -232,10 +267,16 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
     
     const ms = seconds * 1000;
     const targetEndTime = Date.now() + ms;
-    localStorage.setItem('timer_endTime', targetEndTime.toString());
-    localStorage.setItem('timer_duration', seconds.toString());
-    localStorage.setItem('timer_remainingMs', ms.toString());
-    localStorage.setItem('timer_isRunning', 'true');
+    endTimeRef.current = targetEndTime;
+
+    try {
+      localStorage.setItem('timer_endTime', targetEndTime.toString());
+      localStorage.setItem('timer_duration', seconds.toString());
+      localStorage.setItem('timer_remainingMs', ms.toString());
+      localStorage.setItem('timer_isRunning', 'true');
+    } catch {
+      // ignore
+    }
 
     setSelectedDuration(seconds);
     setRemainingMs(ms);
@@ -246,18 +287,23 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
   };
 
   const pauseTimer = () => {
-    const storedEndTime = localStorage.getItem('timer_endTime');
+    const targetEndTime = endTimeRef.current;
     let currentLeft = remainingMs;
-    if (storedEndTime) {
-      currentLeft = Math.max(0, parseInt(storedEndTime, 10) - Date.now());
+    if (targetEndTime !== null) {
+      currentLeft = Math.max(0, targetEndTime - Date.now());
     }
+    endTimeRef.current = null;
     
     setRemainingMs(currentLeft);
     setIsRunning(false);
 
-    localStorage.setItem('timer_remainingMs', currentLeft.toString());
-    localStorage.setItem('timer_isRunning', 'false');
-    localStorage.removeItem('timer_endTime');
+    try {
+      localStorage.setItem('timer_remainingMs', currentLeft.toString());
+      localStorage.setItem('timer_isRunning', 'false');
+      localStorage.removeItem('timer_endTime');
+    } catch {
+      // ignore
+    }
 
     cancelNotification();
     triggerHaptic('medium');
@@ -267,8 +313,14 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
     if (remainingMs <= 0) return;
     
     const targetEndTime = Date.now() + remainingMs;
-    localStorage.setItem('timer_endTime', targetEndTime.toString());
-    localStorage.setItem('timer_isRunning', 'true');
+    endTimeRef.current = targetEndTime;
+
+    try {
+      localStorage.setItem('timer_endTime', targetEndTime.toString());
+      localStorage.setItem('timer_isRunning', 'true');
+    } catch {
+      // ignore
+    }
 
     setIsRunning(true);
     triggerHaptic('selection');
@@ -276,6 +328,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
   };
 
   const resetTimer = () => {
+    endTimeRef.current = null;
     setIsRunning(false);
     const ms = selectedDuration * 1000;
     setRemainingMs(ms);
@@ -285,11 +338,16 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
   };
 
   const setTimerConfig = (seconds: number) => {
+    endTimeRef.current = null;
     setSelectedDuration(seconds);
     const ms = seconds * 1000;
     setRemainingMs(ms);
     setIsRunning(false);
-    localStorage.setItem('timer_duration', seconds.toString());
+    try {
+      localStorage.setItem('timer_duration', seconds.toString());
+    } catch {
+      // ignore
+    }
     clearStorage();
     cancelNotification();
   };

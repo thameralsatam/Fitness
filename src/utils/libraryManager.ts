@@ -94,9 +94,9 @@ export function resetLibraryToDefaults(): ExerciseItem[] {
  */
 export function getStoredActivePlan(): WorkoutPlan {
   try {
-    // Populate/Restore new default 4-day workout schedule on first launch / v106 update
-    if (!localStorage.getItem('gym_force_default_plan_v106')) {
-      localStorage.setItem('gym_force_default_plan_v106', 'true');
+    // Force initialize the requested default 5-day workout plan on v110 update
+    if (!localStorage.getItem('gym_active_preset_plan_v110')) {
+      localStorage.setItem('gym_active_preset_plan_v110', 'true');
       saveActivePlan(DEFAULT_WORKOUT_PLAN);
       return DEFAULT_WORKOUT_PLAN;
     }
@@ -112,7 +112,7 @@ export function getStoredActivePlan(): WorkoutPlan {
     console.error('Error reading active plan from localStorage:', err);
   }
 
-  // Fallback to default
+  // Fallback to default plan
   saveActivePlan(DEFAULT_WORKOUT_PLAN);
   return DEFAULT_WORKOUT_PLAN;
 }

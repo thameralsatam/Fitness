@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" dir="ltr">
+<html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -11,10 +11,49 @@
     <meta name="browsermode" content="application" />
     <meta name="x5-fullscreen" content="true" />
     <meta name="360-fullscreen" content="true" />
-    <title>Trainingsplan · Full Body 3× pro Woche</title>
-    <meta name="description" content="Strukturierter Full-Body-Trainingsplan (Deutsch & Arabisch) mit Geräten, Alternativen, Statistiken und Zielen." />
+    <title>جدول التمارين واللياقة البدنية</title>
+    <meta name="description" content="تطبيق متطور لإدارة وتتبع جدول التمارين الرياضية ومكتبة الأجهزة والمقاطع الصوتية." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/thmanyahsans-Medium.ttf" as="font" type="font/ttf" crossorigin />
+    <style>
+      @font-face {
+        font-family: 'Thmanyah Sans';
+        src: url('/fonts/thmanyahsans-Medium.ttf') format('truetype');
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: block;
+      }
+      :root {
+        --font-display: 'Thmanyah Sans', sans-serif;
+        --font-body: 'Thmanyah Sans', sans-serif;
+      }
+    </style>
+    <script>
+      (function() {
+        try {
+          var tf = localStorage.getItem('gym_custom_title_font');
+          if (tf && window.FontFace) {
+            var f1 = new FontFace('CustomTitleFont', 'url(' + tf + ')');
+            f1.load().then(function(loaded) { document.fonts.add(loaded); }).catch(function() {});
+          }
+          var bf = localStorage.getItem('gym_custom_body_font');
+          if (bf && window.FontFace) {
+            var f2 = new FontFace('CustomBodyFont', 'url(' + bf + ')');
+            f2.load().then(function(loaded) { document.fonts.add(loaded); }).catch(function() {});
+          }
+          var d = localStorage.getItem('gym_font_display');
+          var b = localStorage.getItem('gym_font_body');
+          if (d) document.documentElement.style.setProperty('--font-display', d);
+          if (b) document.documentElement.style.setProperty('--font-body', b);
+          var lang = localStorage.getItem('gym_lang');
+          if (lang) {
+            document.documentElement.lang = lang;
+            document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+          }
+        } catch(e) {}
+      })();
+    </script>
   </head>
   <body class="bg-[#f6f8f6] text-[#15221b] antialiased selection:bg-[#215641]/15 selection:text-[#15221b]">
     <div id="root"></div>

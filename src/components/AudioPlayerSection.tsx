@@ -61,7 +61,6 @@ import {
 import { Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { NativeFilePickerModal } from './NativeFilePickerModal';
-import { LyricsModal } from './LyricsModal';
 import { notifyModalChange } from '../utils/modalManager';
 import { useAudio } from '../context/AudioContext';
 
@@ -126,13 +125,12 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
 
-  // Active 3-dots dropdown track ID and folder actions modal
-  const [activeMenuTrackId, setActiveMenuTrackId] = useState<string | null>(null);
+  // Active 3-dots options modal for track and folder
+  const [trackForOptionsMenu, setTrackForOptionsMenu] = useState<AudioTrack | null>(null);
   const [folderForOptionsMenu, setFolderForOptionsMenu] = useState<AudioFolder | null>(null);
 
   // Modals state
   const [detailsModalTrack, setDetailsModalTrack] = useState<AudioTrack | null>(null);
-  const [lyricsModalTrack, setLyricsModalTrack] = useState<AudioTrack | null>(null);
   const [pendingUploads, setPendingUploads] = useState<PendingUploadItem[] | null>(null);
   const [isNativePickerOpen, setIsNativePickerOpen] = useState<boolean>(false);
   const [editingTrack, setEditingTrack] = useState<EditTrackModalData | null>(null);
@@ -151,33 +149,9 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Close 3-dot dropdown menus on outside click / tap
-  useEffect(() => {
-    if (!activeMenuTrackId) return;
-
-    const handleOutsideClick = (e: MouseEvent | TouchEvent | PointerEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && target.closest('[data-track-menu]')) {
-        return;
-      }
-      setActiveMenuTrackId(null);
-    };
-
-    window.addEventListener('pointerdown', handleOutsideClick, true);
-    window.addEventListener('touchstart', handleOutsideClick, true);
-    window.addEventListener('click', handleOutsideClick, true);
-
-    return () => {
-      window.removeEventListener('pointerdown', handleOutsideClick, true);
-      window.removeEventListener('touchstart', handleOutsideClick, true);
-      window.removeEventListener('click', handleOutsideClick, true);
-    };
-  }, [activeMenuTrackId]);
-
   // Sync active modals state to notify bottom nav hiding
   const isAnyAudioModalOpen = Boolean(
     detailsModalTrack ||
-      lyricsModalTrack ||
       pendingUploads ||
       editingTrack ||
       deletingTrack ||
@@ -186,7 +160,8 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
       isNewFolderModalOpen ||
       editingFolder ||
       deletingFolder ||
-      folderForOptionsMenu
+      folderForOptionsMenu ||
+      trackForOptionsMenu
   );
 
   useEffect(() => {
@@ -440,7 +415,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
   // Move Track Up/Down in current view
   const handleMoveTrack = async (trackId: string, direction: 'up' | 'down', e: React.MouseEvent) => {
     e.stopPropagation();
-    setActiveMenuTrackId(null);
+    setTrackForOptionsMenu(null);
     const currentList = displayedTracks;
     const idx = currentList.findIndex((t) => t.id === trackId);
     if (idx === -1) return;
@@ -491,25 +466,6 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Active live lyric line for currentTrack during playback
-  const activeLiveLyric = useMemo(() => {
-    if (!currentTrack || !currentTrack.lyrics || currentTrack.lyrics.length === 0) return null;
-    let active = null;
-    let next = null;
-    for (let i = 0; i < currentTrack.lyrics.length; i++) {
-      if (currentTime >= currentTrack.lyrics[i].time) {
-        active = currentTrack.lyrics[i];
-        next = currentTrack.lyrics[i + 1] || null;
-      } else {
-        if (!active && i === 0) {
-          next = currentTrack.lyrics[0];
-        }
-        break;
-      }
-    }
-    return { active, next };
-  }, [currentTrack, currentTime]);
-
   const activeFolder = folders.find((f) => f.id === selectedFolderId);
 
   return (
@@ -556,41 +512,8 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
             </div>
           </div>
 
-          {/* Action Bar (Lyrics, Speed, Mute, Smart Playback Mode) */}
+          {/* Action Bar (Speed, Mute, Smart Playback Mode) */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {/* Lyrics Button */}
-            {currentTrack && (
-              <button
-                type="button"
-                onClick={() => setLyricsModalTrack(currentTrack)}
-                className={`h-7.5 px-3 rounded-2xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-[11px] font-bold ${
-                  currentTrack.lyrics && currentTrack.lyrics.length > 0
-                    ? 'bg-[#215641] border-[#7be3af]/40 text-[#7be3af]'
-                    : 'bg-white/5 border-white/10 text-white/80 hover:text-white'
-                }`}
-                title={
-                  currentTrack.lyrics && currentTrack.lyrics.length > 0
-                    ? currentLang === 'ar'
-                      ? `الكلمات المتزامنة (${currentTrack.lyrics.length} سطر)`
-                      : `Synchrone Lyrics (${currentTrack.lyrics.length} Zeilen)`
-                    : currentLang === 'ar'
-                    ? 'الكلمات والترجمة المتزامنة للمقطع'
-                    : 'Synchrone Lyrics anzeigen'
-                }
-              >
-                <FileText className="w-3 h-3 text-[#7be3af]" />
-                <span className="hidden sm:inline">
-                  {currentTrack.lyrics && currentTrack.lyrics.length > 0
-                    ? currentLang === 'ar'
-                      ? 'الكلمات'
-                      : 'Lyrics'
-                    : currentLang === 'ar'
-                    ? 'الكلمات'
-                    : 'Lyrics'}
-                </span>
-              </button>
-            )}
-
             {/* Speed Pill Toggle */}
             <button
               type="button"
@@ -1028,9 +951,6 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
           <div className="space-y-2">
             {displayedTracks.map((track, idx) => {
               const isSelected = track.id === tracks[currentTrackIndex]?.id;
-              const isMenuOpen = activeMenuTrackId === track.id;
-              // If it's near the bottom of the list, open the menu upwards so it doesn't cause extra layout expansion
-              const openUpwards = idx >= Math.max(1, displayedTracks.length - 2);
 
               return (
                 <div
@@ -1075,7 +995,7 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                     </div>
                   </div>
 
-                  {/* Right side: Duration pill + 3-Dots Action Button & Dropdown Menu */}
+                  {/* Right side: Duration pill + 3-Dots Action Button */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span
                       className={`hidden sm:inline-block text-[11px] font-mono font-medium px-2 py-0.5 rounded-lg ${
@@ -1085,152 +1005,18 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
                       {formatTime(track.duration)}
                     </span>
 
-                    <div
-                      className="relative flex-shrink-0"
-                      data-track-menu
-                      onClick={(e) => e.stopPropagation()}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerHaptic('light');
+                        setTrackForOptionsMenu(track);
+                      }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center text-[#75877d] hover:text-[#15221b] hover:bg-white active:scale-95 transition-all cursor-pointer"
+                      title={currentLang === 'ar' ? 'خيارات المقطع' : 'Optionen'}
                     >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuTrackId((prev) => (prev === track.id ? null : track.id));
-                        }}
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                          isMenuOpen
-                            ? 'bg-[#215641] text-white'
-                            : 'text-[#75877d] hover:text-[#15221b] hover:bg-white'
-                        }`}
-                        title={currentLang === 'ar' ? 'خيارات المقطع' : 'Optionen'}
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-
-                      {/* Dropdown Menu - smart upward or downward positioning */}
-                      <AnimatePresence>
-                        {isMenuOpen && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-20"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveMenuTrackId(null);
-                              }}
-                            />
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.95, y: openUpwards ? 4 : -4 }}
-                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.95, y: openUpwards ? 4 : -4 }}
-                              transition={{ duration: 0.15 }}
-                              className={`absolute z-30 ${
-                                currentLang === 'ar' ? 'left-0' : 'right-0'
-                              } ${
-                                openUpwards ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-                              } w-48 bg-white rounded-2xl shadow-xl border border-[#dbe4dc] p-1.5 space-y-0.5`}
-                              dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
-                            >
-                            {/* 1. Lyrics Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveMenuTrackId(null);
-                                setLyricsModalTrack(track);
-                              }}
-                              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-[#215641] hover:bg-[#eef4f0] rounded-xl transition-colors text-right"
-                            >
-                              <FileAudio className="w-3.5 h-3.5 text-[#215641]" />
-                              <span>{currentLang === 'ar' ? 'كلمات المقطع المتزامنة' : 'Synchrone Lyrics'}</span>
-                            </button>
-
-                            {/* 2. Details Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveMenuTrackId(null);
-                                setDetailsModalTrack(track);
-                              }}
-                              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-[#15221b] hover:bg-[#eef4f0] rounded-xl transition-colors text-right"
-                            >
-                              <Info className="w-3.5 h-3.5 text-[#215641]" />
-                              <span>{currentLang === 'ar' ? 'تفاصيل المقطع' : 'Details'}</span>
-                            </button>
-
-                            {/* 2. Move Up */}
-                            <button
-                              type="button"
-                              onClick={(e) => handleMoveTrack(track.id, 'up', e)}
-                              disabled={idx === 0}
-                              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-[#4f6156] hover:bg-[#fafcfa] rounded-xl transition-colors disabled:opacity-30 text-right"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5 text-[#75877d]" />
-                              <span>{currentLang === 'ar' ? 'تقديم للأعلى' : 'Nach oben'}</span>
-                            </button>
-
-                            {/* 3. Move Down */}
-                            <button
-                              type="button"
-                              onClick={(e) => handleMoveTrack(track.id, 'down', e)}
-                              disabled={idx === displayedTracks.length - 1}
-                              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-[#4f6156] hover:bg-[#fafcfa] rounded-xl transition-colors disabled:opacity-30 text-right"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5 text-[#75877d]" />
-                              <span>{currentLang === 'ar' ? 'تنزيل للأسفل' : 'Nach unten'}</span>
-                            </button>
-
-                            {/* 4. Edit (Name & Folder) */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (isPlaying && currentTrack?.id === track.id) return;
-                                setActiveMenuTrackId(null);
-                                setEditingTrack({
-                                  id: track.id,
-                                  name: track.name,
-                                  folderId: track.folderId || '',
-                                });
-                              }}
-                              disabled={isPlaying && currentTrack?.id === track.id}
-                              className={`w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold rounded-xl transition-colors text-right ${
-                                isPlaying && currentTrack?.id === track.id
-                                  ? 'text-[#75877d] opacity-50 cursor-not-allowed'
-                                  : 'text-[#215641] hover:bg-[#eef4f0]'
-                              }`}
-                              title={
-                                isPlaying && currentTrack?.id === track.id
-                                  ? currentLang === 'ar'
-                                    ? 'أوقف تشغيل المقطع لتعديل بياناته'
-                                    : 'Pausiere Wiedergabe zum Bearbeiten'
-                                  : currentLang === 'ar'
-                                  ? 'تعديل البيانات'
-                                  : 'Bearbeiten'
-                              }
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                              <span>{currentLang === 'ar' ? 'تعديل البيانات' : 'Bearbeiten'}</span>
-                            </button>
-
-                            <div className="border-t border-[#edf4ef] my-1" />
-
-                            {/* 5. Delete */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveMenuTrackId(null);
-                                setDeletingTrack({
-                                  id: track.id,
-                                  name: track.name,
-                                });
-                              }}
-                              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-colors text-right"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                              <span>{currentLang === 'ar' ? 'حذف المقطع' : 'Löschen'}</span>
-                            </button>
-                          </motion.div>
-                        </>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               );
@@ -2177,6 +1963,172 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
         )}
       </AnimatePresence>
 
+      {/* ================= MODAL: Track Actions Dialog (Overlay Layer / طبقة عائمة فوق المحتوى) ================= */}
+      <AnimatePresence>
+        {trackForOptionsMenu && (
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
+            onClick={() => setTrackForOptionsMenu(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-white rounded-3xl p-5 border border-[#dbe4dc] shadow-2xl space-y-3.5"
+              dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-2.5 border-b border-[#edf4ef]">
+                <div className="flex items-center gap-2.5 min-w-0 pr-1">
+                  <div className="w-8 h-8 rounded-xl bg-[#edf4ef] text-[#215641] flex items-center justify-center flex-shrink-0">
+                    <FileAudio className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-display font-bold text-sm text-[#15221b] truncate">
+                      {trackForOptionsMenu.name}
+                    </h3>
+                    <p className="text-[11px] text-[#75877d]">
+                      {formatTime(trackForOptionsMenu.duration)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTrackForOptionsMenu(null)}
+                  className="w-7 h-7 rounded-full bg-[#f8faf8] hover:bg-[#edf4ef] text-[#75877d] flex items-center justify-center flex-shrink-0 transition-colors"
+                  aria-label={currentLang === 'ar' ? 'إغلاق' : 'Schließen'}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-1.5 pt-1">
+                {/* 1. Details */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const t = trackForOptionsMenu;
+                    setTrackForOptionsMenu(null);
+                    setDetailsModalTrack(t);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 text-xs font-bold text-[#15221b] bg-[#f8faf8] hover:bg-[#edf4ef] rounded-2xl transition-colors border border-[#e2ebe3] text-start"
+                >
+                  <Info className="w-4 h-4 text-[#215641] flex-shrink-0" />
+                  <div>
+                    <div>{currentLang === 'ar' ? 'تفاصيل المقطع' : 'Details'}</div>
+                    <div className="text-[10px] font-normal text-[#75877d]">
+                      {currentLang === 'ar' ? 'عرض الحجم والمسار والمدة' : 'Größe, Pfad und Dauer anzeigen'}
+                    </div>
+                  </div>
+                </button>
+
+                {/* 2. Move Up */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const t = trackForOptionsMenu;
+                    setTrackForOptionsMenu(null);
+                    handleMoveTrack(t.id, 'up', e);
+                  }}
+                  disabled={displayedTracks.findIndex((t) => t.id === trackForOptionsMenu.id) <= 0}
+                  className="w-full flex items-center gap-3 p-3 text-xs font-bold text-[#15221b] bg-[#f8faf8] hover:bg-[#edf4ef] rounded-2xl transition-colors border border-[#e2ebe3] disabled:opacity-40 text-start"
+                >
+                  <ChevronUp className="w-4 h-4 text-[#4f6156] flex-shrink-0" />
+                  <div>
+                    <div>{currentLang === 'ar' ? 'تقديم للأعلى' : 'Nach oben verschieben'}</div>
+                    <div className="text-[10px] font-normal text-[#75877d]">
+                      {currentLang === 'ar' ? 'رفع ترتيب المقطع في القائمة' : 'Position in der Liste erhöhen'}
+                    </div>
+                  </div>
+                </button>
+
+                {/* 3. Move Down */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const t = trackForOptionsMenu;
+                    setTrackForOptionsMenu(null);
+                    handleMoveTrack(t.id, 'down', e);
+                  }}
+                  disabled={
+                    displayedTracks.findIndex((t) => t.id === trackForOptionsMenu.id) === -1 ||
+                    displayedTracks.findIndex((t) => t.id === trackForOptionsMenu.id) >= displayedTracks.length - 1
+                  }
+                  className="w-full flex items-center gap-3 p-3 text-xs font-bold text-[#15221b] bg-[#f8faf8] hover:bg-[#edf4ef] rounded-2xl transition-colors border border-[#e2ebe3] disabled:opacity-40 text-start"
+                >
+                  <ChevronDown className="w-4 h-4 text-[#4f6156] flex-shrink-0" />
+                  <div>
+                    <div>{currentLang === 'ar' ? 'تنزيل للأسفل' : 'Nach unten verschieben'}</div>
+                    <div className="text-[10px] font-normal text-[#75877d]">
+                      {currentLang === 'ar' ? 'خفض ترتيب المقطع في القائمة' : 'Position in der Liste verringern'}
+                    </div>
+                  </div>
+                </button>
+
+                {/* 4. Edit (Name & Folder) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const t = trackForOptionsMenu;
+                    if (isPlaying && currentTrack?.id === t.id) return;
+                    setTrackForOptionsMenu(null);
+                    setEditingTrack({
+                      id: t.id,
+                      name: t.name,
+                      folderId: t.folderId || '',
+                    });
+                  }}
+                  disabled={isPlaying && currentTrack?.id === trackForOptionsMenu.id}
+                  className={`w-full flex items-center gap-3 p-3 text-xs font-bold rounded-2xl transition-colors border border-[#e2ebe3] text-start ${
+                    isPlaying && currentTrack?.id === trackForOptionsMenu.id
+                      ? 'text-[#75877d] opacity-50 bg-[#fafcfa]'
+                      : 'text-[#15221b] bg-[#f8faf8] hover:bg-[#edf4ef]'
+                  }`}
+                >
+                  <Pencil className="w-4 h-4 text-[#215641] flex-shrink-0" />
+                  <div>
+                    <div>{currentLang === 'ar' ? 'تعديل المقطع' : 'Bearbeiten'}</div>
+                    <div className="text-[10px] font-normal text-[#75877d]">
+                      {currentLang === 'ar' ? 'تعديل الاسم أو نقل المقطع لمجلد آخر' : 'Namen ändern oder Ordner zuweisen'}
+                    </div>
+                  </div>
+                </button>
+
+                {/* 5. Delete */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const t = trackForOptionsMenu;
+                    setTrackForOptionsMenu(null);
+                    setDeletingTrack({
+                      id: t.id,
+                      name: t.name,
+                    });
+                  }}
+                  className="w-full flex items-center gap-3 p-3 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100/80 rounded-2xl transition-colors text-start"
+                >
+                  <Trash2 className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <div>
+                    <div>{currentLang === 'ar' ? 'حذف من القائمة' : 'Aus Liste löschen'}</div>
+                    <div className="text-[10px] font-normal text-red-500/80">
+                      {currentLang === 'ar' ? 'إزالة هذا المقطع من المكتبة' : 'Diesen Track dauerhaft entfernen'}
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ================= MODAL: Folder Actions Dialog ================= */}
       <AnimatePresence>
         {folderForOptionsMenu && (
@@ -2294,16 +2246,6 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
         currentLang={currentLang}
         isProcessing={isProcessingFiles}
       />
-
-      {/* Synced Lyrics & AI Transcription Modal */}
-      {lyricsModalTrack && (
-        <LyricsModal
-          track={lyricsModalTrack}
-          isOpen={Boolean(lyricsModalTrack)}
-          onClose={() => setLyricsModalTrack(null)}
-          currentLang={currentLang}
-        />
-      )}
     </div>
   );
 };

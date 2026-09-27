@@ -18,11 +18,34 @@ export const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   className = 'w-full h-full object-cover pointer-events-none',
   seekTime = 0.5,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cleanSrc = src ? src.split('#')[0] : '';
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(
     poster || (cleanSrc ? thumbnailCache.get(cleanSrc) || null : null)
   );
+  const [isInView, setIsInView] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (thumbnailUrl || !cleanSrc) return;
+
+    // Use IntersectionObserver so off-screen video thumbnails don't consume decoders
+    if (typeof IntersectionObserver !== 'undefined' && containerRef.current) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0]?.isIntersecting) {
+            setIsInView(true);
+            observer.disconnect();
+          }
+        },
+        { rootMargin: '200px' }
+      );
+      observer.observe(containerRef.current);
+      return () => observer.disconnect();
+    } else {
+      setIsInView(true);
+    }
+  }, [cleanSrc, thumbnailUrl]);
 
   useEffect(() => {
     let isMounted = true;
@@ -31,7 +54,7 @@ export const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
       return;
     }
 
-    if (!cleanSrc) return;
+    if (!cleanSrc || !isInView) return;
 
     // Check cache
     if (thumbnailCache.has(cleanSrc)) {
@@ -103,6 +126,13 @@ export const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
         video.removeEventListener('loadedmetadata', handleLoadedMetadata);
         video.removeEventListener('seeked', handleSeeked);
         video.removeEventListener('canplay', handleCanPlay);
+        try {
+          video.pause();
+          video.removeAttribute('src');
+          video.load();
+        } catch {
+          // ignore
+        }
       }
     };
   }, [cleanSrc, poster, seekTime]);
@@ -119,15 +149,21 @@ export const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   }
 
   return (
-    <video
-      ref={videoRef}
-      src={cleanSrc}
-      poster={poster}
-      className={className}
-      preload="metadata"
-      muted
-      playsInline
-      aria-label={alt}
-    />
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden bg-emerald-950/20">
+      {isInView ? (
+        <video
+          ref={videoRef}
+          src={cleanSrc}
+          poster={poster}
+          className={className}
+          preload="metadata"
+          muted
+          playsInline
+          aria-label={alt}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-[#13271e]/30" />
+      )}
+    </div>
   );
 };

@@ -11,6 +11,7 @@ import {
   Check,
   Sparkles,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { DayIndex, Language, WorkoutPlan } from '../types';
 import {
@@ -33,6 +34,7 @@ interface DayScheduleModalProps {
   plan: WorkoutPlan;
   currentLang: Language;
   onUpdatePlan: (updatedPlan: WorkoutPlan) => void;
+  onClearExercises?: () => void;
   showToast: (msg: string) => void;
 }
 
@@ -43,6 +45,7 @@ export const DayScheduleModal: React.FC<DayScheduleModalProps> = ({
   plan,
   currentLang,
   onUpdatePlan,
+  onClearExercises,
   showToast,
 }) => {
   const isAr = currentLang === 'ar';
@@ -325,6 +328,24 @@ export const DayScheduleModal: React.FC<DayScheduleModalProps> = ({
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Optional Clear Exercises Action */}
+          {!isRest && onClearExercises && currentExercises.length > 0 && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('warning');
+                  onClose();
+                  onClearExercises();
+                }}
+                className="w-full py-2.5 px-3 rounded-2xl text-xs font-bold text-red-600 hover:text-red-700 bg-red-50/70 hover:bg-red-50 border border-red-200 transition-all flex items-center justify-center gap-1.5 active:scale-98 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 stroke-[2]" />
+                <span>{isAr ? 'تفريغ جميع تمارين هذا اليوم' : 'Alle Übungen dieses Tages löschen'}</span>
+              </button>
             </div>
           )}
 

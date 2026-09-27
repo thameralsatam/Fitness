@@ -10,7 +10,6 @@ import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Clipboard } from '@capacitor/clipboard';
-import JSZip from 'jszip';
 
 /**
  * Logger callback type for step-by-step debugging on mobile screens
@@ -224,6 +223,7 @@ export async function exportPlanAsZipPackage(
     const includeVideos = options?.includeVideos ?? true;
     log(`[ZIP] جاري تحضير الملف المضغوط (.zip) شامل الوسائط والفيديوهات...`);
 
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
     const mediaRecordsMap = await getAllExerciseMediaRecordsMap();
     const clonedPlan: WorkoutPlan = JSON.parse(JSON.stringify(plan));
@@ -739,8 +739,9 @@ export async function parseAndHydrateZipOrJsonFile(
     // 2. Try parsing input as a compressed ZIP file package first!
     log('📦 جاري فحص الملف (فحص ضغط ZIP مقابل JSON)...');
     let isZip = false;
-    let zip: JSZip | null = null;
+    let zip: InstanceType<typeof import('jszip')> | null = null;
     try {
+      const { default: JSZip } = await import('jszip');
       zip = await JSZip.loadAsync(input);
       isZip = true;
     } catch {

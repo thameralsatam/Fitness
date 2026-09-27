@@ -4,7 +4,6 @@ export interface AudioFolder {
   createdAt: number;
 }
 
-import { LyricLine } from '../types';
 import { NativeAudioPlayer, isNativeAudioAvailable } from './nativeAudioBridge';
 
 export interface AudioTrack {
@@ -18,8 +17,6 @@ export interface AudioTrack {
   order: number;
   extractedFromVideo?: boolean;
   folderId?: string;
-  lyrics?: LyricLine[];
-  hasExtractedLyrics?: boolean;
 }
 
 const DB_NAME = 'GymWorkoutAudioDB';
@@ -222,13 +219,6 @@ export async function updateTrackDetails(id: string, updates: Partial<AudioTrack
     };
 
     getReq.onerror = () => reject(getReq.error);
-  });
-}
-
-export async function saveTrackLyrics(id: string, lyrics: LyricLine[]): Promise<void> {
-  return updateTrackDetails(id, {
-    lyrics,
-    hasExtractedLyrics: lyrics && lyrics.length > 0,
   });
 }
 

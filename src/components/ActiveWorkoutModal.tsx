@@ -34,7 +34,6 @@ interface ActiveWorkoutModalProps {
   plan: WorkoutPlan;
   currentLang: Language;
   onFinishWorkout: (completedIds: number[]) => void;
-  onOpenLibrary?: () => void;
 }
 
 export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
@@ -43,7 +42,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   plan,
   currentLang,
   onFinishWorkout,
-  onOpenLibrary,
 }) => {
   const isAr = currentLang === 'ar';
   const exercises = plan.exercises || [];
@@ -58,7 +56,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [isRestPaused, setIsRestPaused] = useState<boolean>(false);
   const [completedExIds, setCompletedExIds] = useState<Set<number>>(new Set());
   const [isFinished, setIsFinished] = useState<boolean>(false);
-  const [showAlternatives, setShowAlternatives] = useState<boolean>(false);
   const [showExitConfirm, setShowExitConfirm] = useState<boolean>(false);
   const [currentMediaList, setCurrentMediaList] = useState<ExerciseMediaItem[]>([]);
   const [activeMediaViewer, setActiveMediaViewer] = useState<{
@@ -72,16 +69,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
   const currentExercise: ExerciseItem | undefined = exercises[currentExIdx];
 
-  // Load media whenever current exercise changes
+  // Load media whenever current exercise changes (prioritize IndexedDB for fresh blob URLs)
   useEffect(() => {
     if (currentExercise) {
-      if (currentExercise.media && currentExercise.media.length > 0) {
-        setCurrentMediaList(currentExercise.media);
-      } else {
-        getExerciseMediaList(currentExercise.id).then((stored) => {
-          setCurrentMediaList(stored || []);
-        });
-      }
+      getExerciseMediaList(currentExercise.id).then((stored) => {
+        if (stored && stored.length > 0) {
+          setCurrentMediaList(stored);
+        } else if (currentExercise.media && currentExercise.media.length > 0) {
+          setCurrentMediaList(currentExercise.media);
+        } else {
+          setCurrentMediaList([]);
+        }
+      });
     } else {
       setCurrentMediaList([]);
     }
@@ -101,7 +100,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       setIsRestPaused(false);
       setCompletedExIds(new Set());
       setIsFinished(false);
-      setShowAlternatives(false);
       setShowExitConfirm(false);
 
       return () => {
@@ -329,32 +327,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
               </h3>
               <p className="text-xs text-[#6e8276] leading-relaxed">
                 {isAr
-                  ? 'لا توجد تمارين مضافة في هذا الجدول لبدء التدريب. يمكنك إضافة أجهزة من المكتبة أولاً.'
-                  : 'Füge zuerst Übungen aus der Bibliothek zu deinem Plan hinzu, um das Training zu starten.'}
+                  ? 'لا توجد تمارين مضافة في هذا الجدول لبدء التدريب. أضف أجهزة وتمارين إلى جدولك أولاً.'
+                  : 'Füge zuerst Übungen zu deinem Plan hinzu, um das Training zu starten.'}
               </p>
             </div>
 
-            <div className="space-y-2 pt-2">
-              {onOpenLibrary && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onOpenLibrary();
-                  }}
-                  className="w-full py-3 px-4 rounded-2xl bg-[#215641] hover:bg-[#184232] text-white font-display font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all active:scale-95 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
-                  <span>{isAr ? 'تصفح وإضافة من المكتبة' : 'Übungen hinzufügen'}</span>
-                </button>
-              )}
-
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-2.5 px-4 text-xs font-bold text-[#75877d] hover:text-[#15221b] transition-colors cursor-pointer"
+                className="w-full py-3 px-4 rounded-2xl bg-[#215641] hover:bg-[#184232] text-white font-display font-bold text-xs sm:text-sm transition-colors cursor-pointer"
               >
-                {isAr ? 'إغلاق' : 'Schließen'}
+                {isAr ? 'إغلاق وإضافة تمارين' : 'Schließen & Übungen hinzufügen'}
               </button>
             </div>
           </motion.div>
@@ -486,35 +470,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                         : `Ausführungs-Video/Foto ansehen (${currentMediaList.length})`}
                     </span>
                   </button>
-                )}
-
-                {/* Alternatives Accordion */}
-                {currentExercise.alternatives && currentExercise.alternatives.length > 0 && (
-                  <div className="border border-[#dbe4dc] rounded-xl bg-[#f8faf8] overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setShowAlternatives(!showAlternatives)}
-                      className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-[#4f6156] hover:text-[#15221b]"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-[#215641]" />
-                        <span>{isAr ? 'الجهاز مشغول؟ البدائل المتاحة' : 'Gerät belegt? Alternativen'}</span>
-                      </div>
-                      <span className="text-[10px] text-[#215641] font-bold">
-                        {showAlternatives ? (isAr ? 'إخفاء' : 'Verbergen') : (isAr ? 'عرض' : 'Anzeigen')}
-                      </span>
-                    </button>
-                    {showAlternatives && (
-                      <div className="px-3.5 pb-3 pt-1 border-t border-[#e2ebe3] space-y-1.5 text-xs text-[#15221b]">
-                        {currentExercise.alternatives.map((alt, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#215641] flex-shrink-0" />
-                            <span>{alt}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 )}
               </motion.div>
             )}

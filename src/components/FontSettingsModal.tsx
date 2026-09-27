@@ -16,7 +16,7 @@ export const SYSTEM_FONT = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe
 interface FontSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  lang: Language;
+  lang?: Language;
   currentTitleFont: string;
   currentBodyFont: string;
   onSelectTitleFont: (fontValue: string) => void;
@@ -27,14 +27,12 @@ interface FontSettingsModalProps {
 export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
   isOpen,
   onClose,
-  lang,
   currentTitleFont,
   currentBodyFont,
   onSelectTitleFont,
   onSelectBodyFont,
   onShowToast,
 }) => {
-  const isAr = lang === 'ar';
   const titleFileInputRef = useRef<HTMLInputElement | null>(null);
   const bodyFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -66,11 +64,11 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
         setCustomBodyInfo(getStoredCustomFontInfo('body'));
         onSelectBodyFont(result.fontValue);
       }
-      const msg = isAr ? `تم استيراد وتطبيق الخط بنجاح: ${file.name}` : `Schriftart erfolgreich importiert: ${file.name}`;
+      const msg = `تم استيراد وتطبيق الخط بنجاح: ${file.name}`;
       if (onShowToast) onShowToast(msg);
     } else {
       triggerHaptic('heavy');
-      const errorMsg = isAr ? 'فشل استيراد ملف الخط، تأكد من الصيغة (TTF, OTF, WOFF)' : 'Fehler beim Laden der Schriftartdatei';
+      const errorMsg = 'فشل استيراد ملف الخط، تأكد من الصيغة (TTF, OTF, WOFF)';
       if (onShowToast) onShowToast(errorMsg);
     }
   };
@@ -90,7 +88,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
       }
     }
     if (onShowToast) {
-      onShowToast(isAr ? 'تم حذف الخط المخصص والرجوع للافتراضي' : 'Benutzerdefinierte Schriftart entfernt');
+      onShowToast('تم حذف الخط المخصص والرجوع للافتراضي');
     }
   };
 
@@ -106,14 +104,14 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs"
         />
 
         {/* Hidden File Pickers */}
@@ -154,17 +152,17 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
               </div>
               <div>
                 <h3 className="font-display font-bold text-[15px] text-[#15221b]">
-                  {isAr ? 'إدارة واستيراد الخطوط' : 'Schriftarten verwalten & importieren'}
+                  إدارة واستيراد الخطوط
                 </h3>
                 <p className="text-[11px] text-[#75877d]">
-                  {isAr ? 'الخطوط الافتراضية أو استيراد خط مخصص من جهازك' : 'Standard oder eigene Schriftartdatei hochladen'}
+                  الخطوط الافتراضية أو استيراد خط مخصص من جهازك
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-[#f1f6f3] text-[#4f6156] hover:text-[#15221b] flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-full bg-[#f1f6f3] text-[#4f6156] hover:text-[#15221b] flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -177,7 +175,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="text-xs font-extrabold text-[#15221b] flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#215641]" />
-                  <span>{isAr ? '1. خط العناوين الرئيسية (Titles Font):' : '1. Schriftart für Überschriften:'}</span>
+                  <span>1. خط العناوين الرئيسية (Titles Font):</span>
                 </label>
               </div>
 
@@ -189,7 +187,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                     triggerHaptic('selection');
                     onSelectTitleFont(DEFAULT_TITLE_FONT);
                   }}
-                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right transition-all active:scale-98 cursor-pointer ${
                     isKufamTitleSelected
                       ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
                       : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
@@ -197,7 +195,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                 >
                   <div className="flex flex-col">
                     <span style={{ fontFamily: DEFAULT_TITLE_FONT }} className="text-sm font-bold">
-                      {isAr ? 'خط ثمانية (Thmanyah Sans - الافتراضي)' : 'Thmanyah Sans (Standard)'}
+                      خط ثمانية (Thmanyah Sans - الافتراضي)
                     </span>
                     <span className="text-[10px] text-[#75877d]">Thmanyah Sans Medium</span>
                   </div>
@@ -215,7 +213,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                     triggerHaptic('selection');
                     onSelectTitleFont(SYSTEM_FONT);
                   }}
-                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right transition-all active:scale-98 cursor-pointer ${
                     isSystemTitleSelected
                       ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
                       : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
@@ -224,7 +222,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                   <div className="flex items-center gap-2">
                     <Smartphone className="w-4 h-4 text-[#75877d]" />
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold">{isAr ? 'خط نظام الجوال (System)' : 'System-Schriftart'}</span>
+                      <span className="text-sm font-bold">خط نظام الجوال (System)</span>
                       <span className="text-[10px] text-[#75877d]">Android / Device Default</span>
                     </div>
                   </div>
@@ -250,12 +248,12 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                         triggerHaptic('selection');
                         onSelectTitleFont(customTitleInfo.fontValue);
                       }}
-                      className="flex-1 flex flex-col text-right rtl:text-right ltr:text-left"
+                      className="flex-1 flex flex-col text-right cursor-pointer"
                     >
                       <span style={{ fontFamily: customTitleInfo.fontValue }} className="text-sm font-bold">
-                        {customTitleInfo.name} ({isAr ? 'خط مستورد' : 'Importiert'})
+                        {customTitleInfo.name} (خط مستورد)
                       </span>
-                      <span className="text-[10px] text-[#75877d]">{isAr ? 'خطك المخصص المحفوظ' : 'Benutzerdefiniert'}</span>
+                      <span className="text-[10px] text-[#75877d]">خطك المخصص المحفوظ</span>
                     </button>
 
                     <div className="flex items-center gap-2">
@@ -267,8 +265,8 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDeleteCustom('title')}
-                        className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center"
-                        title={isAr ? 'حذف هذا الخط' : 'Löschen'}
+                        className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center cursor-pointer"
+                        title="حذف هذا الخط"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -281,10 +279,10 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                   type="button"
                   onClick={() => titleFileInputRef.current?.click()}
                   disabled={isUploading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-[#215641]/40 bg-[#f4f8f5] hover:bg-[#eaf2ec] text-[#215641] text-xs font-bold transition-all active:scale-98"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-[#215641]/40 bg-[#f4f8f5] hover:bg-[#eaf2ec] text-[#215641] text-xs font-bold transition-all active:scale-98 cursor-pointer"
                 >
                   <UploadCloud className="w-4 h-4" />
-                  <span>{isAr ? '📂 استيراد خط مخصص للعناوين (TTF / OTF / WOFF)' : '📂 Eigene Schriftart für Titel importieren'}</span>
+                  <span>📂 استيراد خط مخصص للعناوين (TTF / OTF / WOFF)</span>
                 </button>
               </div>
             </div>
@@ -294,7 +292,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="text-xs font-extrabold text-[#15221b] flex items-center gap-1.5">
                   <Type className="w-3.5 h-3.5 text-[#215641]" />
-                  <span>{isAr ? '2. خط النصوص والقوائم (Body Font):' : '2. Schriftart für Fließtext & Listen:'}</span>
+                  <span>2. خط النصوص والقوائم (Body Font):</span>
                 </label>
               </div>
 
@@ -306,7 +304,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                     triggerHaptic('selection');
                     onSelectBodyFont(DEFAULT_BODY_FONT);
                   }}
-                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right transition-all active:scale-98 cursor-pointer ${
                     isIbmBodySelected
                       ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
                       : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
@@ -314,7 +312,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                 >
                   <div className="flex flex-col">
                     <span style={{ fontFamily: DEFAULT_BODY_FONT }} className="text-sm font-medium">
-                      {isAr ? 'خط ثمانية (Thmanyah Sans - الافتراضي)' : 'Thmanyah Sans (Standard)'}
+                      خط ثمانية (Thmanyah Sans - الافتراضي)
                     </span>
                     <span className="text-[10px] text-[#75877d]">Thmanyah Sans Medium</span>
                   </div>
@@ -332,7 +330,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                     triggerHaptic('selection');
                     onSelectBodyFont(SYSTEM_FONT);
                   }}
-                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right rtl:text-right ltr:text-left transition-all active:scale-98 ${
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl border text-right transition-all active:scale-98 cursor-pointer ${
                     isSystemBodySelected
                       ? 'bg-[#eef5f1] border-[#215641] text-[#215641] shadow-xs'
                       : 'bg-[#fafcfa] border-[#dbe4dc] text-[#15221b] hover:border-[#bad3c3]'
@@ -341,7 +339,7 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                   <div className="flex items-center gap-2">
                     <Smartphone className="w-4 h-4 text-[#75877d]" />
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium">{isAr ? 'خط نظام الجوال (System)' : 'System-Schriftart'}</span>
+                      <span className="text-sm font-medium">خط نظام الجوال (System)</span>
                       <span className="text-[10px] text-[#75877d]">Android / Device Default</span>
                     </div>
                   </div>
@@ -367,12 +365,12 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                         triggerHaptic('selection');
                         onSelectBodyFont(customBodyInfo.fontValue);
                       }}
-                      className="flex-1 flex flex-col text-right rtl:text-right ltr:text-left"
+                      className="flex-1 flex flex-col text-right cursor-pointer"
                     >
                       <span style={{ fontFamily: customBodyInfo.fontValue }} className="text-sm font-medium">
-                        {customBodyInfo.name} ({isAr ? 'خط مستورد' : 'Importiert'})
+                        {customBodyInfo.name} (خط مستورد)
                       </span>
-                      <span className="text-[10px] text-[#75877d]">{isAr ? 'خطك المخصص المحفوظ' : 'Benutzerdefiniert'}</span>
+                      <span className="text-[10px] text-[#75877d]">خطك المخصص المحفوظ</span>
                     </button>
 
                     <div className="flex items-center gap-2">
@@ -384,8 +382,8 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDeleteCustom('body')}
-                        className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center"
-                        title={isAr ? 'حذف هذا الخط' : 'Löschen'}
+                        className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center cursor-pointer"
+                        title="حذف هذا الخط"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -398,10 +396,10 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                   type="button"
                   onClick={() => bodyFileInputRef.current?.click()}
                   disabled={isUploading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-[#215641]/40 bg-[#f4f8f5] hover:bg-[#eaf2ec] text-[#215641] text-xs font-bold transition-all active:scale-98"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-dashed border-[#215641]/40 bg-[#f4f8f5] hover:bg-[#eaf2ec] text-[#215641] text-xs font-bold transition-all active:scale-98 cursor-pointer"
                 >
                   <UploadCloud className="w-4 h-4" />
-                  <span>{isAr ? '📂 استيراد خط مخصص للنصوص (TTF / OTF / WOFF)' : '📂 Eigene Schriftart für Fließtext importieren'}</span>
+                  <span>📂 استيراد خط مخصص للنصوص (TTF / OTF / WOFF)</span>
                 </button>
               </div>
             </div>
@@ -415,9 +413,9 @@ export const FontSettingsModal: React.FC<FontSettingsModalProps> = ({
                 triggerHaptic('success');
                 onClose();
               }}
-              className="w-full py-2.5 px-4 bg-[#215641] hover:bg-[#1b4836] text-white text-xs font-bold rounded-xl transition-colors shadow-sm active:scale-98"
+              className="w-full py-2.5 px-4 bg-[#215641] hover:bg-[#1b4836] text-white text-xs font-bold rounded-xl transition-colors shadow-xs active:scale-98 cursor-pointer"
             >
-              {isAr ? 'تم وحفظ الإعدادات' : 'Fertig & Schließen'}
+              تم وحفظ الإعدادات
             </button>
           </div>
         </motion.div>

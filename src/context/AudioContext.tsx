@@ -4,9 +4,7 @@ import {
   AudioFolder,
   getAllTracks,
   getAudioFolders,
-  saveTrackLyrics,
 } from '../utils/audioDb';
-import { LyricLine } from '../types';
 import {
   NativeAudioPlayer,
   isNativeAudioAvailable,
@@ -41,7 +39,6 @@ interface AudioContextType {
   cyclePlaybackMode: () => void;
   toggleMute: () => void;
   stopAudio: () => void;
-  updateTrackLyrics: (id: string, lyrics: LyricLine[]) => Promise<void>;
   setTracks: React.Dispatch<React.SetStateAction<AudioTrack[]>>;
   setFolders: React.Dispatch<React.SetStateAction<AudioFolder[]>>;
   refreshTracksAndFolders: () => Promise<void>;
@@ -744,25 +741,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     setCurrentTime(0);
   };
 
-  const updateTrackLyrics = async (id: string, lyrics: LyricLine[]) => {
-    try {
-      await saveTrackLyrics(id, lyrics);
-      setTracks((prev) =>
-        prev.map((t) =>
-          t.id === id
-            ? {
-                ...t,
-                lyrics,
-                hasExtractedLyrics: lyrics && lyrics.length > 0,
-              }
-            : t
-        )
-      );
-    } catch (e) {
-      console.error('Failed to update track lyrics:', e);
-    }
-  };
-
   const onTimeUpdate = () => {
     if (!isNative && audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
@@ -863,7 +841,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         cyclePlaybackMode,
         toggleMute,
         stopAudio,
-        updateTrackLyrics,
         setTracks,
         setFolders,
         refreshTracksAndFolders,

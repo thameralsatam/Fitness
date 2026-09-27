@@ -1,6 +1,6 @@
 {
   "name": "Gym Workout & Fitness",
-  "description": "Smarter Trainings- und Fitnessbegleiter auf Deutsch & Arabisch mit flexibler Übungsverwaltung und professionellen Tools.",
+  "description": "تطبيق متطور لإدارة وتتبع جدول التمارين الرياضية ومكتبة الأجهزة والمقاطع الصوتية.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

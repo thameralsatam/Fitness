@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Dumbbell } from 'lucide-react';
 import { triggerHaptic } from '../utils/haptics';
@@ -16,8 +16,24 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   planTitle,
   planSubtitle
 }) => {
+  const [isFontReady, setIsFontReady] = useState<boolean>(() => {
+    if (typeof document !== 'undefined' && document.fonts) {
+      return document.fonts.check("16px 'Thmanyah Sans'");
+    }
+    return true;
+  });
+
   useEffect(() => {
     triggerHaptic('light');
+
+    if (typeof document !== 'undefined' && document.fonts) {
+      document.fonts.ready.then(() => {
+        setIsFontReady(true);
+      }).catch(() => {
+        setIsFontReady(true);
+      });
+    }
+
     const timer = setTimeout(() => {
       onFinish();
     }, 5000); // 5s calm smooth presentation
@@ -44,13 +60,15 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
           </div>
         </div>
 
-        <h1 className="font-display text-lg sm:text-xl font-extrabold text-[#15221b] tracking-tight">
-          {planTitle || defaultTitle}
-        </h1>
+        <div className={`flex flex-col items-center transition-opacity duration-200 ${isFontReady ? 'opacity-100' : 'opacity-0'}`}>
+          <h1 className="font-display text-lg sm:text-xl font-extrabold text-[#15221b] tracking-tight">
+            {planTitle || defaultTitle}
+          </h1>
 
-        <p className="font-body text-xs font-semibold text-[#215641] mt-1">
-          {planSubtitle || defaultSubtitle}
-        </p>
+          <p className="font-body text-xs font-semibold text-[#215641] mt-1">
+            {planSubtitle || defaultSubtitle}
+          </p>
+        </div>
       </div>
     </motion.div>
   );

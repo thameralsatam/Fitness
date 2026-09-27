@@ -1,31 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import {
   Check,
-  ChevronDown,
-  Info,
   Plus,
   Dumbbell,
-  Calendar,
   SlidersHorizontal,
-  Trash2,
-  Film,
-  Image as ImageIcon,
   Play,
   Coffee,
   Link2,
   Sparkles,
-  Copy,
-  ArrowUpDown,
 } from 'lucide-react';
 import { ExerciseItem, Language, WorkoutPlan, ViewTab, ExerciseMediaItem, DayIndex } from '../types';
 import { I18N } from '../data/workoutData';
 import { WorkoutWidgets } from './WorkoutWidgets';
 import { triggerHaptic } from '../utils/haptics';
 import { MediaViewerModal } from './MediaViewerModal';
-import { PlanShareModal } from './PlanShareModal';
 import { VideoThumbnail } from './VideoThumbnail';
-import { getAllExerciseMediaMap } from '../utils/mediaStorage';
+import { getAllExerciseMediaMap, getExerciseMediaList } from '../utils/mediaStorage';
 import {
   DAYS_NAMES_AR,
   DAYS_NAMES_DE,
@@ -53,7 +43,7 @@ interface PlanViewProps {
   plan: WorkoutPlan;
   onUpdatePlan: (plan: WorkoutPlan) => void;
   onStartActiveWorkout?: () => void;
-  onOpenLibrary?: () => void;
+  onOpenAddExercise?: () => void;
   onOpenEditExercise?: (exercise: ExerciseItem) => void;
   onRemoveExercise?: (id: number) => void;
   onClearPlan?: () => void;
@@ -72,7 +62,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   plan,
   onUpdatePlan,
   onStartActiveWorkout,
-  onOpenLibrary,
+  onOpenAddExercise,
   onOpenEditExercise,
   onClearPlan,
   showToast,
@@ -81,9 +71,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const isAr = currentLang === 'ar';
   const todayIndex = getTodayDayIndex();
 
-  const [notesOpen, setNotesOpen] = useState(false);
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [mediaMap, setMediaMap] = useState<Record<number, ExerciseMediaItem[]>>({});
   const [activeMediaViewer, setActiveMediaViewer] = useState<{
     name: string;
@@ -97,21 +85,44 @@ export const PlanView: React.FC<PlanViewProps> = ({
     });
   }, [exercises]);
 
+  const handleOpenExerciseMedia = async (item: ExerciseItem, currentMedia: ExerciseMediaItem[]) => {
+    triggerHaptic('light');
+
+    // Always fetch fresh, active object URLs from IndexedDB to ensure video plays reliably
+    try {
+      const freshStored = await getExerciseMediaList(item.id);
+      if (freshStored && freshStored.length > 0) {
+        setMediaMap((prev) => ({ ...prev, [item.id]: freshStored }));
+        setActiveMediaViewer({
+          name: item.nameDe,
+          list: freshStored,
+          index: 0,
+        });
+        return;
+      }
+    } catch {
+      // fallback
+    }
+
+    const listToUse = currentMedia.length > 0 ? currentMedia : (item.media || []);
+    if (listToUse.length > 0) {
+      setActiveMediaViewer({
+        name: item.nameDe,
+        list: listToUse,
+        index: 0,
+      });
+    }
+  };
+
   const completedCount = exercises.filter((e) => completedExercises.has(e.id)).length;
   const isRest = isDayRestDay(plan, selectedDayIndex);
   const linkedTo = getLinkedDay(plan, selectedDayIndex);
   const currentDayName = isAr ? DAYS_NAMES_AR[selectedDayIndex] : DAYS_NAMES_DE[selectedDayIndex];
 
-  const notesList = plan
-    ? currentLang === 'de'
-      ? plan.notesDe
-      : plan.notesAr
-    : t.notes;
-
   return (
     <div className="w-full max-w-full min-w-0 space-y-6 sm:space-y-7 animate-in fade-in duration-200">
       {/* Primary Companion Widget */}
-      {onNavigateTab && (
+      {onNavigateTab && exercises.length > 0 && (
         <WorkoutWidgets
           currentLang={currentLang}
           completedCount={completedCount}
@@ -120,7 +131,6 @@ export const PlanView: React.FC<PlanViewProps> = ({
           totalSessions={totalSessions}
           onNavigateTab={onNavigateTab}
           onStartActiveWorkout={onStartActiveWorkout}
-          onOpenLibrary={onOpenLibrary}
         />
       )}
 
@@ -173,48 +183,20 @@ export const PlanView: React.FC<PlanViewProps> = ({
             </div>
           </div>
 
-          {/* Action buttons (Day options, Export/Import, and optional clear) */}
+          {/* Single Day Options Control */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('selection');
-                setIsShareModalOpen(true);
-              }}
-              className="p-2.5 rounded-2xl text-[#4f6156] hover:text-[#15221b] hover:bg-[#edf5f0] transition-all active:scale-95 cursor-pointer"
-              title={isAr ? 'تصدير واستيراد ملف الجدول' : 'Plan exportieren / importieren'}
-              aria-label={isAr ? 'تصدير واستيراد ملف الجدول' : 'Plan exportieren / importieren'}
-            >
-              <ArrowUpDown className="w-4 h-4 stroke-[2.2]" />
-            </button>
-
             <button
               type="button"
               onClick={() => {
                 triggerHaptic('selection');
                 setIsDayModalOpen(true);
               }}
-              className="p-2.5 rounded-2xl text-[#4f6156] hover:text-[#15221b] hover:bg-[#edf5f0] transition-all active:scale-95 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-[#edf5f0] hover:bg-[#e2ede5] text-[#215641] text-xs font-bold transition-all flex items-center gap-1.5 border border-[#bad5c2]/70 cursor-pointer active:scale-95"
               title={isAr ? 'خيارات وتخصيص جدول اليوم' : 'Tages-Einstellungen'}
-              aria-label={isAr ? 'خيارات وتخصيص جدول اليوم' : 'Tages-Einstellungen'}
             >
-              <SlidersHorizontal className="w-4 h-4 stroke-[2.2]" />
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>{isAr ? 'خيارات اليوم' : 'Optionen'}</span>
             </button>
-
-            {!isRest && onClearPlan && exercises.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('warning');
-                  onClearPlan();
-                }}
-                className="p-2 rounded-2xl bg-[#fafcfa] hover:bg-red-50 text-[#7a8e82] hover:text-red-600 border border-[#dbe6de] hover:border-red-200 transition-all active:scale-95 cursor-pointer"
-                title={isAr ? 'تفريغ تمارين اليوم' : 'Plan leeren'}
-                aria-label={isAr ? 'تفريغ تمارين اليوم' : 'Plan leeren'}
-              >
-                <Trash2 className="w-4 h-4 stroke-[2]" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -328,23 +310,23 @@ export const PlanView: React.FC<PlanViewProps> = ({
               </h3>
               <p className="text-xs sm:text-sm text-[#6e8276] leading-relaxed">
                 {isAr
-                  ? 'يمكنك إضافة أجهزة جديدة من المكتبة، أو نسخ وتطابق التمارين من يوم تدريبي آخر.'
-                  : 'Füge Übungen aus der Bibliothek hinzu oder übernimm sie von einem anderen Tag.'}
+                  ? 'أضف أجهزتك وتمارينك يدويًا لهذا اليوم، أو انسخها من يوم تدريبي آخر.'
+                  : 'Füge deine Übungen manuell hinzu oder übernimm sie von einem anderen Tag.'}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              {onOpenLibrary && (
+              {onOpenAddExercise && (
                 <button
                   type="button"
                   onClick={() => {
                     triggerHaptic('selection');
-                    onOpenLibrary();
+                    onOpenAddExercise();
                   }}
                   className="px-5 py-2.5 rounded-2xl bg-[#215641] hover:bg-[#184232] text-white font-display font-bold text-xs sm:text-sm inline-flex items-center gap-2 shadow-xs active:scale-95 transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4 stroke-[2.5]" />
-                  <span>{isAr ? 'إضافة أجهزة من المكتبة' : 'Aus Bibliothek hinzufügen'}</span>
+                  <span>{isAr ? 'إضافة جهاز / تمرين' : 'Übung hinzufügen'}</span>
                 </button>
               )}
 
@@ -384,107 +366,69 @@ export const PlanView: React.FC<PlanViewProps> = ({
             )}
             {exercises.map((item, index) => {
             const isDone = completedExercises.has(item.id);
-            const itemMedia = (item.media && item.media.length > 0) ? item.media : (mediaMap[item.id] || []);
+            const itemMedia = (mediaMap[item.id] && mediaMap[item.id].length > 0)
+              ? mediaMap[item.id]
+              : (item.media || []);
             const firstMedia = itemMedia.length > 0 ? itemMedia[0] : null;
 
             return (
               <article
                 key={item.id}
-                className={`group rounded-3xl border transition-all duration-200 p-4 sm:p-5 min-w-0 ${
+                className={`group rounded-2xl border transition-all duration-150 p-3.5 sm:p-4 min-w-0 ${
                   isDone
-                    ? 'bg-[#f4f9f6] border-[#bad5c2] shadow-2xs'
-                    : 'bg-white border-[#e2ece5] hover:border-[#c5dbce] shadow-xs'
+                    ? 'bg-[#f4f8f5] border-[#c0dac8]'
+                    : 'bg-white border-[#e2ece5] hover:border-[#bad3c3]'
                 }`}
               >
-                <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
-                  {/* Thumbnail Cover or Sequence Number */}
-                  {firstMedia ? (
-                    <div className="relative flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          triggerHaptic('light');
-                          setActiveMediaViewer({
-                            name: item.nameDe,
-                            list: itemMedia,
-                            index: 0,
-                          });
-                        }}
-                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden relative border border-[#cbe3d3] bg-[#edf5f0] shadow-2xs block group-hover:border-[#96c4a8] transition-all cursor-pointer active:scale-95 text-start"
-                        title={isAr ? 'مشاهدة صورة وفيديو التكنيك' : 'Medien ansehen'}
-                      >
-                        {firstMedia.type === 'video' ? (
-                          <div className="w-full h-full relative bg-black flex items-center justify-center">
-                            <VideoThumbnail
-                              src={firstMedia.url}
-                              alt={item.nameDe}
-                              className="w-full h-full object-cover pointer-events-none"
-                            />
-                            <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
-                              <div className="w-6 h-6 rounded-full bg-black/60 backdrop-blur-xs flex items-center justify-center text-white">
-                                <Play className="w-3 h-3 fill-white translate-x-0.5" />
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <img
+                <div className="flex items-center gap-3 min-w-0">
+                  {/* Clean Accessible Completion Checkbox */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerHaptic('selection');
+                      onToggleExercise(item.id);
+                    }}
+                    aria-label={isDone ? (isAr ? 'إلغاء الإكمال' : 'Als unvollständig markieren') : (isAr ? 'تحديد كمكتمل' : 'Als erledigt markieren')}
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 cursor-pointer ${
+                      isDone
+                        ? 'bg-[#215641] text-white'
+                        : 'border-2 border-[#bad3c3] hover:border-[#215641] bg-white text-transparent'
+                    }`}
+                    title={isDone ? (isAr ? 'مكتمل' : 'Erledigt') : (isAr ? 'تحديد كمكتمل' : 'Als erledigt markieren')}
+                  >
+                    <Check className={`w-4 h-4 stroke-[3] ${isDone ? 'opacity-100' : 'opacity-0'}`} />
+                  </button>
+
+                  {/* Optional Media Thumbnail */}
+                  {firstMedia && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenExerciseMedia(item, itemMedia)}
+                      className="w-12 h-12 rounded-xl overflow-hidden relative border border-[#cbe3d3] bg-[#edf5f0] flex-shrink-0 cursor-pointer active:scale-95 text-start"
+                      title={isAr ? 'مشاهدة صورة وفيديو التكنيك' : 'Medien ansehen'}
+                    >
+                      {firstMedia.type === 'video' ? (
+                        <div className="w-full h-full relative bg-black flex items-center justify-center">
+                          <VideoThumbnail
                             src={firstMedia.url}
                             alt={item.nameDe}
                             className="w-full h-full object-cover pointer-events-none"
-                            referrerPolicy="no-referrer"
                           />
-                        )}
-
-                        {/* Multiple Media Count Badge */}
-                        {itemMedia.length > 1 && (
-                          <div className="absolute bottom-1 end-1 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-white text-[9px] font-bold font-mono leading-none">
-                            +{itemMedia.length - 1}
+                          <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                            <div className="w-5 h-5 rounded-full bg-black/60 backdrop-blur-xs flex items-center justify-center text-white">
+                              <Play className="w-2.5 h-2.5 fill-white translate-x-0.5" />
+                            </div>
                           </div>
-                        )}
-
-                        {/* Completion Dark Overlay */}
-                        {isDone && (
-                          <div className="absolute inset-0 bg-[#215641]/80 backdrop-blur-[1px] flex items-center justify-center text-white animate-in fade-in duration-200">
-                            <Check className="w-6 h-6 stroke-[3]" />
-                          </div>
-                        )}
-                      </button>
-
-                      {/* Quick Done/Undone Toggle Button */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerHaptic('selection');
-                          onToggleExercise(item.id);
-                        }}
-                        aria-label={isDone ? (isAr ? 'إلغاء الإكمال' : 'Als unvollständig markieren') : (isAr ? 'تحديد كمكتمل' : 'Als erledigt markieren')}
-                        className={`absolute -top-1.5 -start-1.5 w-6 h-6 rounded-full flex items-center justify-center transition-all shadow-xs z-10 cursor-pointer ${
-                          isDone
-                            ? 'bg-[#215641] text-white ring-2 ring-white scale-100'
-                            : 'bg-white text-[#6b8274] hover:text-[#215641] hover:bg-[#edf5f0] border border-[#cbe0d3] scale-90 sm:scale-75 group-hover:scale-100 hover:scale-105'
-                        }`}
-                        title={isDone ? (isAr ? 'مكتمل (انقر للإلغاء)' : 'Erledigt') : (isAr ? 'تحديد كمكتمل' : 'Als erledigt markieren')}
-                      >
-                        <Check className={`w-3.5 h-3.5 stroke-[3] ${isDone ? 'text-white' : 'text-[#75877d]'}`} />
-                      </button>
-                    </div>
-                  ) : (
-                    /* Fallback: Sequence & Completion Button */
-                    <button
-                      type="button"
-                      onClick={() => {
-                        triggerHaptic('selection');
-                        onToggleExercise(item.id);
-                      }}
-                      aria-label={`Übung ${index + 1} abschließen`}
-                      className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-display font-black text-sm sm:text-base transition-all flex-shrink-0 active:scale-90 cursor-pointer ${
-                        isDone
-                          ? 'bg-[#215641] text-white shadow-xs'
-                          : 'bg-[#edf5f0] text-[#215641] hover:bg-[#e2ede6] border border-[#d2e2d7]'
-                      }`}
-                    >
-                      {isDone ? <Check className="w-5 h-5 stroke-[3]" /> : index + 1}
+                        </div>
+                      ) : (
+                        <img
+                          src={firstMedia.url}
+                          alt={item.nameDe}
+                          className="w-full h-full object-cover pointer-events-none"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
                     </button>
                   )}
 
@@ -494,28 +438,27 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     className="flex-1 min-w-0 cursor-pointer py-0.5"
                   >
                     <h3
-                      className={`font-display font-extrabold text-base sm:text-lg leading-snug truncate transition-colors ${
+                      className={`font-display font-bold text-sm sm:text-base leading-snug truncate transition-colors ${
                         isDone
-                          ? 'text-[#4e6b5c] line-through decoration-[#86b59b]'
-                          : 'text-[#15241c] group-hover:text-[#215641]'
+                          ? 'text-[#5a7364] line-through decoration-[#86b59b]'
+                          : 'text-[#15241c] hover:text-[#215641]'
                       }`}
                     >
                       {item.nameDe}
                     </h3>
-                    <p className="text-xs sm:text-sm font-medium text-[#5a7364] truncate mt-0.5">
+                    <p className="text-xs text-[#6e8276] truncate mt-0.5">
                       {isAr ? item.muscleAr : item.muscleDe}
                     </p>
                   </div>
 
-                  {/* Sets × Reps Pill (Tap to Edit) */}
-                  <button
-                    type="button"
+                  {/* Sets × Reps Metadata (Tap to Edit) */}
+                  <div
                     onClick={() => onOpenEditExercise && onOpenEditExercise(item)}
-                    className="px-3.5 sm:px-4 py-2 rounded-2xl bg-[#edf5f0] hover:bg-[#e2ede6] border border-[#d2e2d7] text-[#173e2d] font-display font-black text-xs sm:text-sm transition-all active:scale-95 flex-shrink-0 cursor-pointer"
-                    title={isAr ? 'تعديل أو استبدال الجهاز' : 'Übung bearbeiten'}
+                    className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#edf5f0] text-[#1b4332] font-display font-bold text-xs sm:text-sm flex-shrink-0 cursor-pointer hover:bg-[#e0ece3] transition-colors"
+                    title={isAr ? 'تعديل الجهاز' : 'Bearbeiten'}
                   >
                     <span>{item.sets} × {item.reps}</span>
-                  </button>
+                  </div>
                 </div>
               </article>
             );
@@ -524,12 +467,12 @@ export const PlanView: React.FC<PlanViewProps> = ({
         )}
 
         {/* Add Exercise Button */}
-        {!isRest && onOpenLibrary && exercises.length > 0 && (
+        {!isRest && onOpenAddExercise && exercises.length > 0 && (
           <button
             type="button"
             onClick={() => {
               triggerHaptic('selection');
-              onOpenLibrary();
+              onOpenAddExercise();
             }}
             className="w-full py-4 px-5 rounded-3xl border-2 border-dashed border-[#bad5c2] hover:border-[#215641] bg-[#f9fcfa] hover:bg-[#edf5f0] text-[#215641] font-display font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99] shadow-2xs cursor-pointer"
           >
@@ -543,51 +486,6 @@ export const PlanView: React.FC<PlanViewProps> = ({
         )}
       </section>
 
-      {/* Important Notes Section */}
-      <section className="bg-white rounded-3xl border border-[#e2ebe4] overflow-hidden shadow-xs min-w-0">
-        <button
-          type="button"
-          onClick={() => setNotesOpen(!notesOpen)}
-          className="w-full flex items-center justify-between p-4 sm:p-4.5 hover:bg-[#fafcfa] transition-colors min-w-0 cursor-pointer"
-        >
-          <div className="flex items-center gap-2.5 text-[#215641] min-w-0">
-            <Info className="w-4.5 h-4.5 flex-shrink-0 stroke-[2.2]" />
-            <h3 className="font-display font-extrabold text-sm sm:text-base text-[#15241c] truncate">
-              {t.notesTitle}
-            </h3>
-          </div>
-          <ChevronDown
-            className={`w-4 h-4 text-[#75877d] transition-transform duration-200 flex-shrink-0 ${
-              notesOpen ? 'rotate-180' : ''
-            }`}
-          />
-        </button>
-
-        <AnimatePresence>
-          {notesOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.15 }}
-              className="px-4.5 pb-4.5 pt-1 border-t border-[#edf4ee] space-y-2 overflow-hidden min-w-0"
-            >
-              <ul className="space-y-2 min-w-0">
-                {notesList.map((note, idx) => (
-                  <li
-                    key={idx}
-                    className="flex items-start gap-2.5 text-xs sm:text-sm text-[#4f6156] leading-relaxed min-w-0"
-                  >
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#215641] flex-shrink-0" />
-                    <span className="break-words">{note}</span>
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </section>
-
       {/* Day Customization Modal (نسخ / ربط / تغيير نوع اليوم) */}
       <DayScheduleModal
         isOpen={isDayModalOpen}
@@ -596,16 +494,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
         plan={plan}
         currentLang={currentLang}
         onUpdatePlan={onUpdatePlan}
-        showToast={showToast}
-      />
-
-      {/* Plan Export & Import Modal */}
-      <PlanShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        plan={plan}
-        currentLang={currentLang}
-        onUpdatePlan={onUpdatePlan}
+        onClearExercises={onClearPlan}
         showToast={showToast}
       />
 

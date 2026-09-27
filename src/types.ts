@@ -1,11 +1,5 @@
 export type Language = 'de' | 'ar';
-export type ViewTab = 'plan' | 'timer' | 'audio' | 'tools' | 'stats' | 'profile';
-
-export interface LyricLine {
-  id?: string;
-  time: number; // Start timestamp in seconds (e.g. 14.5)
-  text: string; // The lyric text
-}
+export type ViewTab = 'plan' | 'timer' | 'audio' | 'profile';
 
 export interface ExerciseMediaItem {
   id: string;

@@ -1,33 +1,30 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ViewTab, Language, WorkoutPlan, ExerciseItem, DayIndex } from './types';
 import { DEFAULT_WORKOUT_PLAN, I18N } from './data/workoutData';
-import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { PlanView } from './components/PlanView';
 import { TimerView } from './components/TimerView';
-import { AudioView } from './components/AudioView';
-import { StatsView } from './components/StatsView';
-import { ToolsView } from './components/ToolsView';
 import { ConfirmModal } from './components/ConfirmModal';
 import { SplashScreen } from './components/SplashScreen';
 import { AudioProvider } from './context/AudioContext';
 import { TimerProvider } from './context/TimerContext';
-import { FloatingMiniPlayer } from './components/FloatingMiniPlayer';
-import { FontSettingsModal } from './components/FontSettingsModal';
-import { DebugLogsModal } from './components/DebugLogsModal';
-import { SettingsModal } from './components/SettingsModal';
-import { ActiveWorkoutModal } from './components/ActiveWorkoutModal';
-import { LibraryModal } from './components/LibraryModal';
-import { ExerciseEditModal } from './components/ExerciseEditModal';
-import { PlanShareModal } from './components/PlanShareModal';
-import { ProfileView } from './components/ProfileView';
+import { ModernAudioMiniBar } from './components/ModernAudioMiniBar';
 import { triggerHaptic } from './utils/haptics';
 import { initializeCustomFonts } from './utils/customFonts';
 import { StatusBar } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
+
+// Lazy-loaded secondary views and heavy modals for instant cold start
+const AudioView = lazy(() => import('./components/AudioView').then((m) => ({ default: m.AudioView })));
+const ProfileView = lazy(() => import('./components/ProfileView').then((m) => ({ default: m.ProfileView })));
+
+const ActiveWorkoutModal = lazy(() => import('./components/ActiveWorkoutModal').then((m) => ({ default: m.ActiveWorkoutModal })));
+const AddExerciseModal = lazy(() => import('./components/AddExerciseModal').then((m) => ({ default: m.AddExerciseModal })));
+const ExerciseEditModal = lazy(() => import('./components/ExerciseEditModal').then((m) => ({ default: m.ExerciseEditModal })));
+const PlanShareModal = lazy(() => import('./components/PlanShareModal').then((m) => ({ default: m.PlanShareModal })));
+const FontSettingsModal = lazy(() => import('./components/FontSettingsModal').then((m) => ({ default: m.FontSettingsModal })));
 import {
-  getStoredLibraryExercises,
-  saveLibraryExercises,
   getStoredActivePlan,
   saveActivePlan,
   hardResetApp,
@@ -38,10 +35,8 @@ import {
   isDayRestDay,
   addExerciseToDay,
   updateExerciseOnDay,
-  swapExerciseOnDay,
   removeExerciseFromDay,
   clearDayExercises,
-  setTrainingDays,
   getScheduleSubtitle,
   DAYS_NAMES_AR,
   DAYS_NAMES_DE,
@@ -58,11 +53,6 @@ interface ConfirmModalState {
 }
 
 export default function App() {
-  // Library & Workout Plan states backed by localStorage
-  const [libraryExercises, setLibraryExercises] = useState<ExerciseItem[]>(() => {
-    return getStoredLibraryExercises();
-  });
-
   const [activePlan, setActivePlan] = useState<WorkoutPlan>(() => {
     return getStoredActivePlan();
   });
@@ -111,14 +101,10 @@ export default function App() {
   });
 
   const [isFontModalOpen, setIsFontModalOpen] = useState<boolean>(false);
-  const [isDebugLogsOpen, setIsDebugLogsOpen] = useState<boolean>(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isPlanShareModalOpen, setIsPlanShareModalOpen] = useState<boolean>(false);
   const [isActiveWorkoutOpen, setIsActiveWorkoutOpen] = useState<boolean>(false);
-  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState<boolean>(false);
+  const [isAddExerciseOpen, setIsAddExerciseOpen] = useState<boolean>(false);
   const [editingExercise, setEditingExercise] = useState<ExerciseItem | null>(null);
-  const [hasActiveFloatingControl, setHasActiveFloatingControl] = useState<boolean>(false);
-  const [isFloatingExpanded, setIsFloatingExpanded] = useState<boolean>(false);
 
   const [currentTab, setCurrentTab] = useState<ViewTab>('plan');
 
@@ -163,11 +149,13 @@ export default function App() {
   useEffect(() => {
     initializeCustomFonts();
     const enableFullScreenMode = async () => {
-      try {
-        await StatusBar.hide();
-        await StatusBar.setOverlaysWebView({ overlay: true });
-      } catch {
-        // Fallback for standard web browser environment
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await StatusBar.hide();
+          await StatusBar.setOverlaysWebView({ overlay: true });
+        } catch {
+          // Fallback
+        }
       }
     };
     enableFullScreenMode();
@@ -245,15 +233,6 @@ export default function App() {
     });
   };
 
-  const handleToggleAllAlts = () => {
-    triggerHaptic('selection');
-    if (openPanels.size === activePlan.exercises.length) {
-      setOpenPanels(new Set());
-    } else {
-      setOpenPanels(new Set(activePlan.exercises.map((e) => e.id)));
-    }
-  };
-
   const handleRequestResetProgress = () => {
     triggerHaptic('warning');
     setConfirmModal({
@@ -300,9 +279,6 @@ export default function App() {
         const isDone = completedExercises.has(item.id);
         text += `${index + 1}. [${isDone ? '✓' : ' '}] ${name}\n`;
         text += `   ${item.sets} ${isAr ? 'مجموعات' : 'Sätze'} × ${item.reps}\n`;
-        if (item.alternatives.length > 0) {
-          text += `   ${isAr ? 'البدائل:' : 'Alternativen:'} ${item.alternatives.join(', ')}\n`;
-        }
       });
     }
 
@@ -322,24 +298,22 @@ export default function App() {
     }
   };
 
-  // Derived current day exercises & rest status
-  const currentDayExercises = getExercisesForDay(activePlan, selectedDayIndex);
+  // Derived current day exercises & rest status (Memoized to prevent unnecessary re-renders)
+  const currentDayExercises = useMemo(
+    () => getExercisesForDay(activePlan, selectedDayIndex),
+    [activePlan, selectedDayIndex]
+  );
   const isCurrentDayRest = isDayRestDay(activePlan, selectedDayIndex);
+  const currentDayName = currentLang === 'ar' ? DAYS_NAMES_AR[selectedDayIndex] : DAYS_NAMES_DE[selectedDayIndex];
 
-  // Library & Plan Modification Handlers
-  const handleUpdateLibrary = (newLib: ExerciseItem[]) => {
-    setLibraryExercises(newLib);
-    saveLibraryExercises(newLib);
-    showToast(currentLang === 'ar' ? 'تم تحديث مكتبة الأجهزة' : 'Bibliothek aktualisiert');
-  };
-
+  // Plan Modification Handlers
   const handleAddExerciseToPlan = (exercise: ExerciseItem) => {
     const updatedPlan = addExerciseToDay(activePlan, selectedDayIndex, exercise);
     setActivePlan(updatedPlan);
     saveActivePlan(updatedPlan);
     showToast(
       currentLang === 'ar'
-        ? `تمت إضافة "${exercise.nameDe}" إلى جدول التمرين`
+        ? `تمت إضافة "${exercise.nameDe}" بنجاح`
         : `"${exercise.nameDe}" zum Plan hinzugefügt`
     );
   };
@@ -396,7 +370,7 @@ export default function App() {
           ? 'هذا اليوم فارغ أو يوم راحة! أضف أجهزة أولاً لبدء التدريب'
           : 'Dieser Tag ist leer oder ein Ruhetag! Füge zuerst Übungen hinzu.'
       );
-      setIsLibraryModalOpen(true);
+      setIsAddExerciseOpen(true);
       return;
     }
     setIsActiveWorkoutOpen(true);
@@ -418,17 +392,6 @@ export default function App() {
         hardResetApp();
       },
     });
-  };
-
-  const handleSwapExerciseInPlan = (oldId: number, replacement: ExerciseItem) => {
-    const updatedPlan = swapExerciseOnDay(activePlan, selectedDayIndex, oldId, replacement);
-    setActivePlan(updatedPlan);
-    saveActivePlan(updatedPlan);
-    showToast(
-      currentLang === 'ar'
-        ? `تم استبدال الجهاز بـ "${replacement.nameDe}"`
-        : `Ersetzt durch "${replacement.nameDe}"`
-    );
   };
 
   const handleFinishActiveWorkout = (completedIds: number[]) => {
@@ -488,17 +451,8 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Top Header & Integrated Dynamic Island */}
-        <Header
-          currentTab={currentTab}
-          onNavigateTab={handleTabChange}
-          currentLang={currentLang}
-          onActiveStatusChange={setHasActiveFloatingControl}
-          onExpandStatusChange={setIsFloatingExpanded}
-        />
-
-        {/* Main View Container */}
-        <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-4 pt-[72px] sm:pt-[88px] pb-28 overflow-x-hidden min-w-0">
+        {/* Main View Container (Clean, distraction-free top spacing) */}
+        <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-4 pt-3.5 sm:pt-5 pb-28 overflow-x-hidden min-w-0">
           <AnimatePresence mode="wait">
             {currentTab === 'plan' && (
               <motion.div
@@ -526,7 +480,7 @@ export default function App() {
                     saveActivePlan(updated);
                   }}
                   onStartActiveWorkout={handleStartActiveWorkout}
-                  onOpenLibrary={() => setIsLibraryModalOpen(true)}
+                  onOpenAddExercise={() => setIsAddExerciseOpen(true)}
                   onOpenEditExercise={(exercise) => setEditingExercise(exercise)}
                   onRemoveExercise={handleRemoveExerciseFromPlan}
                   onClearPlan={handleClearAllExercisesFromPlan}
@@ -555,41 +509,9 @@ export default function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
               >
-                <AudioView currentLang={currentLang} />
-              </motion.div>
-            )}
-
-            {currentTab === 'tools' && (
-              <motion.div
-                key="view-tools"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-              >
-                <ToolsView currentLang={currentLang} />
-              </motion.div>
-            )}
-
-            {currentTab === 'stats' && (
-              <motion.div
-                key="view-stats"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-              >
-                <StatsView
-                  currentLang={currentLang}
-                  completedExercises={completedExercises}
-                  totalSessions={totalSessions}
-                  plan={activePlan}
-                  onUpdateTrainingDays={(newDays) => {
-                    const updated = setTrainingDays(activePlan, newDays);
-                    setActivePlan(updated);
-                    saveActivePlan(updated);
-                  }}
-                />
+                <Suspense fallback={null}>
+                  <AudioView currentLang={currentLang} />
+                </Suspense>
               </motion.div>
             )}
 
@@ -601,22 +523,30 @@ export default function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
               >
-                <ProfileView
-                  currentLang={currentLang}
-                  onSelectLang={handleLanguageChange}
-                  onOpenFontSettings={() => setIsFontModalOpen(true)}
-                  onOpenDebugLogs={() => setIsDebugLogsOpen(true)}
-                  onOpenLibrary={() => setIsLibraryModalOpen(true)}
-                  onResetProgress={handleRequestResetProgress}
-                  onCopyPlan={handleCopyPlan}
-                  totalSessions={totalSessions}
-                  completedExercisesCount={completedExercises.size}
-                  plan={activePlan}
-                />
+                <Suspense fallback={null}>
+                  <ProfileView
+                    currentLang={currentLang}
+                    onSelectLang={handleLanguageChange}
+                    onOpenFontSettings={() => setIsFontModalOpen(true)}
+                    onOpenPlanShare={() => setIsPlanShareModalOpen(true)}
+                    onResetProgress={handleRequestResetProgress}
+                    onCopyPlan={handleCopyPlan}
+                    totalSessions={totalSessions}
+                    completedExercisesCount={completedExercises.size}
+                    plan={activePlan}
+                  />
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>
         </main>
+
+        {/* Modern Lightweight Audio Mini-Bar (Appears only when audio is actively playing outside audio tab) */}
+        <ModernAudioMiniBar
+          currentTab={currentTab}
+          onNavigateTab={handleTabChange}
+          lang={currentLang}
+        />
 
         {/* Liquid Glass Bottom Navigation Dock */}
         <MobileBottomNav
@@ -626,91 +556,76 @@ export default function App() {
         />
 
         {/* Active Guided Workout Session Modal */}
-        <ActiveWorkoutModal
-          isOpen={isActiveWorkoutOpen}
-          onClose={() => setIsActiveWorkoutOpen(false)}
-          plan={{
-            ...activePlan,
-            exercises: currentDayExercises,
-          }}
-          currentLang={currentLang}
-          onFinishWorkout={handleFinishActiveWorkout}
-          onOpenLibrary={() => setIsLibraryModalOpen(true)}
-        />
+        {isActiveWorkoutOpen && (
+          <Suspense fallback={null}>
+            <ActiveWorkoutModal
+              isOpen={isActiveWorkoutOpen}
+              onClose={() => setIsActiveWorkoutOpen(false)}
+              plan={{
+                ...activePlan,
+                exercises: currentDayExercises,
+              }}
+              currentLang={currentLang}
+              onFinishWorkout={handleFinishActiveWorkout}
+            />
+          </Suspense>
+        )}
 
-        {/* Full Exercise & Machine Library Modal */}
-        <LibraryModal
-          isOpen={isLibraryModalOpen}
-          onClose={() => setIsLibraryModalOpen(false)}
-          currentLang={currentLang}
-          libraryExercises={libraryExercises}
-          onUpdateLibrary={handleUpdateLibrary}
-          activePlan={{
-            ...activePlan,
-            exercises: currentDayExercises,
-          }}
-          onAddExerciseToPlan={handleAddExerciseToPlan}
-        />
+        {/* Direct Manual Add Exercise / Machine Modal */}
+        {isAddExerciseOpen && (
+          <Suspense fallback={null}>
+            <AddExerciseModal
+              isOpen={isAddExerciseOpen}
+              onClose={() => setIsAddExerciseOpen(false)}
+              currentLang={currentLang}
+              onAddExercise={handleAddExerciseToPlan}
+              dayName={currentDayName}
+            />
+          </Suspense>
+        )}
 
-        {/* Quick Exercise Card Editor / Swapper Modal */}
-        <ExerciseEditModal
-          isOpen={editingExercise !== null}
-          onClose={() => setEditingExercise(null)}
-          exercise={editingExercise}
-          currentLang={currentLang}
-          libraryExercises={libraryExercises}
-          onSaveExercise={handleSaveExerciseInPlan}
-          onRemoveFromPlan={handleRemoveExerciseFromPlan}
-          onSwapExercise={handleSwapExerciseInPlan}
-          onOpenFullLibrary={() => setIsLibraryModalOpen(true)}
-        />
-
-        {/* Settings Modal */}
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          currentLang={currentLang}
-          onSelectLang={(lang) => {
-            setCurrentLang(lang);
-            showToast(lang === 'ar' ? 'تم ضبط لغة التطبيق إلى العربية' : 'Sprache auf Deutsch festgelegt');
-          }}
-          onOpenFontSettings={() => setIsFontModalOpen(true)}
-          onOpenDebugLogs={() => setIsDebugLogsOpen(true)}
-          onOpenLibrary={() => setIsLibraryModalOpen(true)}
-          onOpenPlanShare={() => setIsPlanShareModalOpen(true)}
-          onResetProgress={handleRequestResetProgress}
-          onCopyPlan={handleCopyPlan}
-          onFactoryReset={handleFactoryReset}
-          libraryExercisesCount={libraryExercises.length}
-        />
+        {/* Quick Exercise Card Editor Modal */}
+        {editingExercise !== null && (
+          <Suspense fallback={null}>
+            <ExerciseEditModal
+              isOpen={editingExercise !== null}
+              onClose={() => setEditingExercise(null)}
+              exercise={editingExercise}
+              currentLang={currentLang}
+              onSaveExercise={handleSaveExerciseInPlan}
+              onRemoveFromPlan={handleRemoveExerciseFromPlan}
+            />
+          </Suspense>
+        )}
 
         {/* Plan Export & Import Modal */}
-        <PlanShareModal
-          isOpen={isPlanShareModalOpen}
-          onClose={() => setIsPlanShareModalOpen(false)}
-          plan={activePlan}
-          currentLang={currentLang}
-          onUpdatePlan={handleUpdatePlan}
-          showToast={showToast}
-        />
+        {isPlanShareModalOpen && (
+          <Suspense fallback={null}>
+            <PlanShareModal
+              isOpen={isPlanShareModalOpen}
+              onClose={() => setIsPlanShareModalOpen(false)}
+              plan={activePlan}
+              currentLang={currentLang}
+              onUpdatePlan={handleUpdatePlan}
+              showToast={showToast}
+            />
+          </Suspense>
+        )}
 
         {/* Font Settings Modal */}
-        <FontSettingsModal
-          isOpen={isFontModalOpen}
-          onClose={() => setIsFontModalOpen(false)}
-          lang={currentLang}
-          currentTitleFont={titleFont}
-          currentBodyFont={bodyFont}
-          onSelectTitleFont={setTitleFont}
-          onSelectBodyFont={setBodyFont}
-        />
-
-        {/* Debug Logs Console */}
-        <DebugLogsModal
-          isOpen={isDebugLogsOpen}
-          onClose={() => setIsDebugLogsOpen(false)}
-          currentLang={currentLang}
-        />
+        {isFontModalOpen && (
+          <Suspense fallback={null}>
+            <FontSettingsModal
+              isOpen={isFontModalOpen}
+              onClose={() => setIsFontModalOpen(false)}
+              lang={currentLang}
+              currentTitleFont={titleFont}
+              currentBodyFont={bodyFont}
+              onSelectTitleFont={setTitleFont}
+              onSelectBodyFont={setBodyFont}
+            />
+          </Suspense>
+        )}
 
         {/* Confirmation Modal */}
         <ConfirmModal

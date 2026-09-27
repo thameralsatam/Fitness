@@ -186,78 +186,433 @@ const getEx = (id: number): ExerciseItem => {
 
 export const DEFAULT_WORKOUT_PLAN: WorkoutPlan = {
   id: 'custom_workout_plan',
-  nameDe: "4-Tage Ober- / Unterkörper Split",
-  nameAr: "جدول تقسيم علوي / سفلي (4 أيام)",
-  scheduleDaysDe: "4 Tage pro Woche (Mo, Di, Do, Fr)",
-  scheduleDaysAr: "4 أيام في الأسبوع (إث، ثل، خم، جم)",
-  frequencyDe: "4 Tage / Woche",
-  frequencyAr: "4 أيام / الأسبوع",
-  trainingDays: [0, 1, 3, 4],
-  exercises: [getEx(28), getEx(30), getEx(62), getEx(29), getEx(86), getEx(6)],
+  nameDe: "5-Tage Trainingsplan (Upper / Lower / PPL)",
+  nameAr: "جدول التمارين (5 أيام)",
+  scheduleDaysDe: "5x pro Woche (Mo, Di, Do, Fr, Sa)",
+  scheduleDaysAr: "5 أيام في الأسبوع (إث، ثل، خم، جم، سب)",
+  frequencyDe: "5 Tage pro Woche",
+  frequencyAr: "5 أيام في الأسبوع",
+  trainingDays: [0, 1, 3, 4, 5],
+  exercises: [
+    {
+      id: 101,
+      nameDe: "Chest Press Machine",
+      muscleAr: "عضلات الصدر",
+      muscleDe: "Brust",
+      sets: "3",
+      reps: "6–8",
+      alternatives: ["Incline Chest Press", "Chest Press"]
+    },
+    {
+      id: 102,
+      nameDe: "Lat Pulldown",
+      muscleAr: "الظهر (اللاتس)",
+      muscleDe: "Rücken (Lat)",
+      sets: "3",
+      reps: "6–10",
+      alternatives: ["Chest Supported Row", "Seated Row"]
+    },
+    {
+      id: 103,
+      nameDe: "Incline Chest Press",
+      muscleAr: "الصدر (العلوي)",
+      muscleDe: "Brust (Obere)",
+      sets: "2",
+      reps: "8–12",
+      alternatives: ["Chest Press Machine", "Pec Deck / Chest Fly"]
+    },
+    {
+      id: 104,
+      nameDe: "Chest Supported Row",
+      muscleAr: "عضلات الظهر",
+      muscleDe: "Rücken",
+      sets: "2",
+      reps: "8–12",
+      alternatives: ["Lat Pulldown", "Seated Row"]
+    },
+    {
+      id: 105,
+      nameDe: "Reverse Fly",
+      muscleAr: "الأكتاف (الخلفية)",
+      muscleDe: "Schultern (Posterior)",
+      sets: "2",
+      reps: "10–15",
+      alternatives: ["Lateral Raise"]
+    },
+    {
+      id: 106,
+      nameDe: "Lateral Raise",
+      muscleAr: "الأكتاف (الجانبية)",
+      muscleDe: "Schultern (Seitlich)",
+      sets: "3",
+      reps: "10–15",
+      alternatives: ["Shoulder Press"]
+    },
+    {
+      id: 107,
+      nameDe: "Triceps Extension",
+      muscleAr: "الترايسبس",
+      muscleDe: "Arme (Trizeps)",
+      sets: "2",
+      reps: "10–15",
+      alternatives: ["Overhead Triceps Extension", "Machine Dip"]
+    },
+    {
+      id: 108,
+      nameDe: "Preacher Curl",
+      muscleAr: "البايسبس",
+      muscleDe: "Arme (Bizeps)",
+      sets: "2",
+      reps: "10–15",
+      alternatives: ["Biceps Curl", "Cable Biceps Curl"]
+    }
+  ],
   days: {
     0: {
       isRestDay: false,
-      focusTitleAr: "علوي 1 (Upper A)",
-      focusTitleDe: "Oberkörper A (Upper A)",
-      exercises: [getEx(28), getEx(30), getEx(62), getEx(29), getEx(86), getEx(6)],
+      focusTitleAr: "الجزء العلوي",
+      focusTitleDe: "Oberkörper",
       linkedDay: null,
+      exercises: [
+        {
+          id: 101,
+          nameDe: "Chest Press Machine",
+          muscleAr: "عضلات الصدر",
+          muscleDe: "Brust",
+          sets: "3",
+          reps: "6–8",
+          alternatives: ["Incline Chest Press", "Chest Press"]
+        },
+        {
+          id: 102,
+          nameDe: "Lat Pulldown",
+          muscleAr: "الظهر (اللاتس)",
+          muscleDe: "Rücken (Lat)",
+          sets: "3",
+          reps: "6–10",
+          alternatives: ["Chest Supported Row", "Seated Row"]
+        },
+        {
+          id: 103,
+          nameDe: "Incline Chest Press",
+          muscleAr: "الصدر (العلوي)",
+          muscleDe: "Brust (Obere)",
+          sets: "2",
+          reps: "8–12",
+          alternatives: ["Chest Press Machine", "Pec Deck / Chest Fly"]
+        },
+        {
+          id: 104,
+          nameDe: "Chest Supported Row",
+          muscleAr: "عضلات الظهر",
+          muscleDe: "Rücken",
+          sets: "2",
+          reps: "8–12",
+          alternatives: ["Lat Pulldown", "Seated Row"]
+        },
+        {
+          id: 105,
+          nameDe: "Reverse Fly",
+          muscleAr: "الأكتاف (الخلفية)",
+          muscleDe: "Schultern (Posterior)",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Lateral Raise"]
+        },
+        {
+          id: 106,
+          nameDe: "Lateral Raise",
+          muscleAr: "الأكتاف (الجانبية)",
+          muscleDe: "Schultern (Seitlich)",
+          sets: "3",
+          reps: "10–15",
+          alternatives: ["Shoulder Press"]
+        },
+        {
+          id: 107,
+          nameDe: "Triceps Extension",
+          muscleAr: "الترايسبس",
+          muscleDe: "Arme (Trizeps)",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Overhead Triceps Extension", "Machine Dip"]
+        },
+        {
+          id: 108,
+          nameDe: "Preacher Curl",
+          muscleAr: "البايسبس",
+          muscleDe: "Arme (Bizeps)",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Biceps Curl", "Cable Biceps Curl"]
+        }
+      ]
     },
     1: {
       isRestDay: false,
-      focusTitleAr: "سفلي 1 (Lower A)",
-      focusTitleDe: "Unterkörper A (Lower A)",
-      exercises: [getEx(17), getEx(21), getEx(10), getEx(99), getEx(57)],
+      focusTitleAr: "الجزء السفلي",
+      focusTitleDe: "Unterkörper",
       linkedDay: null,
+      exercises: [
+        {
+          id: 109,
+          nameDe: "Leg Press",
+          muscleAr: "الأرجل والأرداف",
+          muscleDe: "Beine & Gesäß",
+          sets: "3",
+          reps: "6–10",
+          alternatives: ["Hack Squat"]
+        },
+        {
+          id: 110,
+          nameDe: "Romanian Deadlift (RDL)",
+          muscleAr: "الظهر الخلفي والأرجل",
+          muscleDe: "Beine (Beuger & Gesäß)",
+          sets: "3",
+          reps: "8–10",
+          alternatives: ["Seated Leg Curl", "Reverse Hyperextension"]
+        },
+        {
+          id: 111,
+          nameDe: "Seated Leg Curl",
+          muscleAr: "الأرجل (الفخذ الخلفي)",
+          muscleDe: "Beine (Beuger)",
+          sets: "3",
+          reps: "10–15",
+          alternatives: ["Lying Leg Curl"]
+        },
+        {
+          id: 112,
+          nameDe: "Leg Extension",
+          muscleAr: "الأرجل (الفخذ الأمامي)",
+          muscleDe: "Beine (Quadrizeps)",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Leg Press", "Hack Squat"]
+        },
+        {
+          id: 113,
+          nameDe: "Standing Calf Raise",
+          muscleAr: "عضلات الساق (السمانة)",
+          muscleDe: "Waden",
+          sets: "3",
+          reps: "8–12",
+          alternatives: ["Seated Calf Raise"]
+        },
+        {
+          id: 114,
+          nameDe: "Abdominal Crunch",
+          muscleAr: "عضلات البطن",
+          muscleDe: "Bauch",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Reverse Hyperextension"]
+        }
+      ]
     },
     2: {
       isRestDay: true,
-      focusTitleAr: "راحة تامة (استشفاء)",
-      focusTitleDe: "Ruhetag & Regeneration",
-      exercises: [],
+      focusTitleAr: "راحة واستشفاء",
+      focusTitleDe: "Ruhetag & Erholung",
       linkedDay: null,
+      exercises: []
     },
     3: {
       isRestDay: false,
-      focusTitleAr: "علوي 2 (Upper B)",
-      focusTitleDe: "Oberkörper B (Upper B)",
-      exercises: [getEx(84), getEx(51), getEx(74), getEx(79), getEx(89), getEx(24), getEx(94)],
+      focusTitleAr: "الدفع (Push)",
+      focusTitleDe: "Push (Brust, Schultern, Trizeps)",
       linkedDay: null,
+      exercises: [
+        {
+          id: 115,
+          nameDe: "Chest Press",
+          muscleAr: "عضلات الصدر",
+          muscleDe: "Brust",
+          sets: "3",
+          reps: "8–10",
+          alternatives: ["Incline Chest Press", "Pec Deck / Chest Fly"]
+        },
+        {
+          id: 116,
+          nameDe: "Shoulder Press",
+          muscleAr: "الأكتاف",
+          muscleDe: "Schultern",
+          sets: "3",
+          reps: "6–10",
+          alternatives: ["Lateral Raise"]
+        },
+        {
+          id: 117,
+          nameDe: "Pec Deck / Chest Fly",
+          muscleAr: "عضلات الصدر",
+          muscleDe: "Brust",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Chest Press"]
+        },
+        {
+          id: 118,
+          nameDe: "Lateral Raise",
+          muscleAr: "الأكتاف (الجانبية)",
+          muscleDe: "Schultern (Seitlich)",
+          sets: "3",
+          reps: "10–15",
+          alternatives: ["Shoulder Press"]
+        },
+        {
+          id: 119,
+          nameDe: "Machine Dip",
+          muscleAr: "الصدر والترايسبس",
+          muscleDe: "Brust & Trizeps",
+          sets: "3",
+          reps: "8–12",
+          alternatives: ["Triceps Extension", "Overhead Triceps Extension"]
+        },
+        {
+          id: 120,
+          nameDe: "Overhead Triceps Extension",
+          muscleAr: "الترايسبس",
+          muscleDe: "Arme (Trizeps)",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Triceps Extension", "Machine Dip"]
+        }
+      ]
     },
     4: {
       isRestDay: false,
-      focusTitleAr: "سفلي 2 (Lower B)",
-      focusTitleDe: "Unterkörper B (Lower B)",
-      exercises: [getEx(17), getEx(21), getEx(10), getEx(15)],
+      focusTitleAr: "السحب (Pull)",
+      focusTitleDe: "Pull (Rücken, Bizeps)",
       linkedDay: null,
+      exercises: [
+        {
+          id: 121,
+          nameDe: "Lat Pulldown",
+          muscleAr: "الظهر (اللاتس)",
+          muscleDe: "Rücken (Lat)",
+          sets: "3",
+          reps: "8–10",
+          alternatives: ["Chest Supported Row", "Seated Row"]
+        },
+        {
+          id: 122,
+          nameDe: "Seated Row",
+          muscleAr: "عضلات الظهر",
+          muscleDe: "Rücken",
+          sets: "3",
+          reps: "8–12",
+          alternatives: ["Chest Supported Row", "Lat Pulldown"]
+        },
+        {
+          id: 123,
+          nameDe: "Reverse Fly",
+          muscleAr: "الأكتاف (الخلفية)",
+          muscleDe: "Schultern (Posterior)",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Lateral Raise"]
+        },
+        {
+          id: 124,
+          nameDe: "Biceps Curl",
+          muscleAr: "البايسبس",
+          muscleDe: "Arme (Bizeps)",
+          sets: "3",
+          reps: "8–12",
+          alternatives: ["Preacher Curl", "Cable Biceps Curl"]
+        },
+        {
+          id: 125,
+          nameDe: "Cable Biceps Curl",
+          muscleAr: "البايسبس",
+          muscleDe: "Arme (Bizeps)",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Biceps Curl", "Preacher Curl"]
+        }
+      ]
     },
     5: {
-      isRestDay: true,
-      focusTitleAr: "راحة واستشفاء",
-      focusTitleDe: "Ruhetag & Erholung",
-      exercises: [],
+      isRestDay: false,
+      focusTitleAr: "الأرجل والبطن",
+      focusTitleDe: "Beine & Rumpf",
       linkedDay: null,
+      exercises: [
+        {
+          id: 126,
+          nameDe: "Hack Squat",
+          muscleAr: "الأرجل (الفخذ الأمامي)",
+          muscleDe: "Beine (Quadrizeps)",
+          sets: "3",
+          reps: "8–12",
+          alternatives: ["Leg Press"]
+        },
+        {
+          id: 127,
+          nameDe: "Lying Leg Curl",
+          muscleAr: "الأرجل (الفخذ الخلفي)",
+          muscleDe: "Beine (Beuger)",
+          sets: "3",
+          reps: "10–15",
+          alternatives: ["Seated Leg Curl"]
+        },
+        {
+          id: 128,
+          nameDe: "Leg Extension",
+          muscleAr: "الأرجل (الفخذ الأمامي)",
+          muscleDe: "Beine (Quadrizeps)",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Hack Squat", "Leg Press"]
+        },
+        {
+          id: 129,
+          nameDe: "Reverse Hyperextension",
+          muscleAr: "أسفل الظهر والأرداف",
+          muscleDe: "Unterer Rücken & Gesäß",
+          sets: "2",
+          reps: "10–15",
+          alternatives: ["Romanian Deadlift (RDL)"]
+        },
+        {
+          id: 130,
+          nameDe: "Seated Calf Raise",
+          muscleAr: "عضلات الساق (السمانة)",
+          muscleDe: "Waden",
+          sets: "3",
+          reps: "10–15",
+          alternatives: ["Standing Calf Raise"]
+        },
+        {
+          id: 131,
+          nameDe: "Abdominal Crunch",
+          muscleAr: "عضلات البطن",
+          muscleDe: "Bauch",
+          sets: "2",
+          reps: "12–20",
+          alternatives: ["Reverse Hyperextension"]
+        }
+      ]
     },
     6: {
       isRestDay: true,
       focusTitleAr: "راحة واستشفاء",
       focusTitleDe: "Ruhetag & Erholung",
-      exercises: [],
       linkedDay: null,
-    },
+      exercises: []
+    }
   },
   notesDe: [
-    "Warm-up: 5–10 Minuten leichtes Aufwärmen vor dem Krafttraining.",
-    "Pause: ca. 90 Sekunden kontrollierte Pause zwischen den Sätzen.",
-    "RIR 2: Satz beenden, wenn noch ca. 2 saubere Wiederholungen möglich wären.",
-    "Sobald die Obergrenze der Wiederholungen mit sauberer Technik leicht fällt, das Gewicht moderat steigern.",
-    "Ausreichend Schlaf und Proteinzufuhr für optimale Regeneration sichern."
+    "RIR (Repetitions in Reserve): Hauptübungen 2, Isolationsübungen 1–2.",
+    "Mittwoch & Sonntag: Ruhetage für optimale Muskelregeneration.",
+    "Warm-up: 5–10 Minuten leicht vor dem Krafttraining.",
+    "Pause: ca. 60–90 Sekunden zwischen den Sätzen."
   ],
   notesAr: [
-    "الإحماء (Warm-up): 5–10 دقائق إحماء خفيف قبل البدء بأوزان الحديد.",
-    "الراحة (Pause): حوالي 90 ثانية استشفاء منتظم بين المجموعات.",
-    "مقياس الجهد (RIR 2): التوقف عندما يتبقى تكراران ممكنان بتكنيك سليم لتفادي الإجهاد المفرط.",
-    "عند إتقان التكرارات بسهولة مع تكنيك نظيف، يتم التدرج بالوزن قليلاً.",
-    "احرص على النوم الجيد والتغذية السليمة لضمان البناء والاستشفاء العضلي."
+    "مقياس الجهد (RIR): أغلب التمارين 2، وتمارين العزل ممكن 1–2.",
+    "الأربعاء والأحد: راحة واستشفاء عضلي.",
+    "الإحماء (Warm-up): 5–10 دقائق خفيف قبل أوزان الحديد.",
+    "الراحة بين المجموعات: 60–90 ثانية لضمان استعادة الطاقة."
   ]
 };
 
@@ -336,7 +691,7 @@ export const I18N = {
     navTools: "Tools",
     navStats: "Statistik",
     navGoals: "Ziele",
-    navProfile: "Profil",
+    navProfile: "Einstellungen",
     audioViewTitle: "Smarter Workout-Audioplayer",
     audioViewDesc: "Eigene Trainings-Audio- & Videodateien lokal im Browser speichern und werbefrei abspielen.",
     toolsTitle: "Smarte Trainings-Tools",
@@ -419,7 +774,7 @@ export const I18N = {
     navTools: "الأدوات",
     navStats: "الإحصائيات",
     navGoals: "الأهداف",
-    navProfile: "البروفايل",
+    navProfile: "الإعدادات",
     audioViewTitle: "مشغل صوتيات التمرين الذكي",
     audioViewDesc: "شغّل مقاطعك الصوتية والفيديوهات المحفوظة محلياً بجودة عالية وبدون إعلانات أثناء تمرينك.",
     toolsTitle: "أدوات ومساعد التدريب الذكي",
