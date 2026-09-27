@@ -53,8 +53,7 @@ jobs:
       - name: Build Debug APK with Gradle
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Locate & Verify Generated APK
         id: find-apk
