@@ -257,46 +257,6 @@ export default function App() {
     });
   };
 
-  const handleCopyPlan = () => {
-    triggerHaptic('light');
-    const isAr = currentLang === 'ar';
-    const planTitle = isAr ? activePlan.nameAr : activePlan.nameDe;
-    const scheduleSub = getScheduleSubtitle(activePlan, currentLang);
-    const dayName = isAr ? DAYS_NAMES_AR[selectedDayIndex] : DAYS_NAMES_DE[selectedDayIndex];
-    const isRest = isDayRestDay(activePlan, selectedDayIndex);
-
-    let text = `🏋️ ${planTitle} · ${scheduleSub}\n`;
-    text += `📅 ${isAr ? 'تمارين يوم' : 'Trainingstag'}: ${dayName}\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-
-    if (isRest) {
-      text += isAr ? '☕ يوم راحة واستشفاء عضلي.\n' : '☕ Geplanter Ruhetag & Regeneration.\n';
-    } else if (currentDayExercises.length === 0) {
-      text += isAr ? 'لا توجد أجهزة مضافة لهذا اليوم بعد.\n' : 'Keine Übungen für diesen Tag eingetragen.\n';
-    } else {
-      currentDayExercises.forEach((item, index) => {
-        const name = isAr ? `${item.nameDe} (${item.muscleAr})` : item.nameDe;
-        const isDone = completedExercises.has(item.id);
-        text += `${index + 1}. [${isDone ? '✓' : ' '}] ${name}\n`;
-        text += `   ${item.sets} ${isAr ? 'مجموعات' : 'Sätze'} × ${item.reps}\n`;
-      });
-    }
-
-    const notes = isAr ? activePlan.notesAr : activePlan.notesDe;
-    if (notes && notes.length > 0) {
-      text += `\n${isAr ? 'الملاحظات الإرشادية:' : 'Hinweise:'}\n`;
-      notes.forEach((note) => {
-        text += `• ${note}\n`;
-      });
-    }
-
-    try {
-      navigator.clipboard.writeText(text);
-      showToast(t.toastCopied);
-    } catch {
-      showToast(isAr ? 'تم النسخ!' : 'Kopiert!');
-    }
-  };
 
   // Derived current day exercises & rest status (Memoized to prevent unnecessary re-renders)
   const currentDayExercises = useMemo(
@@ -530,7 +490,6 @@ export default function App() {
                     onOpenFontSettings={() => setIsFontModalOpen(true)}
                     onOpenPlanShare={() => setIsPlanShareModalOpen(true)}
                     onResetProgress={handleRequestResetProgress}
-                    onCopyPlan={handleCopyPlan}
                     totalSessions={totalSessions}
                     completedExercisesCount={completedExercises.size}
                     plan={activePlan}

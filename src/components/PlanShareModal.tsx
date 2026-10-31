@@ -5,28 +5,19 @@ import {
   Download,
   Upload,
   Share2,
-  Copy,
   Check,
-  FileJson,
   AlertTriangle,
   RotateCcw,
-  Code2,
   Loader2,
   Archive,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { WorkoutPlan, Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
 import {
-  exportPlanAsFile,
-  exportPlanAsJsonString,
   exportPlanAsZipFile,
   sharePlanNative,
-  parseAndHydratePlanJson,
   parseAndHydrateZipOrJsonFile,
-  copyTextToClipboardAndroid,
 } from '../utils/planShare';
 import { DEFAULT_WORKOUT_PLAN } from '../data/workoutData';
 
@@ -52,16 +43,9 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
   const [includeVideos, setIncludeVideos] = useState<boolean>(true);
-  const [pastedJson, setPastedJson] = useState('');
-  const [copied, setCopied] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<WorkoutPlan | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [showPasteArea, setShowPasteArea] = useState(false);
-
-  // Code Inspector state
-  const [showCodeInspector, setShowCodeInspector] = useState(false);
-  const [codeInspectorText, setCodeInspectorText] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -83,62 +67,6 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
-
-  const handleOpenCodeInspector = async () => {
-    if (activeAction !== null) return;
-    try {
-      setActiveAction('inspector');
-      triggerHaptic('selection');
-      const jsonStr = await exportPlanAsJsonString(plan, { includeVideos: false });
-      setCodeInspectorText(jsonStr);
-      setShowCodeInspector(true);
-    } catch {
-      showToast(isAr ? 'تعذر توليد كود الخطة' : 'Fehler beim Generieren');
-    } finally {
-      setActiveAction(null);
-    }
-  };
-
-  const handleDownloadFile = async () => {
-    if (activeAction !== null) return;
-    try {
-      setActiveAction('download');
-      triggerHaptic('success');
-      const res = await exportPlanAsFile(plan, { includeVideos });
-      if (res === 'file_picker' || res === 'download_data' || res === 'download_blob') {
-        showToast(isAr ? 'تم تنزيل ملف الخطة بنجاح' : 'Datei heruntergeladen');
-      } else if (res === 'share') {
-        showToast(isAr ? 'تم فتح نافذة المشاركة' : 'Freigabe geöffnet');
-      } else {
-        showToast(isAr ? 'تعذر التحميل، يمكنك نسخ الكود بدلاً من ذلك' : 'Download fehlgeschlagen');
-      }
-    } catch {
-      showToast(isAr ? 'حدث خطأ أثناء تحميل الملف' : 'Fehler beim Herunterladen');
-    } finally {
-      setActiveAction(null);
-    }
-  };
-
-  const handleCopyJson = async () => {
-    if (activeAction !== null) return;
-    try {
-      setActiveAction('copy');
-      triggerHaptic('success');
-      const jsonStr = await exportPlanAsJsonString(plan, { includeVideos: false });
-      const res = await copyTextToClipboardAndroid(jsonStr);
-      if (res.success) {
-        setCopied(true);
-        showToast(isAr ? 'تم نسخ كود الخطة' : 'Plan-Code kopiert');
-        setTimeout(() => setCopied(false), 2500);
-      } else {
-        showToast(isAr ? 'تعذر النسخ التلقائي' : 'Kopieren fehlgeschlagen');
-      }
-    } catch {
-      showToast(isAr ? 'تعذر النسخ' : 'Kopieren fehlgeschlagen');
-    } finally {
-      setActiveAction(null);
-    }
-  };
 
   const handleExportZipPackage = async () => {
     if (activeAction !== null) return;
@@ -167,10 +95,7 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
     try {
       setActiveAction('share');
       triggerHaptic('selection');
-      const success = await sharePlanNative(plan, { includeVideos });
-      if (!success) {
-        await handleDownloadFile();
-      }
+      await sharePlanNative(plan, { includeVideos });
     } catch {
       showToast(isAr ? 'تعذر المشاركة' : 'Teilen fehlgeschlagen');
     } finally {
@@ -209,34 +134,6 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
     } finally {
       setActiveAction(null);
       e.target.value = '';
-    }
-  };
-
-  const handleParsePastedJson = async () => {
-    if (!pastedJson.trim()) {
-      setImportError(isAr ? 'يرجى لصق كود JSON أولاً' : 'Bitte zuerst JSON-Code einfügen');
-      setImportPreview(null);
-      return;
-    }
-    triggerHaptic('selection');
-    setActiveAction('import_paste');
-    try {
-      const result = await parseAndHydratePlanJson(pastedJson);
-      if (result.success && result.plan) {
-        setImportPreview(result.plan);
-        setImportError(null);
-        triggerHaptic('light');
-      } else {
-        setImportPreview(null);
-        setImportError(result.error || (isAr ? 'كود الخطة غير صالح' : 'Ungültiger Code'));
-        triggerHaptic('warning');
-      }
-    } catch {
-      setImportPreview(null);
-      setImportError(isAr ? 'خطأ في تحليل كود JSON' : 'Fehler beim Analysieren');
-      triggerHaptic('warning');
-    } finally {
-      setActiveAction(null);
     }
   };
 
@@ -417,49 +314,8 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
                     </span>
                   </button>
 
-                  {/* Secondary Export Actions */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={handleDownloadFile}
-                      disabled={activeAction !== null}
-                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-[#f8faf9] text-[#15241c] font-display font-bold text-xs flex items-center justify-center gap-1.5 border border-[#e4ede7] transition-colors cursor-pointer disabled:opacity-60"
-                    >
-                      {activeAction === 'download' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#215641]" />
-                      ) : (
-                        <FileJson className="w-3.5 h-3.5 text-[#5a7364]" />
-                      )}
-                      <span>{isAr ? 'ملف JSON فقط' : 'Nur .json Datei'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleCopyJson}
-                      disabled={activeAction !== null}
-                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-[#f8faf9] text-[#15241c] font-display font-bold text-xs flex items-center justify-center gap-1.5 border border-[#e4ede7] transition-colors cursor-pointer disabled:opacity-60"
-                    >
-                      {activeAction === 'copy' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#215641]" />
-                      ) : copied ? (
-                        <Check className="w-3.5 h-3.5 text-[#215641]" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5 text-[#5a7364]" />
-                      )}
-                      <span>
-                        {copied
-                          ? isAr
-                            ? 'تم النسخ'
-                            : 'Kopiert'
-                          : isAr
-                          ? 'نسخ الكود'
-                          : 'Code kopieren'}
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Quiet Additional Utilities */}
-                  <div className="flex items-center justify-center gap-4 pt-1 text-xs text-[#6e8276]">
+                  {/* Quiet Share Action */}
+                  <div className="flex items-center justify-center pt-1 text-xs text-[#6e8276]">
                     <button
                       type="button"
                       onClick={handleNativeShare}
@@ -467,67 +323,9 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
                       className="hover:text-[#15241c] font-medium flex items-center gap-1 transition-colors cursor-pointer py-1"
                     >
                       <Share2 className="w-3.5 h-3.5" />
-                      <span>{isAr ? 'مشاركة' : 'Teilen'}</span>
-                    </button>
-                    <span className="text-[#d2e2d7]">·</span>
-                    <button
-                      type="button"
-                      onClick={handleOpenCodeInspector}
-                      disabled={activeAction !== null}
-                      className="hover:text-[#15241c] font-medium flex items-center gap-1 transition-colors cursor-pointer py-1"
-                    >
-                      <Code2 className="w-3.5 h-3.5" />
-                      <span>{isAr ? 'عرض الكود' : 'Code anzeigen'}</span>
+                      <span>{isAr ? 'مشاركة الخطة' : 'Plan teilen'}</span>
                     </button>
                   </div>
-
-                  {/* Clean Code Viewer */}
-                  {showCodeInspector && (
-                    <div className="p-3.5 rounded-2xl bg-[#f8faf9] border border-[#e4ede7] space-y-2.5 animate-in fade-in duration-150">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#15241c]">
-                          {isAr ? 'كود الخطة (JSON)' : 'Plan-Code'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowCodeInspector(false)}
-                          className="text-[#6e8276] hover:text-[#15241c] text-xs font-semibold cursor-pointer"
-                        >
-                          {isAr ? 'إغلاق' : 'Schließen'}
-                        </button>
-                      </div>
-
-                      <div className="p-2.5 rounded-xl bg-white border border-[#e4ede7] max-h-36 overflow-y-auto">
-                        <textarea
-                          readOnly
-                          value={codeInspectorText}
-                          className="w-full h-28 bg-transparent text-[11px] font-mono text-[#15241c] resize-none outline-none leading-relaxed"
-                          onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const res = await copyTextToClipboardAndroid(codeInspectorText);
-                          triggerHaptic(res.success ? 'success' : 'warning');
-                          showToast(
-                            res.success
-                              ? isAr
-                                ? 'تم نسخ الكود'
-                                : 'Code kopiert'
-                              : isAr
-                              ? 'يرجى تحديد النص يدويًا'
-                              : 'Fehler'
-                          );
-                        }}
-                        className="w-full py-2 px-3 rounded-xl bg-[#215641] hover:bg-[#184232] text-white font-display font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{isAr ? 'نسخ كامل الكود' : 'Alles kopieren'}</span>
-                      </button>
-                    </div>
-                  )}
                 </div>
               ) : (
                 /* IMPORT SECTION */
@@ -564,60 +362,6 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
                           : 'Lädt alle Übungen und Medien'}
                       </p>
                     </div>
-                  </div>
-
-                  {/* Optional Direct Code Paste Accordion */}
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowPasteArea(!showPasteArea)}
-                      className="text-xs font-semibold text-[#6e8276] hover:text-[#15241c] flex items-center justify-between w-full py-1 transition-colors cursor-pointer"
-                    >
-                      <span>
-                        {isAr
-                          ? 'أو لصق كود الخطة (JSON) مباشرة'
-                          : 'Oder JSON-Code einfügen'}
-                      </span>
-                      {showPasteArea ? (
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      ) : (
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-
-                    {showPasteArea && (
-                      <div className="space-y-2 pt-1 animate-in fade-in duration-150">
-                        <textarea
-                          value={pastedJson}
-                          onChange={(e) => {
-                            setPastedJson(e.target.value);
-                            setImportError(null);
-                          }}
-                          placeholder={
-                            isAr
-                              ? 'الصق كود الـ JSON هنا...'
-                              : 'JSON-Code hier einfügen...'
-                          }
-                          rows={3}
-                          className="w-full p-3 rounded-xl border border-[#e4ede7] focus:border-[#215641] font-mono text-xs text-[#15241c] bg-[#f8faf9] resize-none outline-none"
-                        />
-                        {pastedJson.trim().length > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleParsePastedJson}
-                            disabled={activeAction !== null}
-                            className="w-full py-2 px-3 rounded-xl bg-[#215641] hover:bg-[#184232] text-white font-display font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
-                          >
-                            {activeAction === 'import_paste' ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Check className="w-3.5 h-3.5" />
-                            )}
-                            <span>{isAr ? 'فحص ومعاينة الخطة' : 'Code prüfen'}</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   {/* Error Box */}

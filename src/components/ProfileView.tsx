@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Type,
-  Copy,
   RotateCcw,
   ChevronLeft,
   ArrowUpDown,
@@ -15,7 +14,6 @@ interface ProfileViewProps {
   onOpenFontSettings: () => void;
   onOpenPlanShare?: () => void;
   onResetProgress: () => void;
-  onCopyPlan: () => void;
   totalSessions?: number;
   completedExercisesCount?: number;
   plan?: WorkoutPlan;
@@ -26,7 +24,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onOpenFontSettings,
   onOpenPlanShare,
   onResetProgress,
-  onCopyPlan,
 }) => {
   const isDe = currentLang === 'de';
 
@@ -128,34 +125,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 />
               </button>
             )}
-
-            {/* Copy Plan */}
-            <button
-              type="button"
-              onClick={onCopyPlan}
-              className="w-full p-4 sm:p-4.5 flex items-center justify-between gap-3 text-start hover:bg-[#fafcfa] active:bg-[#f2f7f4] transition-colors group cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-2xl bg-[#edf4ef] text-[#215641] flex items-center justify-center flex-shrink-0 group-hover:bg-[#215641] group-hover:text-white transition-colors">
-                  <Copy className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs sm:text-sm font-bold text-[#15221b]">
-                    {isDe ? 'Kompletten Plan kopieren' : 'نسخ الجدول كاملاً'}
-                  </div>
-                  <div className="text-[11px] text-[#75877d]">
-                    {isDe
-                      ? 'Textformatierte Zusammenfassung in die Zwischenablage kopieren'
-                      : 'نسخ نصي لتمارين اليوم والخطة للحافظة'}
-                  </div>
-                </div>
-              </div>
-              <ChevronLeft
-                className={`w-4 h-4 text-[#9ab0a3] group-hover:text-[#215641] transition-colors ${
-                  isDe ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
 
             {/* Reset Today's Progress */}
             <button
