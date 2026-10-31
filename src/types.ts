@@ -46,25 +46,6 @@ export interface WorkoutPlan {
   notesAr: string[];
 }
 
-export interface GoalItem {
-  id: number | string;
-  titleDe?: string;
-  titleAr?: string;
-  title?: string;
-  descDe?: string;
-  descAr?: string;
-  done: boolean;
-}
-
-export interface ProgressionPhase {
-  weekDe: string;
-  weekAr: string;
-  focusDe: string;
-  focusAr: string;
-  sessions: boolean[];
-  isCurrent: boolean;
-}
-
 export interface MuscleVolume {
   nameDe: string;
   nameAr: string;

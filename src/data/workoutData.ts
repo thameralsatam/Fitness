@@ -1,4 +1,4 @@
-import { ExerciseItem, GoalItem, ProgressionPhase, MuscleVolume, WorkoutPlan } from '../types';
+import { ExerciseItem, MuscleVolume, WorkoutPlan } from '../types';
 
 export const EXERCISES_DATA: ExerciseItem[] = [
   { id: 1, nameDe: "Abduktionsmaschine", muscleDe: "Beine & Gesäß", muscleAr: "الأرجل والأرداف", sets: "3 Sätze", reps: "12–15 Wdh", alternatives: ["Stehende Abduktionsmaschine", "Kabelzug Abduktion"] },
@@ -104,76 +104,6 @@ export const EXERCISES_DATA: ExerciseItem[] = [
   { id: 101, nameDe: "Wadenpresse sitzend", muscleDe: "Waden", muscleAr: "عضلات الساق (السمانة)", sets: "3 Sätze", reps: "12–15 Wdh", alternatives: ["Wadenmaschine sitzend", "Donkey Calf Wadenmaschine"] },
   { id: 102, nameDe: "Überzugmaschine", muscleDe: "Rücken & Brust", muscleAr: "الظهر والصدر", sets: "3 Sätze", reps: "10–12 Wdh", alternatives: ["Überzugmaschine mit Ellenbogenpolstern", "Latzugstation mit Oberschenkelpolster"] },
   { id: 103, nameDe: "Überzugmaschine mit Ellenbogenpolstern", muscleDe: "Rücken & Brust", muscleAr: "الظهر والصدر", sets: "3 Sätze", reps: "10–12 Wdh", alternatives: ["Überzugmaschine", "Rückenzugmaschine"] },
-];
-
-export const DEFAULT_GOALS: GoalItem[] = [
-  {
-    id: 1,
-    titleDe: "Regelmäßiges Training diszipliniert einhalten",
-    titleAr: "الالتزام بجدول التمارين بانضباط واستمرارية",
-    descDe: "Feste Trainingstage mit ausreichenden Ruhetagen zur Regeneration.",
-    descAr: "تحديد أيام التدريب مع فترات راحة كافية للاستشفاء العضلي.",
-    done: true
-  },
-  {
-    id: 2,
-    titleDe: "RIR 2 (Repetitions in Reserve) diszipliniert anwenden",
-    titleAr: "تطبيق معيار الجهد RIR 2 بدقة",
-    descDe: "Satz beenden, wenn noch 2 saubere Wiederholungen im Tank sind.",
-    descAr: "إنهاء المجموعة عندما يتبقى تكراران ممكنان دون الوصول للفشل التام.",
-    done: true
-  },
-  {
-    id: 3,
-    titleDe: "90 Sekunden Pause zwischen den Sätzen timen",
-    titleAr: "ضبط 90 ثانية راحة بين المجموعات",
-    descDe: "Sorgt für volle ATP-Wiederherstellung und saubere Sätze.",
-    descAr: "يضمن استعادة طاقة العضلة وأداء المجموعات بكفاءة.",
-    done: false
-  },
-  {
-    id: 4,
-    titleDe: "Progressive Overload: Gewicht bei Beherrschung steigern",
-    titleAr: "التدرج في الأوزان بمجرد إتقان التكنيك",
-    descDe: "Sobald die Wiederholungen sauber fallen, Gewicht moderat steigern.",
-    descAr: "بمجرد إتقان العدّات بتكنيك نظيف، يتم التدرج بالوزن لضمان التطور.",
-    done: false
-  }
-];
-
-export const PHASES_DATA: ProgressionPhase[] = [
-  {
-    weekDe: "Phase 1: Grundlagen",
-    weekAr: "المرحلة الأولى: التأسيس والتكنيك",
-    focusDe: "Eingewöhnung & saubere Ausführung (2 Sätze pro Übung)",
-    focusAr: "التعود على التكنيك الصحيح والتحكم الحركي الكامل",
-    sessions: [true, true, true],
-    isCurrent: true
-  },
-  {
-    weekDe: "Phase 2: Progression",
-    weekAr: "المرحلة الثانية: التدرج في الأحمال",
-    focusDe: "Volle Satzanzahl & kontinuierliche Steigerung",
-    focusAr: "زيادة حجم التمرين التدريجي وتثبيت الأداء",
-    sessions: [false, false, false],
-    isCurrent: false
-  },
-  {
-    weekDe: "Phase 3: Intensivierung",
-    weekAr: "المرحلة الثالثة: رفع الكثافة والقوة",
-    focusDe: "Progressive Overload mit Fokus auf RIR 2",
-    focusAr: "زيادة الحمل التدريجي ورفع الأوزان مع RIR 2",
-    sessions: [false, false, false],
-    isCurrent: false
-  },
-  {
-    weekDe: "Phase 4: Deload & Erholung",
-    weekAr: "المرحلة الرابعة: الاستشفاء والتجديد",
-    focusDe: "Volumenreduktion zur Entlastung des ZNS und der Sehnen",
-    focusAr: "تخفيف الأحمال للاستشفاء العصبي وحماية الأوتار والمفاصل",
-    sessions: [false, false, false],
-    isCurrent: false
-  }
 ];
 
 const getEx = (id: number): ExerciseItem => {
