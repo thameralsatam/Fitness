@@ -61,6 +61,7 @@ import {
 import { Language } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { NativeFilePickerModal } from './NativeFilePickerModal';
+import { ConfirmModal } from './ConfirmModal';
 import { notifyModalChange } from '../utils/modalManager';
 import { useAudio } from '../context/AudioContext';
 
@@ -1654,116 +1655,38 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
       </AnimatePresence>
 
       {/* ================= MODAL: Confirm Delete Track ================= */}
-      <AnimatePresence>
-        {deletingTrack && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-            onClick={() => setDeletingTrack(null)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 8 }}
-              className="w-full max-w-sm bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-[#dbe4dc] space-y-4"
-              onClick={(e) => e.stopPropagation()}
-              dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center flex-shrink-0">
-                  <Trash2 className="w-5 h-5" />
-                </div>
-                <div className="space-y-1 flex-1 min-w-0">
-                  <h3 className="font-display font-bold text-sm sm:text-base text-[#15221b]">
-                    {currentLang === 'ar' ? 'تأكيد حذف المقطع' : 'Track löschen'}
-                  </h3>
-                  <p className="text-xs text-[#4f6156] leading-relaxed">
-                    {currentLang === 'ar'
-                      ? `هل أنت متأكد من رغبتك بحذف "${deletingTrack.name}"؟`
-                      : `Möchtest du "${deletingTrack.name}" wirklich löschen?`}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2 border-t border-[#edf4ef]">
-                <button
-                  type="button"
-                  onClick={handleConfirmDelete}
-                  className="flex-1 h-11 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>{currentLang === 'ar' ? 'نعم، احذف' : 'Ja, löschen'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeletingTrack(null)}
-                  className="px-4 h-11 rounded-xl bg-[#f1f6f3] hover:bg-[#e2ece5] text-[#4f6156] text-xs font-bold transition-all"
-                >
-                  {currentLang === 'ar' ? 'إلغاء' : 'Abbrechen'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ConfirmModal
+        isOpen={Boolean(deletingTrack)}
+        type="delete"
+        title={currentLang === 'ar' ? 'تأكيد حذف المقطع' : 'Track löschen'}
+        description={
+          currentLang === 'ar'
+            ? `هل أنت متأكد من رغبتك بحذف "${deletingTrack?.name || ''}"؟`
+            : `Möchtest du "${deletingTrack?.name || ''}" wirklich löschen?`
+        }
+        confirmText={currentLang === 'ar' ? 'نعم، احذف' : 'Ja, löschen'}
+        cancelText={currentLang === 'ar' ? 'إلغاء' : 'Abbrechen'}
+        currentLang={currentLang}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeletingTrack(null)}
+      />
 
       {/* ================= MODAL: Confirm Clear All ================= */}
-      <AnimatePresence>
-        {isClearAllModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-            onClick={() => setIsClearAllModalOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 8 }}
-              className="w-full max-w-sm bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-[#dbe4dc] space-y-4"
-              onClick={(e) => e.stopPropagation()}
-              dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <div className="space-y-1 flex-1 min-w-0">
-                  <h3 className="font-display font-bold text-sm sm:text-base text-[#15221b]">
-                    {currentLang === 'ar' ? 'مسح جميع المقاطع' : 'Alle Tracks löschen'}
-                  </h3>
-                  <p className="text-xs text-[#4f6156] leading-relaxed">
-                    {currentLang === 'ar'
-                      ? 'هل أنت متأكد من رغبتك بحذف كافة المقاطع الصوتية المحفوظة؟ لا يمكن التراجع عن هذا الإجراء.'
-                      : 'Möchtest du wirklich alle gespeicherten Tracks unwiderruflich löschen?'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2 border-t border-[#edf4ef]">
-                <button
-                  type="button"
-                  onClick={handleConfirmClearAll}
-                  className="flex-1 h-11 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>{currentLang === 'ar' ? 'نعم، مسح الكل' : 'Ja, alle löschen'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsClearAllModalOpen(false)}
-                  className="px-4 h-11 rounded-xl bg-[#f1f6f3] hover:bg-[#e2ece5] text-[#4f6156] text-xs font-bold transition-all"
-                >
-                  {currentLang === 'ar' ? 'إلغاء' : 'Abbrechen'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ConfirmModal
+        isOpen={isClearAllModalOpen}
+        type="danger"
+        title={currentLang === 'ar' ? 'مسح جميع المقاطع' : 'Alle Tracks löschen'}
+        description={
+          currentLang === 'ar'
+            ? 'هل أنت متأكد من رغبتك بحذف كافة المقاطع الصوتية المحفوظة؟ لا يمكن التراجع عن هذا الإجراء.'
+            : 'Möchtest du wirklich alle gespeicherten Tracks unwiderruflich löschen?'
+        }
+        confirmText={currentLang === 'ar' ? 'نعم، مسح الكل' : 'Ja, alle löschen'}
+        cancelText={currentLang === 'ar' ? 'إلغاء' : 'Abbrechen'}
+        currentLang={currentLang}
+        onConfirm={handleConfirmClearAll}
+        onCancel={() => setIsClearAllModalOpen(false)}
+      />
       {/* ================= MODAL: Add Existing Tracks to Current Folder ================= */}
       <AnimatePresence>
         {isAddExistingToFolderModalOpen && selectedFolderId !== 'all' && (

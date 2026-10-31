@@ -20,6 +20,36 @@ export interface ExportOptions {
   includeVideos?: boolean;
 }
 
+function normalizePlanData(data: any): WorkoutPlan {
+  return {
+    id: data.id || `plan_imported_${Date.now()}`,
+    nameDe: data.nameDe || 'Importierter Trainingsplan',
+    nameAr: data.nameAr || 'جدول تمارين مستورد',
+    scheduleDaysDe: data.scheduleDaysDe || 'Individuelles Training',
+    scheduleDaysAr: data.scheduleDaysAr || 'جدول مخصص',
+    frequencyDe: data.frequencyDe || 'Individuell',
+    frequencyAr: data.frequencyAr || 'مخصص',
+    trainingDays: Array.isArray(data.trainingDays) ? data.trainingDays : [0, 1, 3, 4],
+    exercises: Array.isArray(data.exercises) ? data.exercises : [],
+    days: data.days && typeof data.days === 'object' ? data.days : {},
+    notesDe: Array.isArray(data.notesDe) ? data.notesDe : [],
+    notesAr: Array.isArray(data.notesAr) ? data.notesAr : [],
+  };
+}
+
+async function iteratePlanExercises(plan: WorkoutPlan, fn: (ex: ExerciseItem) => Promise<void> | void): Promise<void> {
+  if (Array.isArray(plan.exercises)) {
+    for (const ex of plan.exercises) await fn(ex);
+  }
+  if (plan.days) {
+    for (const day of Object.values(plan.days)) {
+      if (Array.isArray(day?.exercises)) {
+        for (const ex of day.exercises) await fn(ex);
+      }
+    }
+  }
+}
+
 /**
  * Prepares a workout plan for export by embedding IndexedDB exercise media as Base64 Data URLs
  */
@@ -40,36 +70,22 @@ export async function prepareExportablePlan(
     const clonedPlan: WorkoutPlan = JSON.parse(JSON.stringify(plan));
 
     let mediaCount = 0;
-    const enrichExercise = (ex: ExerciseItem) => {
-      if (!ex) return;
+    await iteratePlanExercises(clonedPlan, (ex) => {
       const base64List = mediaMap[ex.id];
       if (base64List && base64List.length > 0) {
         mediaCount += base64List.length;
         ex.media = base64List.map((item) => ({
           id: item.id,
           type: item.type,
-          url: item.dataUrl, // Embed base64 string
+          url: item.dataUrl,
           name: item.name,
           size: item.size,
           createdAt: item.createdAt,
         }));
       } else if (Array.isArray(ex.media)) {
-        // Remove temporary object URLs
         ex.media = ex.media.filter((m) => m.url && !m.url.startsWith('blob:'));
       }
-    };
-
-    if (Array.isArray(clonedPlan.exercises)) {
-      clonedPlan.exercises.forEach(enrichExercise);
-    }
-
-    if (clonedPlan.days) {
-      Object.values(clonedPlan.days).forEach((dayData) => {
-        if (Array.isArray(dayData.exercises)) {
-          dayData.exercises.forEach(enrichExercise);
-        }
-      });
-    }
+    });
 
     log(`✅ تم تجهيز البيانات بنجاح! عدد وسائط التمارين المضمنة: ${mediaCount}`);
     return clonedPlan;
@@ -364,68 +380,6 @@ export async function exportPlanAsZipFile(
   }
 }
 
-/**
- * Opens native OS File Picker (Files app) so user explicitly selects target folder & filename
- */
-export async function exportPlanWithFolderPicker(
-  plan: WorkoutPlan,
-  options?: ExportOptions,
-  logger?: ShareLogger
-): Promise<boolean> {
-  const log = (msg: string) => {
-    console.log(`[PlanShare FolderPicker] ${msg}`);
-    logger?.(msg);
-  };
-
-  log('🔍 فحص دعم ميزة اختيار المجلد (showSaveFilePicker)...');
-  if (!('showSaveFilePicker' in window) || typeof (window as any).showSaveFilePicker !== 'function') {
-    log('❌ ميزة showSaveFilePicker غير مدعومة في نظام أندرويد/WebView الخاص بالتطبيق الحالي.');
-    return false;
-  }
-
-  let exportablePlan = await prepareExportablePlan(plan, options, logger);
-  let jsonStr: string;
-
-  try {
-    jsonStr = JSON.stringify(exportablePlan, null, 2);
-  } catch {
-    log('⚠️ حجم البيانات كبير جداً، جاري المحاولة بدون الفيديوهات...');
-    exportablePlan = await prepareExportablePlan(plan, { includeVideos: false }, logger);
-    jsonStr = JSON.stringify(exportablePlan, null, 2);
-  }
-
-  const fileName =
-    (plan.nameAr || plan.nameDe || 'Gym_Workout_Plan')
-      .replace(/[^\w\u0600-\u06FF]+/g, '_')
-      .toLowerCase() + '_schedule.json';
-
-  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
-
-  try {
-    log('📁 جاري طلب فتح منتقي الملفات الخاص بالجهاز...');
-    const handle = await (window as any).showSaveFilePicker({
-      suggestedName: fileName,
-      types: [
-        {
-          description: 'JSON Workout Plan File',
-          accept: { 'application/json': ['.json'] },
-        },
-      ],
-    });
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-    log('✅ تم كتابة وحفظ الملف بنجاح داخل المجلد الذي اخترته!');
-    return true;
-  } catch (err: any) {
-    if (err.name === 'AbortError') {
-      log('⚠️ قمت بإلغاء نافذة اختيار المجلد ولم يتم حفظ الملف.');
-      return false;
-    }
-    log(`❌ فشلت عملية حفظ المجلد: ${err?.message || err}`);
-    return false;
-  }
-}
 
 /**
  * Downloads the workout plan as a formatted JSON file.
@@ -630,6 +584,36 @@ export async function sharePlanNative(
   return false;
 }
 
+async function hydrateEmbeddedBase64Media(plan: WorkoutPlan): Promise<void> {
+  const processedExerciseIds = new Set<number>();
+  await iteratePlanExercises(plan, async (ex) => {
+    if (!ex || !Array.isArray(ex.media) || ex.media.length === 0 || processedExerciseIds.has(ex.id)) return;
+    const base64Items: SerializedMediaItem[] = [];
+    const nonDataMedia: ExerciseMediaItem[] = [];
+
+    for (const item of ex.media) {
+      if (item.url && item.url.startsWith('data:')) {
+        base64Items.push({
+          id: item.id,
+          type: item.type,
+          name: item.name,
+          dataUrl: item.url,
+          size: item.size,
+          createdAt: item.createdAt,
+        });
+      } else {
+        nonDataMedia.push(item);
+      }
+    }
+
+    if (base64Items.length > 0) {
+      const savedMedia = await importBase64MediaItems(ex.id, base64Items);
+      ex.media = [...nonDataMedia, ...savedMedia];
+      processedExerciseIds.add(ex.id);
+    }
+  });
+}
+
 /**
  * Parses and validates JSON string, restoring embedded Base64 media into IndexedDB
  */
@@ -638,79 +622,13 @@ export async function parseAndHydratePlanJson(
 ): Promise<{ success: boolean; plan?: WorkoutPlan; error?: string }> {
   try {
     const data = JSON.parse(jsonText.trim());
-    if (!data || typeof data !== 'object') {
-      return { success: false, error: 'الملف غير صالح أو المضمون ليس بصيغة JSON' };
+    if (!data || typeof data !== 'object' || (!data.days && !Array.isArray(data.exercises))) {
+      return { success: false, error: 'الملف غير صالح أو لا يحتوي على جدول تمارين صحيح' };
     }
-
-    if (!data.days && !Array.isArray(data.exercises)) {
-      return { success: false, error: 'الملف لا يحتوي على جدول تمارين صحيح (غياب أيام التمارين أو الأجهزة)' };
-    }
-
-    const importedPlan: WorkoutPlan = {
-      id: data.id || `plan_imported_${Date.now()}`,
-      nameDe: data.nameDe || 'Importierter Trainingsplan',
-      nameAr: data.nameAr || 'جدول تمارين مستورد',
-      scheduleDaysDe: data.scheduleDaysDe || 'Individuelles Training',
-      scheduleDaysAr: data.scheduleDaysAr || 'جدول مخصص',
-      frequencyDe: data.frequencyDe || 'Individuell',
-      frequencyAr: data.frequencyAr || 'مخصص',
-      trainingDays: Array.isArray(data.trainingDays) ? data.trainingDays : [0, 1, 3, 4],
-      exercises: Array.isArray(data.exercises) ? data.exercises : [],
-      days: data.days && typeof data.days === 'object' ? data.days : {},
-      notesDe: Array.isArray(data.notesDe) ? data.notesDe : [],
-      notesAr: Array.isArray(data.notesAr) ? data.notesAr : [],
-    };
-
-    // Hydrate embedded Base64 media into IndexedDB
-    const processedExerciseIds = new Set<number>();
-
-    const hydrateExerciseMedia = async (ex: ExerciseItem) => {
-      if (!ex || !Array.isArray(ex.media) || ex.media.length === 0) return;
-      if (processedExerciseIds.has(ex.id)) return;
-
-      const base64Items: SerializedMediaItem[] = [];
-      const nonDataMedia: ExerciseMediaItem[] = [];
-
-      for (const item of ex.media) {
-        if (item.url && item.url.startsWith('data:')) {
-          base64Items.push({
-            id: item.id,
-            type: item.type,
-            name: item.name,
-            dataUrl: item.url,
-            size: item.size,
-            createdAt: item.createdAt,
-          });
-        } else {
-          nonDataMedia.push(item);
-        }
-      }
-
-      if (base64Items.length > 0) {
-        const savedMedia = await importBase64MediaItems(ex.id, base64Items);
-        ex.media = [...nonDataMedia, ...savedMedia];
-        processedExerciseIds.add(ex.id);
-      }
-    };
-
-    if (Array.isArray(importedPlan.exercises)) {
-      for (const ex of importedPlan.exercises) {
-        await hydrateExerciseMedia(ex);
-      }
-    }
-
-    if (importedPlan.days) {
-      for (const dayData of Object.values(importedPlan.days)) {
-        if (Array.isArray(dayData.exercises)) {
-          for (const ex of dayData.exercises) {
-            await hydrateExerciseMedia(ex);
-          }
-        }
-      }
-    }
-
+    const importedPlan = normalizePlanData(data);
+    await hydrateEmbeddedBase64Media(importedPlan);
     return { success: true, plan: importedPlan };
-  } catch (e: any) {
+  } catch {
     return { success: false, error: 'تعذر قراءة الملف: تأكد من صحة التنسيق' };
   }
 }
@@ -762,20 +680,7 @@ export async function parseAndHydrateZipOrJsonFile(
         return { success: false, error: 'بيانات plan.json داخل الملف المضغوط غير صالحة' };
       }
 
-      const importedPlan: WorkoutPlan = {
-        id: data.id || `plan_imported_${Date.now()}`,
-        nameDe: data.nameDe || 'Importierter Trainingsplan',
-        nameAr: data.nameAr || 'جدول تمارين مستورد',
-        scheduleDaysDe: data.scheduleDaysDe || 'Individuelles Training',
-        scheduleDaysAr: data.scheduleDaysAr || 'جدول مخصص',
-        frequencyDe: data.frequencyDe || 'Individuell',
-        frequencyAr: data.frequencyAr || 'مخصص',
-        trainingDays: Array.isArray(data.trainingDays) ? data.trainingDays : [0, 1, 3, 4],
-        exercises: Array.isArray(data.exercises) ? data.exercises : [],
-        days: data.days && typeof data.days === 'object' ? data.days : {},
-        notesDe: Array.isArray(data.notesDe) ? data.notesDe : [],
-        notesAr: Array.isArray(data.notesAr) ? data.notesAr : [],
-      };
+      const importedPlan = normalizePlanData(data);
 
       let restoredCount = 0;
       const processMediaRestoration = async (ex: ExerciseItem) => {
@@ -827,20 +732,7 @@ export async function parseAndHydrateZipOrJsonFile(
         ex.media = newMediaList;
       };
 
-      if (Array.isArray(importedPlan.exercises)) {
-        for (const ex of importedPlan.exercises) {
-          await processMediaRestoration(ex);
-        }
-      }
-      if (importedPlan.days) {
-        for (const dayData of Object.values(importedPlan.days)) {
-          if (Array.isArray(dayData.exercises)) {
-            for (const ex of dayData.exercises) {
-              await processMediaRestoration(ex);
-            }
-          }
-        }
-      }
+      await iteratePlanExercises(importedPlan, processMediaRestoration);
 
       log(`🎉 تم استيراد الملف المضغوط (.zip) بنجاح! تم استرجاع ${restoredCount} ملف ميديا وفيديو كاملاً.`);
       return { success: true, plan: importedPlan, mediaRestoredCount: restoredCount };

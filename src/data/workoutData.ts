@@ -114,6 +114,62 @@ const getEx = (id: number): ExerciseItem => {
   return ex;
 };
 
+const createEx = (
+  id: number,
+  nameDe: string,
+  muscleAr: string,
+  muscleDe: string,
+  sets: string,
+  reps: string,
+  alternatives: string[]
+): ExerciseItem => ({ id, nameDe, muscleAr, muscleDe, sets, reps, alternatives });
+
+const day0Exercises: ExerciseItem[] = [
+  createEx(101, "Chest Press Machine", "عضلات الصدر", "Brust", "3", "6–8", ["Incline Chest Press", "Chest Press"]),
+  createEx(102, "Lat Pulldown", "الظهر (اللاتس)", "Rücken (Lat)", "3", "6–10", ["Chest Supported Row", "Seated Row"]),
+  createEx(103, "Incline Chest Press", "الصدر (العلوي)", "Brust (Obere)", "2", "8–12", ["Chest Press Machine", "Pec Deck / Chest Fly"]),
+  createEx(104, "Chest Supported Row", "عضلات الظهر", "Rücken", "2", "8–12", ["Lat Pulldown", "Seated Row"]),
+  createEx(105, "Reverse Fly", "الأكتاف (الخلفية)", "Schultern (Posterior)", "2", "10–15", ["Lateral Raise"]),
+  createEx(106, "Lateral Raise", "الأكتاف (الجانبية)", "Schultern (Seitlich)", "3", "10–15", ["Shoulder Press"]),
+  createEx(107, "Triceps Extension", "الترايسبس", "Arme (Trizeps)", "2", "10–15", ["Overhead Triceps Extension", "Machine Dip"]),
+  createEx(108, "Preacher Curl", "البايسبس", "Arme (Bizeps)", "2", "10–15", ["Biceps Curl", "Cable Biceps Curl"]),
+];
+
+const day1Exercises: ExerciseItem[] = [
+  createEx(109, "Leg Press", "الأرجل والأرداف", "Beine & Gesäß", "3", "6–10", ["Hack Squat"]),
+  createEx(110, "Romanian Deadlift (RDL)", "الظهر الخلفي والأرجل", "Beine (Beuger & Gesäß)", "3", "8–10", ["Seated Leg Curl", "Reverse Hyperextension"]),
+  createEx(111, "Seated Leg Curl", "الأرجل (الفخذ الخلفي)", "Beine (Beuger)", "3", "10–15", ["Lying Leg Curl"]),
+  createEx(112, "Leg Extension", "الأرجل (الفخذ الأمامي)", "Beine (Quadrizeps)", "2", "10–15", ["Leg Press", "Hack Squat"]),
+  createEx(113, "Standing Calf Raise", "عضلات الساق (السمانة)", "Waden", "3", "8–12", ["Seated Calf Raise"]),
+  createEx(114, "Abdominal Crunch", "عضلات البطن", "Bauch", "2", "10–15", ["Reverse Hyperextension"]),
+];
+
+const day3Exercises: ExerciseItem[] = [
+  createEx(115, "Chest Press", "عضلات الصدر", "Brust", "3", "8–10", ["Incline Chest Press", "Pec Deck / Chest Fly"]),
+  createEx(116, "Shoulder Press", "الأكتاف", "Schultern", "3", "6–10", ["Lateral Raise"]),
+  createEx(117, "Pec Deck / Chest Fly", "عضلات الصدر", "Brust", "2", "10–15", ["Chest Press"]),
+  createEx(118, "Lateral Raise", "الأكتاف (الجانبية)", "Schultern (Seitlich)", "3", "10–15", ["Shoulder Press"]),
+  createEx(119, "Machine Dip", "الصدر والترايسبس", "Brust & Trizeps", "3", "8–12", ["Triceps Extension", "Overhead Triceps Extension"]),
+  createEx(120, "Overhead Triceps Extension", "الترايسبس", "Arme (Trizeps)", "2", "10–15", ["Triceps Extension", "Machine Dip"]),
+];
+
+const day4Exercises: ExerciseItem[] = [
+  createEx(121, "Lat Pulldown", "الظهر (اللاتس)", "Rücken (Lat)", "3", "8–10", ["Chest Supported Row", "Seated Row"]),
+  createEx(122, "Seated Row", "عضلات الظهر", "Rücken", "3", "8–12", ["Chest Supported Row", "Lat Pulldown"]),
+  createEx(123, "Reverse Fly", "الأكتاف (الخلفية)", "Schultern (Posterior)", "2", "10–15", ["Lateral Raise"]),
+  createEx(124, "Biceps Curl", "البايسبس", "Arme (Bizeps)", "3", "8–12", ["Preacher Curl", "Cable Biceps Curl"]),
+  createEx(125, "Cable Biceps Curl", "البايسبس", "Arme (Bizeps)", "2", "10–15", ["Biceps Curl", "Preacher Curl"]),
+];
+
+const day5Exercises: ExerciseItem[] = [
+  createEx(126, "Hack Squat", "الأرجل (الفخذ الأمامي)", "Beine (Quadrizeps)", "3", "8–12", ["Leg Press"]),
+  createEx(127, "Lying Leg Curl", "الأرجل (الفخذ الخلفي)", "Beine (Beuger)", "3", "10–15", ["Seated Leg Curl"]),
+  createEx(128, "Leg Extension", "الأرجل (الفخذ الأمامي)", "Beine (Quadrizeps)", "2", "10–15", ["Hack Squat", "Leg Press"]),
+  createEx(129, "Reverse Hyperextension", "أسفل الظهر والأرداف", "Unterer Rücken & Gesäß", "2", "10–15", ["Romanian Deadlift (RDL)"]),
+  createEx(130, "Seated Calf Raise", "عضلات الساق (السمانة)", "Waden", "3", "10–15", ["Standing Calf Raise"]),
+  createEx(131, "Abdominal Crunch", "عضلات البطن", "Bauch", "2", "12–20", ["Reverse Hyperextension"]),
+];
+
 export const DEFAULT_WORKOUT_PLAN: WorkoutPlan = {
   id: 'custom_workout_plan',
   nameDe: "5-Tage Trainingsplan (Upper / Lower / PPL)",
@@ -123,414 +179,15 @@ export const DEFAULT_WORKOUT_PLAN: WorkoutPlan = {
   frequencyDe: "5 Tage pro Woche",
   frequencyAr: "5 أيام في الأسبوع",
   trainingDays: [0, 1, 3, 4, 5],
-  exercises: [
-    {
-      id: 101,
-      nameDe: "Chest Press Machine",
-      muscleAr: "عضلات الصدر",
-      muscleDe: "Brust",
-      sets: "3",
-      reps: "6–8",
-      alternatives: ["Incline Chest Press", "Chest Press"]
-    },
-    {
-      id: 102,
-      nameDe: "Lat Pulldown",
-      muscleAr: "الظهر (اللاتس)",
-      muscleDe: "Rücken (Lat)",
-      sets: "3",
-      reps: "6–10",
-      alternatives: ["Chest Supported Row", "Seated Row"]
-    },
-    {
-      id: 103,
-      nameDe: "Incline Chest Press",
-      muscleAr: "الصدر (العلوي)",
-      muscleDe: "Brust (Obere)",
-      sets: "2",
-      reps: "8–12",
-      alternatives: ["Chest Press Machine", "Pec Deck / Chest Fly"]
-    },
-    {
-      id: 104,
-      nameDe: "Chest Supported Row",
-      muscleAr: "عضلات الظهر",
-      muscleDe: "Rücken",
-      sets: "2",
-      reps: "8–12",
-      alternatives: ["Lat Pulldown", "Seated Row"]
-    },
-    {
-      id: 105,
-      nameDe: "Reverse Fly",
-      muscleAr: "الأكتاف (الخلفية)",
-      muscleDe: "Schultern (Posterior)",
-      sets: "2",
-      reps: "10–15",
-      alternatives: ["Lateral Raise"]
-    },
-    {
-      id: 106,
-      nameDe: "Lateral Raise",
-      muscleAr: "الأكتاف (الجانبية)",
-      muscleDe: "Schultern (Seitlich)",
-      sets: "3",
-      reps: "10–15",
-      alternatives: ["Shoulder Press"]
-    },
-    {
-      id: 107,
-      nameDe: "Triceps Extension",
-      muscleAr: "الترايسبس",
-      muscleDe: "Arme (Trizeps)",
-      sets: "2",
-      reps: "10–15",
-      alternatives: ["Overhead Triceps Extension", "Machine Dip"]
-    },
-    {
-      id: 108,
-      nameDe: "Preacher Curl",
-      muscleAr: "البايسبس",
-      muscleDe: "Arme (Bizeps)",
-      sets: "2",
-      reps: "10–15",
-      alternatives: ["Biceps Curl", "Cable Biceps Curl"]
-    }
-  ],
+  exercises: day0Exercises,
   days: {
-    0: {
-      isRestDay: false,
-      focusTitleAr: "الجزء العلوي",
-      focusTitleDe: "Oberkörper",
-      linkedDay: null,
-      exercises: [
-        {
-          id: 101,
-          nameDe: "Chest Press Machine",
-          muscleAr: "عضلات الصدر",
-          muscleDe: "Brust",
-          sets: "3",
-          reps: "6–8",
-          alternatives: ["Incline Chest Press", "Chest Press"]
-        },
-        {
-          id: 102,
-          nameDe: "Lat Pulldown",
-          muscleAr: "الظهر (اللاتس)",
-          muscleDe: "Rücken (Lat)",
-          sets: "3",
-          reps: "6–10",
-          alternatives: ["Chest Supported Row", "Seated Row"]
-        },
-        {
-          id: 103,
-          nameDe: "Incline Chest Press",
-          muscleAr: "الصدر (العلوي)",
-          muscleDe: "Brust (Obere)",
-          sets: "2",
-          reps: "8–12",
-          alternatives: ["Chest Press Machine", "Pec Deck / Chest Fly"]
-        },
-        {
-          id: 104,
-          nameDe: "Chest Supported Row",
-          muscleAr: "عضلات الظهر",
-          muscleDe: "Rücken",
-          sets: "2",
-          reps: "8–12",
-          alternatives: ["Lat Pulldown", "Seated Row"]
-        },
-        {
-          id: 105,
-          nameDe: "Reverse Fly",
-          muscleAr: "الأكتاف (الخلفية)",
-          muscleDe: "Schultern (Posterior)",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Lateral Raise"]
-        },
-        {
-          id: 106,
-          nameDe: "Lateral Raise",
-          muscleAr: "الأكتاف (الجانبية)",
-          muscleDe: "Schultern (Seitlich)",
-          sets: "3",
-          reps: "10–15",
-          alternatives: ["Shoulder Press"]
-        },
-        {
-          id: 107,
-          nameDe: "Triceps Extension",
-          muscleAr: "الترايسبس",
-          muscleDe: "Arme (Trizeps)",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Overhead Triceps Extension", "Machine Dip"]
-        },
-        {
-          id: 108,
-          nameDe: "Preacher Curl",
-          muscleAr: "البايسبس",
-          muscleDe: "Arme (Bizeps)",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Biceps Curl", "Cable Biceps Curl"]
-        }
-      ]
-    },
-    1: {
-      isRestDay: false,
-      focusTitleAr: "الجزء السفلي",
-      focusTitleDe: "Unterkörper",
-      linkedDay: null,
-      exercises: [
-        {
-          id: 109,
-          nameDe: "Leg Press",
-          muscleAr: "الأرجل والأرداف",
-          muscleDe: "Beine & Gesäß",
-          sets: "3",
-          reps: "6–10",
-          alternatives: ["Hack Squat"]
-        },
-        {
-          id: 110,
-          nameDe: "Romanian Deadlift (RDL)",
-          muscleAr: "الظهر الخلفي والأرجل",
-          muscleDe: "Beine (Beuger & Gesäß)",
-          sets: "3",
-          reps: "8–10",
-          alternatives: ["Seated Leg Curl", "Reverse Hyperextension"]
-        },
-        {
-          id: 111,
-          nameDe: "Seated Leg Curl",
-          muscleAr: "الأرجل (الفخذ الخلفي)",
-          muscleDe: "Beine (Beuger)",
-          sets: "3",
-          reps: "10–15",
-          alternatives: ["Lying Leg Curl"]
-        },
-        {
-          id: 112,
-          nameDe: "Leg Extension",
-          muscleAr: "الأرجل (الفخذ الأمامي)",
-          muscleDe: "Beine (Quadrizeps)",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Leg Press", "Hack Squat"]
-        },
-        {
-          id: 113,
-          nameDe: "Standing Calf Raise",
-          muscleAr: "عضلات الساق (السمانة)",
-          muscleDe: "Waden",
-          sets: "3",
-          reps: "8–12",
-          alternatives: ["Seated Calf Raise"]
-        },
-        {
-          id: 114,
-          nameDe: "Abdominal Crunch",
-          muscleAr: "عضلات البطن",
-          muscleDe: "Bauch",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Reverse Hyperextension"]
-        }
-      ]
-    },
-    2: {
-      isRestDay: true,
-      focusTitleAr: "راحة واستشفاء",
-      focusTitleDe: "Ruhetag & Erholung",
-      linkedDay: null,
-      exercises: []
-    },
-    3: {
-      isRestDay: false,
-      focusTitleAr: "الدفع (Push)",
-      focusTitleDe: "Push (Brust, Schultern, Trizeps)",
-      linkedDay: null,
-      exercises: [
-        {
-          id: 115,
-          nameDe: "Chest Press",
-          muscleAr: "عضلات الصدر",
-          muscleDe: "Brust",
-          sets: "3",
-          reps: "8–10",
-          alternatives: ["Incline Chest Press", "Pec Deck / Chest Fly"]
-        },
-        {
-          id: 116,
-          nameDe: "Shoulder Press",
-          muscleAr: "الأكتاف",
-          muscleDe: "Schultern",
-          sets: "3",
-          reps: "6–10",
-          alternatives: ["Lateral Raise"]
-        },
-        {
-          id: 117,
-          nameDe: "Pec Deck / Chest Fly",
-          muscleAr: "عضلات الصدر",
-          muscleDe: "Brust",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Chest Press"]
-        },
-        {
-          id: 118,
-          nameDe: "Lateral Raise",
-          muscleAr: "الأكتاف (الجانبية)",
-          muscleDe: "Schultern (Seitlich)",
-          sets: "3",
-          reps: "10–15",
-          alternatives: ["Shoulder Press"]
-        },
-        {
-          id: 119,
-          nameDe: "Machine Dip",
-          muscleAr: "الصدر والترايسبس",
-          muscleDe: "Brust & Trizeps",
-          sets: "3",
-          reps: "8–12",
-          alternatives: ["Triceps Extension", "Overhead Triceps Extension"]
-        },
-        {
-          id: 120,
-          nameDe: "Overhead Triceps Extension",
-          muscleAr: "الترايسبس",
-          muscleDe: "Arme (Trizeps)",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Triceps Extension", "Machine Dip"]
-        }
-      ]
-    },
-    4: {
-      isRestDay: false,
-      focusTitleAr: "السحب (Pull)",
-      focusTitleDe: "Pull (Rücken, Bizeps)",
-      linkedDay: null,
-      exercises: [
-        {
-          id: 121,
-          nameDe: "Lat Pulldown",
-          muscleAr: "الظهر (اللاتس)",
-          muscleDe: "Rücken (Lat)",
-          sets: "3",
-          reps: "8–10",
-          alternatives: ["Chest Supported Row", "Seated Row"]
-        },
-        {
-          id: 122,
-          nameDe: "Seated Row",
-          muscleAr: "عضلات الظهر",
-          muscleDe: "Rücken",
-          sets: "3",
-          reps: "8–12",
-          alternatives: ["Chest Supported Row", "Lat Pulldown"]
-        },
-        {
-          id: 123,
-          nameDe: "Reverse Fly",
-          muscleAr: "الأكتاف (الخلفية)",
-          muscleDe: "Schultern (Posterior)",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Lateral Raise"]
-        },
-        {
-          id: 124,
-          nameDe: "Biceps Curl",
-          muscleAr: "البايسبس",
-          muscleDe: "Arme (Bizeps)",
-          sets: "3",
-          reps: "8–12",
-          alternatives: ["Preacher Curl", "Cable Biceps Curl"]
-        },
-        {
-          id: 125,
-          nameDe: "Cable Biceps Curl",
-          muscleAr: "البايسبس",
-          muscleDe: "Arme (Bizeps)",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Biceps Curl", "Preacher Curl"]
-        }
-      ]
-    },
-    5: {
-      isRestDay: false,
-      focusTitleAr: "الأرجل والبطن",
-      focusTitleDe: "Beine & Rumpf",
-      linkedDay: null,
-      exercises: [
-        {
-          id: 126,
-          nameDe: "Hack Squat",
-          muscleAr: "الأرجل (الفخذ الأمامي)",
-          muscleDe: "Beine (Quadrizeps)",
-          sets: "3",
-          reps: "8–12",
-          alternatives: ["Leg Press"]
-        },
-        {
-          id: 127,
-          nameDe: "Lying Leg Curl",
-          muscleAr: "الأرجل (الفخذ الخلفي)",
-          muscleDe: "Beine (Beuger)",
-          sets: "3",
-          reps: "10–15",
-          alternatives: ["Seated Leg Curl"]
-        },
-        {
-          id: 128,
-          nameDe: "Leg Extension",
-          muscleAr: "الأرجل (الفخذ الأمامي)",
-          muscleDe: "Beine (Quadrizeps)",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Hack Squat", "Leg Press"]
-        },
-        {
-          id: 129,
-          nameDe: "Reverse Hyperextension",
-          muscleAr: "أسفل الظهر والأرداف",
-          muscleDe: "Unterer Rücken & Gesäß",
-          sets: "2",
-          reps: "10–15",
-          alternatives: ["Romanian Deadlift (RDL)"]
-        },
-        {
-          id: 130,
-          nameDe: "Seated Calf Raise",
-          muscleAr: "عضلات الساق (السمانة)",
-          muscleDe: "Waden",
-          sets: "3",
-          reps: "10–15",
-          alternatives: ["Standing Calf Raise"]
-        },
-        {
-          id: 131,
-          nameDe: "Abdominal Crunch",
-          muscleAr: "عضلات البطن",
-          muscleDe: "Bauch",
-          sets: "2",
-          reps: "12–20",
-          alternatives: ["Reverse Hyperextension"]
-        }
-      ]
-    },
-    6: {
-      isRestDay: true,
-      focusTitleAr: "راحة واستشفاء",
-      focusTitleDe: "Ruhetag & Erholung",
-      linkedDay: null,
-      exercises: []
-    }
+    0: { isRestDay: false, focusTitleAr: "الجزء العلوي", focusTitleDe: "Oberkörper", linkedDay: null, exercises: day0Exercises },
+    1: { isRestDay: false, focusTitleAr: "الجزء السفلي", focusTitleDe: "Unterkörper", linkedDay: null, exercises: day1Exercises },
+    2: { isRestDay: true, focusTitleAr: "راحة واستشفاء", focusTitleDe: "Ruhetag & Erholung", linkedDay: null, exercises: [] },
+    3: { isRestDay: false, focusTitleAr: "الدفع (Push)", focusTitleDe: "Push (Brust, Schultern, Trizeps)", linkedDay: null, exercises: day3Exercises },
+    4: { isRestDay: false, focusTitleAr: "السحب (Pull)", focusTitleDe: "Pull (Rücken, Bizeps)", linkedDay: null, exercises: day4Exercises },
+    5: { isRestDay: false, focusTitleAr: "الأرجل والبطن", focusTitleDe: "Beine & Rumpf", linkedDay: null, exercises: day5Exercises },
+    6: { isRestDay: true, focusTitleAr: "راحة واستشفاء", focusTitleDe: "Ruhetag & Erholung", linkedDay: null, exercises: [] }
   },
   notesDe: [
     "RIR (Repetitions in Reserve): Hauptübungen 2, Isolationsübungen 1–2.",
