@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Dumbbell, Sparkles } from 'lucide-react';
+import { X, Plus, Dumbbell } from 'lucide-react';
 import { ExerciseItem, Language, ExerciseMediaItem } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 import { notifyModalChange } from '../utils/modalManager';
 import { ExerciseMediaUploader } from './ExerciseMediaUploader';
-import { saveExerciseMediaFile, deleteExerciseMediaItem } from '../utils/mediaStorage';
+import {
+  saveExerciseMediaFile,
+  deleteExerciseMediaItem,
+  clearAllMediaForExercise,
+} from '../utils/mediaStorage';
 
 interface AddExerciseModalProps {
   isOpen: boolean;
@@ -15,17 +19,7 @@ interface AddExerciseModalProps {
   dayName?: string;
 }
 
-const COMMON_MUSCLES = [
-  { ar: 'عضلات الصدر', de: 'Brust' },
-  { ar: 'عضلات الظهر', de: 'Rücken' },
-  { ar: 'الأكتاف', de: 'Schultern' },
-  { ar: 'الأرجل والأرداف', de: 'Beine & Gesäß' },
-  { ar: 'البايسبس', de: 'Arme (Bizeps)' },
-  { ar: 'الترايسبس', de: 'Arme (Trizeps)' },
-  { ar: 'عضلات البطن', de: 'Bauch' },
-  { ar: 'عضلات الساق (السمانة)', de: 'Waden' },
-  { ar: 'أسفل الظهر', de: 'Unterer Rücken' },
-];
+import { COMMON_MUSCLES, resolveMuscle } from '../data/muscles';
 
 const SETS_PRESETS = ['2', '3', '4', '5'];
 const REPS_PRESETS = ['6–8', '8–12', '10–12', '12–15', '15–20'];
@@ -65,6 +59,15 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
     }
   }, [isOpen]);
 
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    return () => {
+      if (!submittedRef.current) {
+        clearAllMediaForExercise(tempId);
+      }
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   const handleUploadFiles = async (files: File[]) => {
@@ -94,14 +97,14 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
     const newExercise: ExerciseItem = {
       id: tempId,
       nameDe: cleanName,
-      muscleAr: muscle.trim() || 'عام',
-      muscleDe: muscle.trim() || 'Allgemein',
+      ...resolveMuscle(muscle, isAr, { muscleAr: 'عام', muscleDe: 'Allgemein' }),
       sets: sets.trim() || '3',
       reps: reps.trim() || '8–12',
       alternatives: [],
       media: mediaList,
     };
 
+    submittedRef.current = true;
     onAddExercise(newExercise);
     onClose();
   };

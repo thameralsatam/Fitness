@@ -117,16 +117,29 @@ export function getStoredActivePlan(): WorkoutPlan {
   return DEFAULT_WORKOUT_PLAN;
 }
 
-/**
- * Hard Reset / Factory Reset all application data from localStorage & sessionStorage
- */
-export function hardResetApp(): void {
+export async function hardResetApp(): Promise<void> {
   try {
-    localStorage.clear();
-    sessionStorage.clear();
-  } catch (err) {
-    console.error('Error clearing storage:', err);
-  }
+    const idb: any = indexedDB;
+    const dbs: Array<{ name?: string }> = (await idb.databases?.()) ?? [];
+    await Promise.all(
+      dbs.map(
+        (d) =>
+          new Promise<void>((resolve) => {
+            if (!d?.name) return resolve();
+            const req = indexedDB.deleteDatabase(d.name);
+            req.onsuccess = req.onerror = req.onblocked = () => resolve();
+          })
+      )
+    );
+  } catch { /* ignore */ }
+  try {
+    const { isNativeAudioAvailable, NativeAudioPlayer } = await import('./nativeAudioBridge');
+    if (isNativeAudioAvailable()) {
+      await NativeAudioPlayer.stop().catch(() => {});
+      await (NativeAudioPlayer as any).clearCache?.().catch(() => {});
+    }
+  } catch { /* ignore */ }
+  try { localStorage.clear(); sessionStorage.clear(); } catch { /* ignore */ }
   window.location.reload();
 }
 

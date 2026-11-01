@@ -45,10 +45,3 @@ export interface WorkoutPlan {
   notesDe: string[];
   notesAr: string[];
 }
-
-export interface MuscleVolume {
-  nameDe: string;
-  nameAr: string;
-  setsDe: string;
-  setsAr: string;
-}

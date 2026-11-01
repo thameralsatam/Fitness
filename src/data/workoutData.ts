@@ -1,4 +1,4 @@
-import { ExerciseItem, MuscleVolume, WorkoutPlan } from '../types';
+import { ExerciseItem, WorkoutPlan } from '../types';
 
 export const EXERCISES_DATA: ExerciseItem[] = [
   { id: 1, nameDe: "Abduktionsmaschine", muscleDe: "Beine & Gesäß", muscleAr: "الأرجل والأرداف", sets: "3 Sätze", reps: "12–15 Wdh", alternatives: ["Stehende Abduktionsmaschine", "Kabelzug Abduktion"] },
@@ -106,14 +106,6 @@ export const EXERCISES_DATA: ExerciseItem[] = [
   { id: 103, nameDe: "Überzugmaschine mit Ellenbogenpolstern", muscleDe: "Rücken & Brust", muscleAr: "الظهر والصدر", sets: "3 Sätze", reps: "10–12 Wdh", alternatives: ["Überzugmaschine", "Rückenzugmaschine"] },
 ];
 
-const getEx = (id: number): ExerciseItem => {
-  const ex = EXERCISES_DATA.find((e) => e.id === id);
-  if (!ex) {
-    throw new Error(`Exercise ID ${id} not found in EXERCISES_DATA`);
-  }
-  return ex;
-};
-
 const createEx = (
   id: number,
   nameDe: string,
@@ -203,120 +195,18 @@ export const DEFAULT_WORKOUT_PLAN: WorkoutPlan = {
   ]
 };
 
-// Dynamically compute muscle group volume distribution from any exercise list
-export function getPlanMuscleDistribution(exercises: ExerciseItem[]): MuscleVolume[] {
-  const muscleMap = new Map<string, { nameDe: string; nameAr: string; totalSets: number }>();
-
-  exercises.forEach((ex) => {
-    // Simplify muscle group key (e.g. "Beine", "Brust", "Rücken", etc.)
-    const key = ex.muscleDe.split('(')[0].trim() || ex.muscleDe;
-    const setsCount = parseInt(ex.sets, 10) || 2;
-
-    const existing = muscleMap.get(key);
-    if (existing) {
-      existing.totalSets += setsCount;
-    } else {
-      muscleMap.set(key, {
-        nameDe: ex.muscleDe,
-        nameAr: ex.muscleAr,
-        totalSets: setsCount,
-      });
-    }
-  });
-
-  return Array.from(muscleMap.values()).map((m) => ({
-    nameDe: m.nameDe,
-    nameAr: m.nameAr,
-    setsDe: `${m.totalSets} Sätze / Einheit`,
-    setsAr: `${m.totalSets} مجموعات / حصة`,
-  }));
-}
-
-// Dynamically compute rep range from any exercise list
-export function getPlanRepRangeSummary(exercises: ExerciseItem[]): string {
-  if (!exercises || exercises.length === 0) return '8–12';
-  const uniqueReps = Array.from(new Set(exercises.map((e) => e.reps.trim())));
-  if (uniqueReps.length === 1) return uniqueReps[0];
-  return uniqueReps.join(' / ');
-}
-
-export const MUSCLE_DIST_DATA: MuscleVolume[] = [
-  { nameDe: "Beine & Gesäß", nameAr: "الأرجل والأرداف", setsDe: "6 Sätze / Einheit", setsAr: "٦ مجموعات / حصة" },
-  { nameDe: "Rücken (Lat & Mitte)", nameAr: "الظهر (اللاتس والترابيز)", setsDe: "6 Sätze / Einheit", setsAr: "٦ مجموعات / حصة" },
-  { nameDe: "Brust", nameAr: "عضلات الصدر", setsDe: "3 Sätze / Einheit", setsAr: "٣ مجموعات / حصة" },
-  { nameDe: "Schultern", nameAr: "الأكتاف", setsDe: "2 Sätze / Einheit", setsAr: "مجموعتان / حصة" },
-  { nameDe: "Unterer Rücken", nameAr: "أسفل الظهر", setsDe: "2 Sätze / Einheit", setsAr: "مجموعتان / حصة" },
-  { nameDe: "Bauchmuskeln", nameAr: "عضلات البطن", setsDe: "2 Sätze / Einheit", setsAr: "مجموعتان / حصة" }
-];
 
 export const I18N = {
   de: {
     htmlLang: "de",
     dir: "ltr" as const,
-    brandTitle: "TRAININGSPLAN",
-    brandSubtitle: "Individuelles Training",
-    menuLang: "Sprache: العربية",
-    menuCopy: "Plan kopieren",
-    menuAllAlts: "Alle Alternativen",
-    menuReset: "Heutigen Fortschritt zurücksetzen",
-    menuPrint: "Drucken / PDF",
-    toastCopied: "Trainingsplan in die Zwischenablage kopiert!",
-    toastReset: "Fortschritt zurückgesetzt.",
-    scheduleDays: "Aktuelle Übungen",
-    scheduleSub: "Individuelles Training · Flexible Auswahl",
-    progressLabel: "Trainingsfortschritt:",
-    progressDoneText: "erledigt",
-    progressReset: "Zurücksetzen",
-    capsuleLabel: "Sätze · Wdh.",
-    altShow: "Alternativen anzeigen",
-    altHide: "Alternativen ausblenden",
-    altHeader: "Mögliche Alternativen:",
-    notesTitle: "Wichtige Hinweise",
     navPlan: "Plan",
     navTimer: "Timer",
     navAudio: "Audio",
-    navTools: "Tools",
-    navStats: "Statistik",
-    navGoals: "Ziele",
     navProfile: "Einstellungen",
-    audioViewTitle: "Smarter Workout-Audioplayer",
-    audioViewDesc: "Eigene Trainings-Audio- & Videodateien lokal im Browser speichern und werbefrei abspielen.",
-    toolsTitle: "Smarte Trainings-Tools",
-    toolsDesc: "Smarte Trainings-Rechner zur präzisen Hantel- und Bedarfsberechnung.",
-    plateCalcTitle: "Hantelscheiben-Rechner",
-    plateCalcDesc: "Berechne sofort die exakten Gewichtsscheiben pro Seite für deine Langhantel.",
-    oneRmTitle: "1RM & Aufwärm-Pyramide",
-    oneRmDesc: "Ermittle dein Maximalgewicht und erhalte deinen perfekten Aufwärm-Stufenplan.",
-    nutritionTitle: "Protein- & Wasser-Bedarf",
-    nutritionDesc: "Tagesbedarf an Flüssigkeit und Eiweiß auf Knopfdruck abgestimmt auf dein Gewicht.",
-    ambientTitle: "Fokus & Regenerations-Audio",
-    ambientDesc: "Echtzeit-Soundgenerator (Brown Noise, Wellen, Fokus) für maximale Konzentration.",
-    statsTitle: "Statistiken & Fortschritt",
-    statsDesc: "Umfassende Langzeit-Übersicht über dein Training, Phasen und Muskelverteilung.",
-    statSessions: "Trainingstage",
-    statSessionsSub: "Gesamte Workouts",
-    statExercises: "Übungen absolviert",
-    statExercisesSub: "Gesamt-Sätze absolviert",
-    statStreak: "Trainings-Serie",
-    statStreakSub: "Aktive Einheiten",
-    statRate: "Abschlussrate",
-    statRateSub: "Heutiges Training",
-    statsProgTitle: "Trainingszyklus & Phasen",
-    statsProgBadge: "Progression",
-    statsWeekTitle: "Wochenplan & Rhythmus",
-    statsWeekBadge: "Individuell",
-    statsVolumeTitle: "Volumen-Verteilung pro Einheit",
-    statsVolumeBadge: "Übersicht",
-    goalsTitle: "Trainingsziele & Disziplin",
-    goalsDesc: "Regeln für maximalen Muskelaufbau und sichere Progression.",
-    goalInputPlaceholder: "Eigenes Ziel hinzufügen...",
-    goalAddBtn: "Hinzufügen",
     confirmResetTitle: "Trainingsfortschritt zurücksetzen?",
     confirmResetDesc: "Möchtest du alle als erledigt markierten Übungen für heute wirklich zurücksetzen?",
-    confirmDeleteGoalTitle: "Ziel löschen?",
-    confirmDeleteGoalDesc: "Möchtest du dieses Ziel wirklich dauerhaft entfernen?",
     confirmBtn: "Ja, zurücksetzen",
-    confirmDeleteBtn: "Löschen",
     cancelBtn: "Abbrechen",
     timerViewTitle: "Pausen-Timer",
     timerViewDesc: "Optimale Erholung zwischen den Trainingssätzen (90s Richtwert).",
@@ -336,70 +226,13 @@ export const I18N = {
   ar: {
     htmlLang: "ar",
     dir: "rtl" as const,
-    brandTitle: "جدول التمارين",
-    brandSubtitle: "تمارين وتدريب مخصص",
-    menuLang: "Sprache: Deutsch",
-    menuCopy: "نسخ الجدول كاملاً",
-    menuAllAlts: "فتح / إغلاق كل البدائل",
-    menuReset: "إعادة ضبط تقدم اليوم",
-    menuPrint: "طباعة / حفظ PDF",
-    toastCopied: "تم نسخ جدول التمارين إلى الحافظة بنجاح!",
-    toastReset: "تمت إعادة ضبط التقدم بنجاح.",
-    scheduleDays: "تمارين الحصة الحالية",
-    scheduleSub: "تمرين حر · تخصيص مرن للأجهزة",
-    progressLabel: "تقدم التمرين اليوم:",
-    progressDoneText: "مكتمل",
-    progressReset: "إعادة ضبط",
-    capsuleLabel: "مجموعات · عدّات",
-    altShow: "عرض البدائل",
-    altHide: "إخفاء البدائل",
-    altHeader: "البدائل المتاحة:",
-    notesTitle: "ملاحظات هامة",
     navPlan: "الجدول",
     navTimer: "المؤقت",
     navAudio: "الصوتيات",
-    navTools: "الأدوات",
-    navStats: "الإحصائيات",
-    navGoals: "الأهداف",
     navProfile: "الإعدادات",
-    audioViewTitle: "مشغل صوتيات التمرين الذكي",
-    audioViewDesc: "شغّل مقاطعك الصوتية والفيديوهات المحفوظة محلياً بجودة عالية وبدون إعلانات أثناء تمرينك.",
-    toolsTitle: "أدوات ومساعد التدريب الذكي",
-    toolsDesc: "حواسب رياضية ذكية مصممة لتسهيل تمرينك وحساب الأوزان والاحتياج اليومي بدقة.",
-    plateCalcTitle: "حاسبة أوزان البار (الأقراص)",
-    plateCalcDesc: "احسب فوراً الأقراص المطلوبة لكل جهة من البار بدون عناء الحساب الذهني.",
-    oneRmTitle: "حاسبة أقصى وزن (1RM) ومجموعات الإحماء",
-    oneRmDesc: "احسب طاقتك القصوى واحصل على جدول تدرج الإحماء المحكم لحماية مفاصلك.",
-    nutritionTitle: "حاسبة البروتين والماء اليومي",
-    nutritionDesc: "احسب احتياجك الدقيق من السوائل وجرامات البروتين بناءً على وزنك وهدفك.",
-    ambientTitle: "أصوات خلفية واسترخاء بين الجولات",
-    ambientDesc: "مولد صوتي نقي ولحظي (الضوضاء البنية وأمواج البحر) لتهدئة الذهن والاسترخاء أثناء فترة الراحة.",
-    statsTitle: "الإحصائيات والتقدم الشامل",
-    statsDesc: "نظرة شاملة ومفصلة على استمراريتك ومراحل التدريب وتوزيع المجموعات العضلية.",
-    statSessions: "أيام التمرين",
-    statSessionsSub: "جلسات مكتملة",
-    statExercises: "التمارين المنجزة",
-    statExercisesSub: "إجمالي التمارين المؤداة",
-    statStreak: "الاستمرارية",
-    statStreakSub: "جلسات تدريبية مستمرة",
-    statRate: "إنجاز اليوم",
-    statRateSub: "نسبة التمرين الحالي",
-    statsProgTitle: "مراحل البرنامج التدريبي والتدرج",
-    statsProgBadge: "الدورة الحالية",
-    statsWeekTitle: "أيام التمرين الأسبوعية",
-    statsWeekBadge: "توزيع مخصص",
-    statsVolumeTitle: "توزيع الحجم العضلي للحصة",
-    statsVolumeBadge: "نظرة شاملة",
-    goalsTitle: "أهداف التمرين والانضباط",
-    goalsDesc: "قواعد البناء العضلي السليم والتدرج الحركي الآمن.",
-    goalInputPlaceholder: "أضف هدفاً أو قاعدة جديدة...",
-    goalAddBtn: "إضافة",
     confirmResetTitle: "تأكيد إعادة ضبط التمرين",
     confirmResetDesc: "هل أنت متأكد من رغبتك في إعادة ضبط جميع التمارين المكتملة لليوم؟",
-    confirmDeleteGoalTitle: "تأكيد حذف الهدف",
-    confirmDeleteGoalDesc: "هل أنت متأكد من رغبتك في حذف هذا الهدف نهائياً؟",
     confirmBtn: "نعم، إعادة الضبط",
-    confirmDeleteBtn: "نعم، حذف",
     cancelBtn: "إلغاء",
     timerViewTitle: "مؤقت الراحة بين المجموعات",
     timerViewDesc: "الاستشفاء الأمثل للطاقة العضلية (المعيار الموصى به: 90 ثانية).",

@@ -109,73 +109,6 @@ export function getLinkedDay(plan: WorkoutPlan, dayIndex: DayIndex): DayIndex | 
   return linked !== undefined && linked !== null && linked !== dayIndex ? linked : null;
 }
 
-/**
- * Gets the list of active training days (not rest days)
- */
-export function getActiveTrainingDays(plan: WorkoutPlan): DayIndex[] {
-  const active: DayIndex[] = [];
-  for (let d = 0; d < 7; d++) {
-    const dayIdx = d as DayIndex;
-    if (!isDayRestDay(plan, dayIdx)) {
-      active.push(dayIdx);
-    }
-  }
-  return active;
-}
-
-/**
- * Updates training days list and synchronizes all days in the plan accordingly
- */
-export function setTrainingDays(plan: WorkoutPlan, newTrainingDays: number[]): WorkoutPlan {
-  const daysMap = ensureDaysMap(plan);
-
-  for (let d = 0; d < 7; d++) {
-    const dayIdx = d as DayIndex;
-    const isTraining = newTrainingDays.includes(dayIdx);
-    daysMap[dayIdx] = {
-      ...daysMap[dayIdx],
-      isRestDay: !isTraining,
-      linkedDay: !isTraining ? null : daysMap[dayIdx]?.linkedDay,
-    };
-  }
-
-  return {
-    ...plan,
-    trainingDays: newTrainingDays.sort((a, b) => a - b),
-    days: daysMap,
-  };
-}
-
-/**
- * Computes a dynamic, elegant schedule subtitle (e.g., "4 أيام في الأسبوع (إث، ثل، خم، جم)" or "4x pro Woche (Mo, Di, Do, Fr)")
- */
-export function getScheduleSubtitle(plan: WorkoutPlan, lang: Language): string {
-  const isAr = lang === 'ar';
-  const activeDays = getActiveTrainingDays(plan);
-  const count = activeDays.length;
-
-  if (count === 0) {
-    return isAr ? 'أيام راحة كاملة' : 'Komplette Ruhewoche';
-  }
-
-  if (count === 7) {
-    return isAr ? 'تدريب يومي (7 أيام/أسبوع)' : 'Tägliches Training (7 Tage/Woche)';
-  }
-
-  const shortNames = activeDays
-    .map((d) => (isAr ? DAYS_SHORT_AR[d] : DAYS_SHORT_DE[d]))
-    .join('، ');
-  const shortNamesDe = activeDays
-    .map((d) => DAYS_SHORT_DE[d])
-    .join(', ');
-
-  if (isAr) {
-    const daysLabel = count === 1 ? 'يوم واحد' : count === 2 ? 'يومان' : `${count} أيام`;
-    return `${daysLabel} في الأسبوع (${shortNames})`;
-  } else {
-    return `${count}x pro Woche (${shortNamesDe})`;
-  }
-}
 
 /**
  * Initializes or clones days structure for a workout plan
@@ -352,46 +285,6 @@ export function updateExerciseOnDay(plan: WorkoutPlan, dayIndex: DayIndex, updat
   };
 }
 
-/**
- * Swaps/replaces an exercise on a specific day with a new exercise item
- */
-export function swapExerciseOnDay(
-  plan: WorkoutPlan,
-  dayIndex: DayIndex,
-  oldId: number,
-  replacement: ExerciseItem
-): WorkoutPlan {
-  const daysMap = ensureDaysMap(plan);
-  const effectiveDay =
-    daysMap[dayIndex]?.linkedDay !== null && daysMap[dayIndex]?.linkedDay !== undefined
-      ? daysMap[dayIndex].linkedDay!
-      : dayIndex;
-
-  const currentExercises = daysMap[effectiveDay]?.exercises || [];
-  const updatedExercises = currentExercises.map((e) => (e.id === oldId ? replacement : e));
-
-  daysMap[effectiveDay] = {
-    ...daysMap[effectiveDay],
-    exercises: updatedExercises,
-  };
-
-  // Sync linked days
-  for (let d = 0; d < 7; d++) {
-    const dIdx = d as DayIndex;
-    if (daysMap[dIdx]?.linkedDay === effectiveDay) {
-      daysMap[dIdx] = {
-        ...daysMap[dIdx],
-        exercises: [...updatedExercises],
-      };
-    }
-  }
-
-  return {
-    ...plan,
-    days: daysMap,
-    exercises: effectiveDay === 0 ? updatedExercises : plan.exercises,
-  };
-}
 
 /**
  * Removes an exercise from a specific day (or linked days)
@@ -476,4 +369,11 @@ export function unlinkDay(plan: WorkoutPlan, dayIndex: DayIndex): WorkoutPlan {
     ...plan,
     days: daysMap,
   };
+}
+
+export function collectPlanExerciseIds(plan: WorkoutPlan): Set<number> {
+  const ids = new Set<number>();
+  (plan.exercises || []).forEach((e) => ids.add(e.id));
+  Object.values(plan.days || {}).forEach((d) => (d?.exercises || []).forEach((e) => ids.add(e.id)));
+  return ids;
 }

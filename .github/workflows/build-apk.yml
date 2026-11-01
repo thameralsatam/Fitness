@@ -40,7 +40,7 @@ jobs:
         run: npm ci || npm install
 
       - name: Build Web Application
-        run: npm run build
+        run: npx vite build
 
       - name: Sync Capacitor Android Project
         run: npx cap sync android

@@ -5,7 +5,6 @@ import {
   Image as ImageIcon,
   Trash2,
   Play,
-  Plus,
   Loader2,
 } from 'lucide-react';
 import { ExerciseMediaItem } from '../types';

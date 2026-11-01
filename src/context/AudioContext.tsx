@@ -216,16 +216,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
     };
   }, [isNative]);
 
-  // Track URL management for Web Fallback
-  const [activeAudioUrl, setActiveAudioUrl] = useState<string | null>(null);
-
   useEffect(() => {
     // If native, Web HTMLAudioElement is not used
     if (isNative) return;
 
     if (currentTrack) {
       const url = URL.createObjectURL(currentTrack.blob);
-      setActiveAudioUrl(url);
 
       if (audioRef.current) {
         audioRef.current.src = url;
@@ -242,7 +238,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         URL.revokeObjectURL(url);
       };
     } else {
-      setActiveAudioUrl(null);
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';
@@ -366,17 +361,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
   // Helper to ensure track is cached into native storage
   const ensureNativeTrackCached = async (track: AudioTrack, isBackground = false) => {
     try {
-      console.log('[DEBUG_AUDIO] Checking cache status for track:', track.id, 'Name:', track.name);
       const { cached } = await NativeAudioPlayer.hasCachedTrack({ id: track.id });
-      console.log('[DEBUG_AUDIO] Cache status for track:', track.id, 'is cached:', cached);
       
       if (!cached) {
         if (!track.blob) {
           console.error('[DEBUG_AUDIO] Cannot cache track natively - track.blob is missing or null!', track.id);
           return false;
         }
-
-        console.log('[DEBUG_AUDIO] cache start for track:', track.id, 'Blob size:', track.blob.size);
         
         // Chunk size: 1MB (1024 * 1024 bytes)
         const chunkSize = 1024 * 1024;
@@ -385,7 +376,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         for (let i = 0; i < totalChunks; i++) {
           // If this is the active track (not background), abort if user selected a different track
           if (!isBackground && lastRequestedTrackIdRef.current !== track.id) {
-            console.log('[DEBUG_AUDIO] Aborting chunked cache upload for track:', track.id, 'because another track was selected.');
             return false;
           }
           
@@ -408,8 +398,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
           // Yield to the browser's event loop to prevent UI freezing
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
-        
-        console.log('[DEBUG_AUDIO] cache finished for track:', track.id);
       }
       return true;
     } catch (e) {
@@ -433,29 +421,21 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
 
     const oldTrack = currentTrackIndexRef.current >= 0 ? list[currentTrackIndexRef.current] : null;
 
-    console.log('[DEBUG_AUDIO] user selected track:', track.name, 'index:', index);
-    console.log('[DEBUG_AUDIO] current track قبل التغيير:', oldTrack ? oldTrack.name : 'none');
-    console.log('[DEBUG_AUDIO] requested track:', track.name);
-
     if (isNative) {
       try {
         lastRequestedTrackIdRef.current = track.id;
 
         // Stop current audio immediately to avoid overlapping playback
-        console.log('[DEBUG_AUDIO] Stopping current player to prepare for new track');
         await NativeAudioPlayer.stop();
 
         // Update active track states immediately to keep UI highly responsive
         setCurrentTrackIndex(index);
         setIsPlaying(true);
 
-        console.log('[DEBUG_AUDIO] cache start for track:', track.id);
         const cacheSuccess = await ensureNativeTrackCached(track, false);
-        console.log('[DEBUG_AUDIO] cache finished for track:', track.id, 'success:', cacheSuccess);
 
         // Abort if user clicked another track during the caching process
         if (lastRequestedTrackIdRef.current !== track.id) {
-          console.log('[DEBUG_AUDIO] Aborting playback of', track.name, 'because another track was selected since.');
           return;
         }
 
@@ -468,8 +448,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
             ? displayedTracksRef.current
             : tracksRef.current;
 
-        console.log('[DEBUG_AUDIO] Playlist tracks count:', currentActiveList.length);
-
         const playlistData: NativeAudioTrackItem[] = currentActiveList.map((t) => ({
           id: t.id,
           name: t.name,
@@ -481,28 +459,23 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
         }));
 
         const startIndexInPlaylist = currentActiveList.findIndex((t) => t.id === track.id);
-        console.log('[DEBUG_AUDIO] startIndexInPlaylist:', startIndexInPlaylist);
 
-        console.log('[DEBUG_AUDIO] setPlaylist start');
         const setPlaylistRes = await NativeAudioPlayer.setPlaylist({
           tracks: playlistData,
           startIndex: Math.max(0, startIndexInPlaylist),
           startPosition: 0,
         });
-        console.log('[DEBUG_AUDIO] setPlaylist finished, result:', setPlaylistRes);
 
         await NativeAudioPlayer.setPlaybackSpeed({ speed: playbackRate });
         await NativeAudioPlayer.setRepeatMode({ mode: playbackMode });
         await NativeAudioPlayer.setVolume({ volume: isMuted ? 0 : 1 });
 
-        console.log('[DEBUG_AUDIO] playback start');
         setIsPlaying(true);
 
         // Pre-cache only the next track in the playlist in background (non-blocking)
         const nextIdx = (startIndexInPlaylist + 1) % currentActiveList.length;
         const nextTrack = currentActiveList[nextIdx];
         if (nextTrack && nextTrack.id !== track.id) {
-          console.log('[DEBUG_AUDIO] Pre-caching next track in background:', nextTrack.name);
           ensureNativeTrackCached(nextTrack, true);
         }
       } catch (err) {

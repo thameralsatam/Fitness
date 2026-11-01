@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Play,
@@ -23,7 +23,6 @@ import {
   Pencil,
   X,
   Check,
-  AlertTriangle,
   Gauge,
   Folder,
   FolderPlus,
@@ -34,19 +33,15 @@ import {
   Info,
   Clock,
   FileAudio,
-  Sparkles,
-  FileText,
 } from 'lucide-react';
 import {
   AudioTrack,
   AudioFolder,
-  getAllTracks,
   deleteTrack,
   clearAllTracks,
   updateTracksOrder,
   saveTrack,
   updateTrackDetails,
-  getAudioFolders,
   saveAudioFolder,
   deleteAudioFolder,
   updateAudioFolderName,
@@ -106,7 +101,6 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
     isMuted,
     playbackRate,
     playbackMode,
-    playTrackAtIndex,
     playTrackById,
     togglePlay,
     handleNext,
@@ -215,7 +209,6 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
     setPendingUploads(null);
     setIsProcessingFiles(true);
 
-    const addedTracks: AudioTrack[] = [];
     const startingOrder = tracks.length;
 
     try {
@@ -258,7 +251,6 @@ export const AudioPlayerSection: React.FC<AudioPlayerSectionProps> = ({ currentL
 
         // Save to IndexedDB
         await saveTrack(newTrack);
-        addedTracks.push(newTrack);
       }
 
       await refreshTracksAndFolders();

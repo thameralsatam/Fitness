@@ -26,17 +26,7 @@ interface ExerciseEditModalProps {
   onRemoveFromPlan: (id: number) => void;
 }
 
-const COMMON_MUSCLES = [
-  'عضلات الصدر',
-  'عضلات الظهر',
-  'الأكتاف',
-  'الأرجل والأرداف',
-  'البايسبس',
-  'الترايسبس',
-  'عضلات البطن',
-  'عضلات الساق (السمانة)',
-  'أسفل الظهر',
-];
+import { COMMON_MUSCLES, resolveMuscle } from '../data/muscles';
 
 export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   isOpen,
@@ -95,8 +85,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
     onSaveExercise({
       ...exercise,
       nameDe: name.trim() || exercise.nameDe,
-      muscleAr: muscle.trim() || exercise.muscleAr,
-      muscleDe: muscle.trim() || exercise.muscleDe,
+      ...resolveMuscle(muscle, isAr, { muscleAr: exercise.muscleAr, muscleDe: exercise.muscleDe }),
       sets,
       reps,
       media: updated,
@@ -110,8 +99,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
     onSaveExercise({
       ...exercise,
       nameDe: name.trim() || exercise.nameDe,
-      muscleAr: muscle.trim() || exercise.muscleAr,
-      muscleDe: muscle.trim() || exercise.muscleDe,
+      ...resolveMuscle(muscle, isAr, { muscleAr: exercise.muscleAr, muscleDe: exercise.muscleDe }),
       sets,
       reps,
       media: updated,
@@ -124,8 +112,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
     onSaveExercise({
       ...exercise,
       nameDe: name.trim() || exercise.nameDe,
-      muscleAr: muscle.trim() || exercise.muscleAr,
-      muscleDe: muscle.trim() || exercise.muscleDe,
+      ...resolveMuscle(muscle, isAr, { muscleAr: exercise.muscleAr, muscleDe: exercise.muscleDe }),
       sets: sets.trim() || '3',
       reps: reps.trim() || '8–12',
       media: mediaList,
@@ -187,7 +174,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="اسم التمرين"
+                  placeholder={isAr ? 'اسم التمرين' : 'Name der Übung'}
                   className="w-full px-3.5 py-2.5 bg-[#f8faf8] rounded-xl border border-[#dbe4dc] text-sm font-bold text-[#15221b] focus:ring-2 focus:ring-[#215641]/20 focus:border-[#215641] outline-hidden"
                 />
               </div>
@@ -198,29 +185,32 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                   {isAr ? 'العضلة المستهدفة:' : 'Zielmuskel:'}
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {COMMON_MUSCLES.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => {
-                        triggerHaptic('light');
-                        setMuscle(m);
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        muscle === m
-                          ? 'bg-[#215641] text-white'
-                          : 'bg-[#edf5f0] text-[#2c4b3a] hover:bg-[#dfeee3]'
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  ))}
+                  {COMMON_MUSCLES.map((m) => {
+                    const label = isAr ? m.ar : m.de;
+                    return (
+                      <button
+                        key={m.de}
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('light');
+                          setMuscle(label);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          muscle === label
+                            ? 'bg-[#215641] text-white'
+                            : 'bg-[#edf5f0] text-[#2c4b3a] hover:bg-[#dfeee3]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
                 <input
                   type="text"
                   value={muscle}
                   onChange={(e) => setMuscle(e.target.value)}
-                  placeholder="العضلة المستهدفة"
+                  placeholder={isAr ? 'العضلة المستهدفة' : 'Zielmuskel'}
                   className="w-full px-3 py-2 bg-[#f8faf8] rounded-xl border border-[#dbe4dc] text-xs font-semibold text-[#15221b] focus:ring-2 focus:ring-[#215641]/20 focus:border-[#215641] outline-hidden"
                 />
               </div>

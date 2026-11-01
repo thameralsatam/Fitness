@@ -8,7 +8,6 @@ const config: CapacitorConfig = {
     androidScheme: 'https'
   },
   android: {
-    allowMixedContent: true,
     captureInput: true,
     webContentsDebuggingEnabled: false
   },

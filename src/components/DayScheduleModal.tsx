@@ -10,7 +10,6 @@ import {
   Coffee,
   Check,
   Sparkles,
-  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import { DayIndex, Language, WorkoutPlan } from '../types';

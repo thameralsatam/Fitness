@@ -3,10 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Play,
   Pause,
-  RotateCcw,
   Check,
-  ChevronRight,
-  ChevronLeft,
   X,
   Plus,
   Minus,
@@ -14,7 +11,6 @@ import {
   Award,
   Dumbbell,
   Clock,
-  Layers,
   ArrowRight,
   Save,
   Trash2,

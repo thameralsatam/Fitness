@@ -37,10 +37,16 @@ import {
   updateExerciseOnDay,
   removeExerciseFromDay,
   clearDayExercises,
-  getScheduleSubtitle,
   DAYS_NAMES_AR,
   DAYS_NAMES_DE,
+  collectPlanExerciseIds,
 } from './utils/scheduleManager';
+import { pruneOrphanMedia } from './utils/mediaStorage';
+import {
+  loadCompletedToday,
+  saveCompletedToday,
+  clearCompletedToday,
+} from './utils/progressStorage';
 
 interface ConfirmModalState {
   isOpen: boolean;
@@ -108,17 +114,7 @@ export default function App() {
 
   const [currentTab, setCurrentTab] = useState<ViewTab>('plan');
 
-  const [completedExercises, setCompletedExercises] = useState<Set<number>>(() => {
-    try {
-      const saved = localStorage.getItem('gym_completed');
-      if (saved) return new Set(JSON.parse(saved));
-    } catch {
-      // fallback
-    }
-    return new Set();
-  });
-
-  const [openPanels, setOpenPanels] = useState<Set<number>>(new Set());
+  const [completedExercises, setCompletedExercises] = useState<Set<number>>(() => loadCompletedToday());
 
   const [totalSessions, setTotalSessions] = useState<number>(() => {
     try {
@@ -191,6 +187,18 @@ export default function App() {
     }
   }, [bodyFont]);
 
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setCompletedExercises(loadCompletedToday());
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  useEffect(() => {
+    pruneOrphanMedia(collectPlanExerciseIds(activePlan));
+  }, []);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
@@ -204,31 +212,14 @@ export default function App() {
   const handleToggleExercise = (id: number) => {
     triggerHaptic('selection');
     setCompletedExercises((prev) => {
-      const next = new Set(prev);
+      const next = new Set<number>(prev);
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
         triggerHaptic('success');
       }
-      try {
-        localStorage.setItem('gym_completed', JSON.stringify(Array.from(next)));
-      } catch {
-        // fallback
-      }
-      return next;
-    });
-  };
-
-  const handleTogglePanel = (id: number) => {
-    triggerHaptic('light');
-    setOpenPanels((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      saveCompletedToday(next);
       return next;
     });
   };
@@ -237,20 +228,15 @@ export default function App() {
     triggerHaptic('warning');
     setConfirmModal({
       isOpen: true,
-      title: t.modalResetTitle || t.confirmResetTitle,
-      description: t.modalResetDesc || t.confirmResetDesc,
-      confirmText: t.confirmReset || t.confirmBtn,
-      cancelText: t.cancel || t.cancelBtn,
+      title: t.confirmResetTitle,
+      description: t.confirmResetDesc,
+      confirmText: t.confirmBtn,
+      cancelText: t.cancelBtn,
       type: 'reset',
       onConfirm: () => {
         triggerHaptic('success');
         setCompletedExercises(new Set());
-        setOpenPanels(new Set());
-        try {
-          localStorage.removeItem('gym_completed');
-        } catch {
-          // fallback
-        }
+        clearCompletedToday();
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         showToast(currentLang === 'de' ? 'Fortschritt zurückgesetzt' : 'تم إعادة تعيين التقدم بنجاح');
       },
@@ -289,6 +275,7 @@ export default function App() {
     const updatedPlan = removeExerciseFromDay(activePlan, selectedDayIndex, id);
     setActivePlan(updatedPlan);
     saveActivePlan(updatedPlan);
+    pruneOrphanMedia(collectPlanExerciseIds(updatedPlan));
     showToast(currentLang === 'ar' ? 'تم حذف الجهاز من الجدول' : 'Gerät aus dem Plan entfernt');
   };
 
@@ -309,8 +296,9 @@ export default function App() {
         const updatedPlan = clearDayExercises(activePlan, selectedDayIndex);
         setActivePlan(updatedPlan);
         saveActivePlan(updatedPlan);
+        pruneOrphanMedia(collectPlanExerciseIds(updatedPlan));
         setCompletedExercises(new Set());
-        setOpenPanels(new Set());
+        clearCompletedToday();
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         showToast(currentLang === 'ar' ? 'تم تفريغ تمارين هذا اليوم بنجاح' : 'Plan wurde geleert');
       },
@@ -320,6 +308,7 @@ export default function App() {
   const handleUpdatePlan = (newPlan: WorkoutPlan) => {
     setActivePlan(newPlan);
     saveActivePlan(newPlan);
+    pruneOrphanMedia(collectPlanExerciseIds(newPlan));
   };
 
   const handleStartActiveWorkout = () => {
@@ -340,10 +329,10 @@ export default function App() {
     triggerHaptic('warning');
     setConfirmModal({
       isOpen: true,
-      title: currentLang === 'ar' ? 'إعادة ضبط مصنع شاملة للموقع' : 'Werkseinstellungen',
+      title: currentLang === 'ar' ? 'إعادة ضبط مصنع شاملة للتطبيق' : 'Werkseinstellungen',
       description:
         currentLang === 'ar'
-          ? 'هل أنت متأكد من رغبتك في مسح كافة التمارين وسجلات التخزين المحلي وإعادة ضبط الموقع بالكامل من الصفر؟'
+          ? 'هل أنت متأكد من رغبتك في مسح كافة التمارين وسجلات التخزين المحلي وإعادة ضبط التطبيق بالكامل من الصفر؟'
           : 'Möchtest du wirklich alle lokalen Daten löschen und die Anwendung komplett neu starten?',
       confirmText: currentLang === 'ar' ? 'نعم، مسح وإعادة ضبط' : 'Ja, alles löschen',
       cancelText: currentLang === 'ar' ? 'إلغاء' : 'Abbrechen',
@@ -356,12 +345,8 @@ export default function App() {
 
   const handleFinishActiveWorkout = (completedIds: number[]) => {
     setCompletedExercises((prev) => {
-      const next = new Set([...prev, ...completedIds]);
-      try {
-        localStorage.setItem('gym_completed', JSON.stringify(Array.from(next)));
-      } catch {
-        // fallback
-      }
+      const next = new Set<number>([...prev, ...completedIds]);
+      saveCompletedToday(next);
       return next;
     });
 
@@ -425,24 +410,15 @@ export default function App() {
                 <PlanView
                   exercises={currentDayExercises}
                   completedExercises={completedExercises}
-                  openPanels={openPanels}
                   currentLang={currentLang}
                   selectedDayIndex={selectedDayIndex}
                   onSelectDayIndex={setSelectedDayIndex}
                   onToggleExercise={handleToggleExercise}
-                  onTogglePanel={handleTogglePanel}
-                  onResetToday={handleRequestResetProgress}
-                  onNavigateTab={handleTabChange}
-                  totalSessions={totalSessions}
                   plan={activePlan}
-                  onUpdatePlan={(updated) => {
-                    setActivePlan(updated);
-                    saveActivePlan(updated);
-                  }}
+                  onUpdatePlan={handleUpdatePlan}
                   onStartActiveWorkout={handleStartActiveWorkout}
                   onOpenAddExercise={() => setIsAddExerciseOpen(true)}
                   onOpenEditExercise={(exercise) => setEditingExercise(exercise)}
-                  onRemoveExercise={handleRemoveExerciseFromPlan}
                   onClearPlan={handleClearAllExercisesFromPlan}
                   showToast={showToast}
                 />
@@ -490,9 +466,7 @@ export default function App() {
                     onOpenFontSettings={() => setIsFontModalOpen(true)}
                     onOpenPlanShare={() => setIsPlanShareModalOpen(true)}
                     onResetProgress={handleRequestResetProgress}
-                    totalSessions={totalSessions}
-                    completedExercisesCount={completedExercises.size}
-                    plan={activePlan}
+                    onFactoryReset={handleFactoryReset}
                   />
                 </Suspense>
               </motion.div>

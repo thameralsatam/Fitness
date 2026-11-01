@@ -2,15 +2,11 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Play, CheckCircle2 } from 'lucide-react';
 import { triggerHaptic } from '../utils/haptics';
-import { ViewTab } from '../types';
 
 interface WorkoutWidgetsProps {
   currentLang: 'ar' | 'de';
   completedCount: number;
   totalExercises: number;
-  currentStreak?: number;
-  totalSessions?: number;
-  onNavigateTab?: (tab: ViewTab) => void;
   onStartActiveWorkout?: () => void;
 }
 

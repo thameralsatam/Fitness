@@ -9,8 +9,7 @@ import {
   Link2,
   Sparkles,
 } from 'lucide-react';
-import { ExerciseItem, Language, WorkoutPlan, ViewTab, ExerciseMediaItem, DayIndex } from '../types';
-import { I18N } from '../data/workoutData';
+import { ExerciseItem, Language, WorkoutPlan, ExerciseMediaItem, DayIndex } from '../types';
 import { WorkoutWidgets } from './WorkoutWidgets';
 import { triggerHaptic } from '../utils/haptics';
 import { MediaViewerModal } from './MediaViewerModal';
@@ -31,21 +30,15 @@ import { DayScheduleModal } from './DayScheduleModal';
 interface PlanViewProps {
   exercises: ExerciseItem[];
   completedExercises: Set<number>;
-  openPanels: Set<number>;
   currentLang: Language;
   selectedDayIndex: DayIndex;
   onSelectDayIndex: (day: DayIndex) => void;
   onToggleExercise: (id: number) => void;
-  onTogglePanel: (id: number) => void;
-  onResetToday?: () => void;
-  onNavigateTab?: (tab: ViewTab) => void;
-  totalSessions?: number;
   plan: WorkoutPlan;
   onUpdatePlan: (plan: WorkoutPlan) => void;
   onStartActiveWorkout?: () => void;
   onOpenAddExercise?: () => void;
   onOpenEditExercise?: (exercise: ExerciseItem) => void;
-  onRemoveExercise?: (id: number) => void;
   onClearPlan?: () => void;
   showToast: (msg: string) => void;
 }
@@ -57,8 +50,6 @@ export const PlanView: React.FC<PlanViewProps> = ({
   selectedDayIndex,
   onSelectDayIndex,
   onToggleExercise,
-  onNavigateTab,
-  totalSessions = 1,
   plan,
   onUpdatePlan,
   onStartActiveWorkout,
@@ -67,7 +58,6 @@ export const PlanView: React.FC<PlanViewProps> = ({
   onClearPlan,
   showToast,
 }) => {
-  const t = I18N[currentLang];
   const isAr = currentLang === 'ar';
   const todayIndex = getTodayDayIndex();
 
@@ -122,14 +112,11 @@ export const PlanView: React.FC<PlanViewProps> = ({
   return (
     <div className="w-full max-w-full min-w-0 space-y-6 sm:space-y-7 animate-in fade-in duration-200">
       {/* Primary Companion Widget */}
-      {onNavigateTab && exercises.length > 0 && (
+      {exercises.length > 0 && (
         <WorkoutWidgets
           currentLang={currentLang}
           completedCount={completedCount}
           totalExercises={exercises.length}
-          currentStreak={Math.max(1, completedCount > 0 ? 3 : 1)}
-          totalSessions={totalSessions}
-          onNavigateTab={onNavigateTab}
           onStartActiveWorkout={onStartActiveWorkout}
         />
       )}

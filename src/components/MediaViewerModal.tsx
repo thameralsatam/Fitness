@@ -7,7 +7,6 @@ import {
   Play,
   Film,
   Image as ImageIcon,
-  Maximize2,
   Trash2,
 } from 'lucide-react';
 import { ExerciseMediaItem } from '../types';

@@ -404,3 +404,19 @@ export async function importBase64MediaItems(
   return savedMediaItems;
 }
 
+export async function pruneOrphanMedia(referencedExerciseIds: Set<number>): Promise<number> {
+  try {
+    const map = await getAllExerciseMediaRecordsMap();
+    let removed = 0;
+    for (const [idStr, records] of Object.entries(map)) {
+      if (referencedExerciseIds.has(Number(idStr))) continue;
+      for (const rec of records) {
+        await deleteExerciseMediaItem(rec.id);
+        removed++;
+      }
+    }
+    return removed;
+  } catch {
+    return 0;
+  }
+}
