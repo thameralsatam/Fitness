@@ -197,9 +197,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode; lang: Language
             id: 42,
             title: isAr ? 'انتهت فترة الراحة!' : 'Erholung abgeschlossen!',
             body: isAr ? 'انتهت الراحة! حان الوقت للعودة للتمرين بنشاط عالي.' : 'Die Pause ist vorbei! Bereit für den nächsten Satz.',
-            schedule: { at: new Date(Date.now() + seconds * 1000) },
-            sound: 'beep.wav',
-            actionTypeId: 'rest_timer_done',
+            schedule: { at: new Date(Date.now() + seconds * 1000), allowWhileIdle: true },
           }
         ]
       });

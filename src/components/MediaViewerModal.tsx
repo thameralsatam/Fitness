@@ -42,14 +42,12 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       notifyModalChange(true);
-      document.body.style.overflow = 'hidden';
       setCurrentIndex(Math.min(Math.max(0, initialIndex), Math.max(0, mediaList.length - 1)));
     }
     return () => {
       if (isOpen) {
         notifyModalChange(false);
       }
-      document.body.style.overflow = 'unset';
     };
   }, [isOpen, initialIndex, mediaList.length]);
 

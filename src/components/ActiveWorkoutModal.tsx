@@ -86,7 +86,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       notifyModalChange(true);
-      document.body.style.overflow = 'hidden';
       // Reset workout state on open
       setCurrentExIdx(0);
       setCurrentSet(1);
@@ -100,7 +99,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
       return () => {
         notifyModalChange(false);
-        document.body.style.overflow = 'unset';
       };
     }
   }, [isOpen]);

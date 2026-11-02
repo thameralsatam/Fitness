@@ -35,14 +35,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     };
     if (isOpen) {
       notifyModalChange(true);
-      document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       if (isOpen) {
         notifyModalChange(false);
       }
-      document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onCancel]);

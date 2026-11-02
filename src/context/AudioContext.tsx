@@ -246,7 +246,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode; lang: 'ar' | '
       setCurrentTime(0);
       setDuration(0);
     }
-  }, [currentTrackIndex, tracks, isNative]);
+  }, [currentTrack?.id, isNative]);
 
   // Configure Media Session API for Web browser fallback
   useEffect(() => {

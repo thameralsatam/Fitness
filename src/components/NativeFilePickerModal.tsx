@@ -41,13 +41,11 @@ export const NativeFilePickerModal: React.FC<NativeFilePickerModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       notifyModalChange(true);
-      document.body.style.overflow = 'hidden';
     }
     return () => {
       if (isOpen) {
         notifyModalChange(false);
       }
-      document.body.style.overflow = 'unset';
     };
   }, [isOpen]);
 

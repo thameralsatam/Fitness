@@ -36,7 +36,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
     const timer = setTimeout(() => {
       onFinish();
-    }, 5000); // 5s calm smooth presentation
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [onFinish]);

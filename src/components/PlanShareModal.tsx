@@ -50,10 +50,8 @@ export const PlanShareModal: React.FC<PlanShareModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       notifyModalChange(true);
-      document.body.style.overflow = 'hidden';
       return () => {
         notifyModalChange(false);
-        document.body.style.overflow = 'unset';
       };
     }
   }, [isOpen]);

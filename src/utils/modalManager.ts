@@ -11,6 +11,7 @@ export const notifyModalChange = (isOpen: boolean) => {
   }
   const hasOpenModals = activeModalsCount > 0;
   listeners.forEach((fn) => fn(hasOpenModals));
+  document.body.style.overflow = activeModalsCount > 0 ? 'hidden' : '';
 };
 
 export const useIsModalOpen = () => {

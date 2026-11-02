@@ -71,10 +71,10 @@ export const ModernAudioMiniBar: React.FC<ModernAudioMiniBarProps> = ({
 
             <div className="min-w-0 flex-1">
               <p className="text-xs font-display font-bold text-[#15221b] truncate group-hover:text-[#215641] transition-colors">
-                {currentTrack.title || (isAr ? 'ملف صوتي' : 'Audiodatei')}
+                {currentTrack.name || (isAr ? 'ملف صوتي' : 'Audiodatei')}
               </p>
               <p className="text-[11px] text-[#6e8276] truncate">
-                {currentTrack.artist || (isAr ? 'مشغل الصوتيات' : 'Audioplayer')}
+                {(isAr ? 'مشغل الصوتيات' : 'Audioplayer')}
               </p>
             </div>
           </button>

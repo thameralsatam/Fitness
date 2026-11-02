@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -25,6 +25,7 @@ import {
   unlinkDay,
 } from '../utils/scheduleManager';
 import { triggerHaptic } from '../utils/haptics';
+import { notifyModalChange } from '../utils/modalManager';
 
 interface DayScheduleModalProps {
   isOpen: boolean;
@@ -57,6 +58,12 @@ export const DayScheduleModal: React.FC<DayScheduleModalProps> = ({
     // Default to Monday (0) or first other day
     return dayIndex === 0 ? 1 : 0;
   });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    notifyModalChange(true);
+    return () => notifyModalChange(false);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

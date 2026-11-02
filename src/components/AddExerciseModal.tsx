@@ -44,7 +44,6 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       notifyModalChange(true);
-      document.body.style.overflow = 'hidden';
       setName('');
       setMuscle('عضلات الصدر');
       setSets('3');
@@ -54,7 +53,6 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
 
       return () => {
         notifyModalChange(false);
-        document.body.style.overflow = 'unset';
       };
     }
   }, [isOpen]);

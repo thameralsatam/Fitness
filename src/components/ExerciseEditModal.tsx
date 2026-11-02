@@ -48,7 +48,6 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   useEffect(() => {
     if (isOpen && exercise) {
       notifyModalChange(true);
-      document.body.style.overflow = 'hidden';
       setName(exercise.nameDe || '');
       setMuscle(isAr ? exercise.muscleAr : exercise.muscleDe);
       setSets(exercise.sets || '3');
@@ -67,7 +66,6 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
 
       return () => {
         notifyModalChange(false);
-        document.body.style.overflow = 'unset';
       };
     }
   }, [isOpen, exercise, isAr]);
