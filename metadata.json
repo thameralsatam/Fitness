@@ -1,6 +1,0 @@
-{
-  "name": "Gym Workout & Fitness",
-  "description": "تطبيق متطور لإدارة وتتبع جدول التمارين الرياضية ومكتبة الأجهزة والمقاطع الصوتية.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
